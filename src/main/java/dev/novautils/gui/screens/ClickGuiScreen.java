@@ -233,7 +233,6 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        extractBackground(graphics, mouseX, mouseY, delta);
 
         graphics.fill(0, 0, this.width, 28, 0xC0000000);
         graphics.fill(0, 28, SIDEBAR_WIDTH + 30, this.height, 0x80000000);

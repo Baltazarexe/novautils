@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 public class NovaUtilsClient implements ClientModInitializer {
     public static final String MOD_ID = "novautils";
     public static final Logger LOG = LoggerFactory.getLogger(MOD_ID);
+    private static final boolean DEBUG_MENU = System.getProperty("novautils.debugmenu") != null;
 
     @Override
     public void onInitializeClient() {
@@ -30,7 +31,12 @@ public class NovaUtilsClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             manager.tick();
+            if (DEBUG_MENU && client.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
+                LOG.info("[debug] opening ClickGuiScreen from title screen");
+                client.gui.setScreen(new ClickGuiScreen());
+            }
             while (openMenu.consumeClick()) {
+                LOG.info("[debug] menu key pressed, screen={}", client.gui.screen());
                 if (client.gui.screen() == null) client.gui.setScreen(new ClickGuiScreen());
             }
         });
