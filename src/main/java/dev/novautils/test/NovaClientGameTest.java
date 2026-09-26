@@ -91,6 +91,16 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 for (dev.novautils.modules.Module m : ModuleManager.get().getModules()) m.setEnabled(false);
             });
             context.waitTicks(20);
+            sp.getServer().runCommand("/summon chest_minecart 7 200 -2");
+            sp.getServer().runCommand("/summon hopper_minecart 7 200 2");
+            sp.getServer().runCommand("/setblock 7 200 0 minecraft:chest");
+            context.runOnClient(client -> {
+                ModuleManager.get().get(dev.novautils.modules.render.StorageEsp.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.player.FastBreak.class).setEnabled(true);
+            });
+            context.waitTicks(40);
+            context.takeScreenshot("7b_storage_esp");
+
             context.takeScreenshot("7_all_off");
 
             sp.getServer().runCommand("/item replace entity @a armor.chest with minecraft:diamond_chestplate");

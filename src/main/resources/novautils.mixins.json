@@ -6,7 +6,8 @@
     "LightmapMixin",
     "MinecraftAccessor",
     "DeltaTrackerTimerAccessor",
-    "EntityAccessor"
+    "EntityAccessor",
+    "MultiPlayerGameModeAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

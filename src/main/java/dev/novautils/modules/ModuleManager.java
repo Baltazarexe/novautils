@@ -40,6 +40,7 @@ import dev.novautils.modules.player.AutoEat;
 import dev.novautils.modules.player.AutoReplenish;
 import dev.novautils.modules.player.AutoTool;
 import dev.novautils.modules.player.ChestSwap;
+import dev.novautils.modules.player.FastBreak;
 import dev.novautils.modules.player.FastUse;
 import dev.novautils.modules.render.Breadcrumbs;
 import dev.novautils.modules.render.Esp;
@@ -133,6 +134,7 @@ public class ModuleManager {
         register(new AutoReplenish());
         register(new ChestSwap());
         register(new FastUse());
+        register(new FastBreak());
         register(new AutoClicker());
 
         // World
