@@ -7,6 +7,10 @@ import dev.novautils.modules.combat.AutoFight;
 import dev.novautils.modules.combat.AutoTotem;
 import dev.novautils.modules.combat.Surround;
 import dev.novautils.modules.misc.AntiAfk;
+import dev.novautils.modules.misc.ArmorHud;
+import dev.novautils.modules.misc.DeathPoint;
+import dev.novautils.modules.misc.KeyStrokes;
+import dev.novautils.modules.misc.PotionHud;
 import dev.novautils.modules.misc.AutoReconnect;
 import dev.novautils.modules.misc.AutoRespawn;
 import dev.novautils.modules.misc.HudInfo;
@@ -140,6 +144,10 @@ public class ModuleManager {
 
         // Misc
         register(new HudInfo());
+        register(new ArmorHud());
+        register(new PotionHud());
+        register(new KeyStrokes());
+        register(new DeathPoint());
         register(new PlayerRadar());
         register(new Notifier());
         register(new AntiAfk());
@@ -203,6 +211,19 @@ public class ModuleManager {
         for (Module module : modules) {
             if (module.isEnabled()) module.onRenderHud(graphics, deltaTracker);
         }
+    }
+
+    /** Turns everything off at once; returns how many were on. Bound to the panic key. */
+    public int disableAll() {
+        int count = 0;
+        for (Module module : modules) {
+            if (module.isEnabled()) {
+                module.setEnabled(false);
+                count++;
+            }
+        }
+        saveConfig();
+        return count;
     }
 
     public void saveConfig() {

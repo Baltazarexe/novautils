@@ -46,7 +46,49 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
             context.runOnClient(client -> client.gui.setScreen(new ClickGuiScreen()));
             context.waitTicks(10);
-            context.takeScreenshot("3_menu");
+            context.takeScreenshot("4_menu");
+
+            context.runOnClient(client -> {
+                ModuleManager.get().get(Esp.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.render.Xray.class).setEnabled(true);
+                dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.movement.Speed.class).setEnabled(true);
+                ClickGuiScreen.setExpanded(ModuleManager.get().get(Esp.class), true);
+                client.gui.setScreen(new ClickGuiScreen());
+            });
+            context.waitTicks(15);
+            context.takeScreenshot("5_menu_active");
+
+            sp.getServer().runCommand("/give @a minecraft:diamond_chestplate");
+            sp.getServer().runCommand("/effect give @a minecraft:speed 120 1");
+            sp.getServer().runCommand("/effect give @a minecraft:night_vision 60 0");
+            context.runOnClient(client -> {
+                client.gui.setScreen(null);
+                ModuleManager.get().get(dev.novautils.modules.misc.ArmorHud.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.misc.PotionHud.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.misc.KeyStrokes.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.misc.HudInfo.class).setEnabled(true);
+            });
+            context.waitTicks(30);
+            context.takeScreenshot("6_huds");
+
+            context.runOnClient(client -> {
+                for (dev.novautils.modules.Module m : ModuleManager.get().getModules()) m.setEnabled(false);
+            });
+            context.waitTicks(20);
+            context.takeScreenshot("7_all_off");
+
+            sp.getServer().runCommand("/item replace entity @a armor.chest with minecraft:diamond_chestplate");
+            sp.getServer().runCommand("/item replace entity @a armor.head with minecraft:iron_helmet[damage=150]");
+            context.runOnClient(client -> ModuleManager.get().get(dev.novautils.modules.misc.ArmorHud.class).setEnabled(true));
+            context.waitTicks(20);
+            context.takeScreenshot("8_only_armorhud");
+
+            context.runOnClient(client -> {
+                ModuleManager.get().get(dev.novautils.modules.misc.ArmorHud.class).setEnabled(false);
+                ModuleManager.get().get(Esp.class).setEnabled(true);
+            });
+            context.waitTicks(20);
+            context.takeScreenshot("9_only_esp");
         }
     }
 }

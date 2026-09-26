@@ -23,6 +23,10 @@ public class Config {
     private static final Config INSTANCE = new Config();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
+    private static final String VERSION_KEY = "_configVersion";
+    /** Bumped when saved keybind numbers stop meaning the same key. */
+    private static final int KEYBIND_FORMAT = 2;
+
     public static Config get() {
         return INSTANCE;
     }
@@ -39,6 +43,14 @@ public class Config {
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
             if (root == null) return;
 
+            // MC 26.3 swapped GLFW key codes for SDL scancodes, so keybinds written by an older
+            // build now point at completely different keys. Drop them instead of toggling modules
+            // at random while the player walks around.
+            boolean keybindsUsable = root.has(VERSION_KEY) && root.get(VERSION_KEY).getAsInt() >= KEYBIND_FORMAT;
+            if (!keybindsUsable) {
+                NovaUtilsClient.LOG.warn("Config predates the SDL key change; clearing saved keybinds.");
+            }
+
             for (Module module : modules) {
                 if (!root.has(module.name)) continue;
                 JsonObject obj = root.getAsJsonObject(module.name);
@@ -46,7 +58,7 @@ public class Config {
                 if (obj.has("enabled") && obj.get("enabled").getAsBoolean()) {
                     module.setEnabled(true);
                 }
-                if (obj.has("keyBind")) {
+                if (keybindsUsable && obj.has("keyBind")) {
                     module.setKeyBind(obj.get("keyBind").getAsInt());
                 }
 
@@ -88,6 +100,7 @@ public class Config {
 
     public void save(List<Module> modules) {
         JsonObject root = new JsonObject();
+        root.addProperty(VERSION_KEY, KEYBIND_FORMAT);
 
         for (Module module : modules) {
             JsonObject obj = new JsonObject();

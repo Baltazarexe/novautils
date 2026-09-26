@@ -29,8 +29,18 @@ public class NovaUtilsClient implements ClientModInitializer {
         KeyMapping openMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping(
             "key.novautils.openmenu", InputConstants.Type.KEYBOARD, InputConstants.KEY_RSHIFT, KeyMapping.Category.MISC));
 
+        KeyMapping panic = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+            "key.novautils.panic", InputConstants.Type.KEYBOARD, InputConstants.KEY_DELETE, KeyMapping.Category.MISC));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             manager.tick();
+            while (panic.consumeClick()) {
+                int disabled = manager.disableAll();
+                if (client.player != null) {
+                    client.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "[NovaUtils] Panic: disabled " + disabled + " modules"));
+                }
+            }
             if (DEBUG_MENU && client.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
                 LOG.info("[debug] opening ClickGuiScreen from title screen");
                 client.gui.setScreen(new ClickGuiScreen());
