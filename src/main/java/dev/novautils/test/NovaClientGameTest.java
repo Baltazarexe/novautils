@@ -10,6 +10,13 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 
 /** Dev-only: builds a scene with a zombie behind a stone wall and screenshots ESP off / ESP on / the menu. */
 public class NovaClientGameTest implements FabricClientGameTest {
+    @SuppressWarnings("unchecked")
+    private static void setEspMode(Esp.Mode m) {
+        for (dev.novautils.settings.Setting<?> s : ModuleManager.get().get(Esp.class).getSettings()) {
+            if (s.name.equals("mode")) ((dev.novautils.settings.Setting<Esp.Mode>) s).set(m);
+        }
+    }
+
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext sp = context.worldBuilder().create()) {
@@ -24,7 +31,11 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
             context.runOnClient(client -> ModuleManager.get().get(Esp.class).setEnabled(true));
             context.waitTicks(10);
-            context.takeScreenshot("2_esp_on");
+            context.takeScreenshot("2_chams");
+
+            context.runOnClient(client -> setEspMode(Esp.Mode.BOX));
+            context.waitTicks(10);
+            context.takeScreenshot("2b_box");
 
             context.runOnClient(client -> {
                 ModuleManager.get().get(Esp.class).setEnabled(false);

@@ -5,7 +5,8 @@
   "client": [
     "LightmapMixin",
     "MinecraftAccessor",
-    "DeltaTrackerTimerAccessor"
+    "DeltaTrackerTimerAccessor",
+    "EntityAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

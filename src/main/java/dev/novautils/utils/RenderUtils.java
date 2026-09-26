@@ -27,6 +27,29 @@ public final class RenderUtils {
         quad(pose, buffer, color, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ, minX, minY, minZ);
     }
 
+    /**
+     * Nicer box: a soft translucent fill plus crisp brighter edges. {@code color} is ARGB; its alpha
+     * is used for the fill and boosted for the edges.
+     */
+    public static void drawBox(PoseStack.Pose pose, VertexConsumer buffer, AABB box, int color) {
+        int alpha = net.minecraft.util.ARGB.alpha(color);
+        int fill = net.minecraft.util.ARGB.color(Math.max(10, (int) (alpha * 0.45)), color & 0xFFFFFF);
+        int edge = net.minecraft.util.ARGB.color(Math.min(255, (int) (alpha * 2.4) + 60), color & 0xFFFFFF);
+
+        drawFilledBox(pose, buffer, box, fill);
+
+        double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
+        double w = 0.012;
+        Vec3 a = new Vec3(x0, y0, z0), b = new Vec3(x1, y0, z0), c = new Vec3(x1, y0, z1), d = new Vec3(x0, y0, z1);
+        Vec3 e = new Vec3(x0, y1, z0), f = new Vec3(x1, y1, z0), g = new Vec3(x1, y1, z1), h = new Vec3(x0, y1, z1);
+        drawRibbon(pose, buffer, a, b, w, edge); drawRibbon(pose, buffer, b, c, w, edge);
+        drawRibbon(pose, buffer, c, d, w, edge); drawRibbon(pose, buffer, d, a, w, edge);
+        drawRibbon(pose, buffer, e, f, w, edge); drawRibbon(pose, buffer, f, g, w, edge);
+        drawRibbon(pose, buffer, g, h, w, edge); drawRibbon(pose, buffer, h, e, w, edge);
+        drawRibbon(pose, buffer, a, e, w, edge); drawRibbon(pose, buffer, b, f, w, edge);
+        drawRibbon(pose, buffer, c, g, w, edge); drawRibbon(pose, buffer, d, h, w, edge);
+    }
+
     /** Thin two-plane ribbon between two world-space points (a stand-in for a line). */
     public static void drawRibbon(PoseStack.Pose pose, VertexConsumer buffer, Vec3 a, Vec3 b, double width, int color) {
         Vec3 d = b.subtract(a);
