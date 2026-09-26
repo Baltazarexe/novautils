@@ -23,7 +23,9 @@ public class PotionHud extends Module {
     public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
         if (mc.player == null) return;
 
-        int y = 30;
+        // Start below the module list if it is sitting in the same corner.
+        int y = 4 + dev.novautils.modules.ModuleManager.get().get(ActiveModules.class)
+            .heightIn(ActiveModules.Corner.TOP_RIGHT);
         for (MobEffectInstance effect : mc.player.getActiveEffects()) {
             String name = effect.getEffect().value().getDisplayName().getString();
             int amplifier = Math.min(effect.getAmplifier(), ROMAN.length - 1);

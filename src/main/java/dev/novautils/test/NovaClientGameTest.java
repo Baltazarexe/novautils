@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 
 /** Dev-only: builds a scene with a zombie behind a stone wall and screenshots ESP off / ESP on / the menu. */
+@SuppressWarnings("unchecked")
 public class NovaClientGameTest implements FabricClientGameTest {
     @SuppressWarnings("unchecked")
     private static void setEspMode(Esp.Mode m) {
@@ -86,6 +87,31 @@ public class NovaClientGameTest implements FabricClientGameTest {
             });
             context.waitTicks(30);
             context.takeScreenshot("6_huds");
+
+            context.runOnClient(client -> {
+                ModuleManager.get().get(dev.novautils.modules.misc.ActiveModules.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.movement.Flight.class).setEnabled(true);
+                ModuleManager.get().get(dev.novautils.modules.render.Fullbright.class).setEnabled(true);
+            });
+            context.waitTicks(20);
+            context.takeScreenshot("6b_arraylist");
+
+            context.runOnClient(client -> {
+                for (dev.novautils.settings.Setting<?> s : ModuleManager.get().get(dev.novautils.modules.misc.ActiveModules.class).getSettings()) {
+                    if (s.name.equals("show-disabled")) ((dev.novautils.settings.Setting<Boolean>) s).set(true);
+                    if (s.name.equals("sort")) ((dev.novautils.settings.Setting<dev.novautils.modules.misc.ActiveModules.Sort>) s).set(dev.novautils.modules.misc.ActiveModules.Sort.CATEGORY);
+                }
+            });
+            context.waitTicks(20);
+            context.takeScreenshot("6c_arraylist_all");
+
+            context.runOnClient(client -> {
+                for (dev.novautils.settings.Setting<?> s : ModuleManager.get().get(dev.novautils.modules.render.Fullbright.class).getSettings()) {
+                    if (s.name.equals("mode")) ((dev.novautils.settings.Setting<dev.novautils.modules.render.Fullbright.Mode>) s).set(dev.novautils.modules.render.Fullbright.Mode.LIGHTMAP);
+                }
+            });
+            context.waitTicks(40);
+            context.takeScreenshot("6d_fullbright_lightmap");
 
             context.runOnClient(client -> {
                 for (dev.novautils.modules.Module m : ModuleManager.get().getModules()) m.setEnabled(false);

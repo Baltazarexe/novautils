@@ -6,6 +6,7 @@ import dev.novautils.modules.combat.AutoArmor;
 import dev.novautils.modules.combat.AutoFight;
 import dev.novautils.modules.combat.AutoTotem;
 import dev.novautils.modules.combat.Surround;
+import dev.novautils.modules.misc.ActiveModules;
 import dev.novautils.modules.misc.AntiAfk;
 import dev.novautils.modules.misc.ArmorHud;
 import dev.novautils.modules.misc.DeathPoint;
@@ -145,6 +146,7 @@ public class ModuleManager {
         register(new AutoNametag());
 
         // Misc
+        register(new ActiveModules());
         register(new HudInfo());
         register(new ArmorHud());
         register(new PotionHud());
