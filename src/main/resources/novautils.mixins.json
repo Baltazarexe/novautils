@@ -3,7 +3,9 @@
   "package": "dev.novautils.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "LightmapMixin"
+    "LightmapMixin",
+    "MinecraftAccessor",
+    "DeltaTrackerTimerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

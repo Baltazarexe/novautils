@@ -4,5 +4,7 @@ public enum Category {
     RENDER,
     MOVEMENT,
     COMBAT,
+    PLAYER,
+    WORLD,
     MISC
 }

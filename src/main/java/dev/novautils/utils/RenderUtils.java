@@ -3,6 +3,7 @@ package dev.novautils.utils;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /** Small helpers for drawing simple world-space geometry (ESP boxes, waypoint markers, ...). */
 public final class RenderUtils {
@@ -24,6 +25,29 @@ public final class RenderUtils {
         quad(pose, buffer, color, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
         // Bottom (-Y)
         quad(pose, buffer, color, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ, minX, minY, minZ);
+    }
+
+    /** Thin two-plane ribbon between two world-space points (a stand-in for a line). */
+    public static void drawRibbon(PoseStack.Pose pose, VertexConsumer buffer, Vec3 a, Vec3 b, double width, int color) {
+        Vec3 d = b.subtract(a);
+        double len = d.length();
+        if (len < 1.0E-4) return;
+        Vec3 dn = d.scale(1.0 / len);
+        Vec3 ref = Math.abs(dn.y) > 0.99 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+        Vec3 p1 = dn.cross(ref).normalize().scale(width);
+        Vec3 p2 = dn.cross(p1).normalize().scale(width);
+        ribbonQuad(pose, buffer, a, b, p1, color);
+        ribbonQuad(pose, buffer, a, b, p2, color);
+    }
+
+    private static void ribbonQuad(PoseStack.Pose pose, VertexConsumer buffer, Vec3 a, Vec3 b, Vec3 p, int color) {
+        Vec3 a1 = a.subtract(p), a2 = a.add(p), b1 = b.subtract(p), b2 = b.add(p);
+        vertex(pose, buffer, a1, color); vertex(pose, buffer, a2, color); vertex(pose, buffer, b2, color); vertex(pose, buffer, b1, color);
+        vertex(pose, buffer, b1, color); vertex(pose, buffer, b2, color); vertex(pose, buffer, a2, color); vertex(pose, buffer, a1, color);
+    }
+
+    private static void vertex(PoseStack.Pose pose, VertexConsumer buffer, Vec3 p, int color) {
+        buffer.addVertex(pose, (float) p.x, (float) p.y, (float) p.z).setColor(color);
     }
 
     private static void quad(PoseStack.Pose pose, VertexConsumer buffer, int color,

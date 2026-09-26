@@ -21,6 +21,7 @@ public class ClickGuiScreen extends Screen {
     private static final int ROW_HEIGHT = 20;
     private static final int TOP = 30;
 
+    private int page = 0;
     private Category selectedCategory = Category.RENDER;
     private Module selectedModule = null;
     private Setting<?> awaitingKeyBindFor = null;
@@ -43,16 +44,38 @@ public class ClickGuiScreen extends Screen {
             Button tab = Button.builder(Component.literal(category.name()), b -> {
                 selectedCategory = category;
                 selectedModule = null;
+                page = 0;
                 rebuild();
             }).pos(tabX, 6).size(70, 18).build();
             addRenderableWidget(tab);
             tabX += 74;
         }
 
-        int y = TOP;
-        for (Module module : ModuleManager.get().getModules()) {
-            if (module.category != selectedCategory) continue;
+        java.util.List<Module> inCategory = new java.util.ArrayList<>();
+        for (Module m : ModuleManager.get().getModules()) {
+            if (m.category == selectedCategory) inCategory.add(m);
+        }
+        int rowsPerPage = Math.max(3, (this.height - TOP - 30) / ROW_HEIGHT);
+        int pageCount = Math.max(1, (inCategory.size() + rowsPerPage - 1) / rowsPerPage);
+        page = Math.min(page, pageCount - 1);
 
+        if (pageCount > 1) {
+            int navY = this.height - 22;
+            addRenderableWidget(Button.builder(Component.literal("<"), b -> {
+                page = Math.max(0, page - 1);
+                rebuild();
+            }).pos(8, navY).size(24, 18).build());
+            addRenderableWidget(Button.builder(Component.literal((page + 1) + "/" + pageCount), b -> {}).pos(36, navY).size(SIDEBAR_WIDTH - 64, 18).build());
+            addRenderableWidget(Button.builder(Component.literal(">"), b -> {
+                page = Math.min(pageCount - 1, page + 1);
+                rebuild();
+            }).pos(8 + SIDEBAR_WIDTH - 24, navY).size(24, 18).build());
+        }
+
+        int y = TOP;
+        int from = page * rowsPerPage;
+        int to = Math.min(inCategory.size(), from + rowsPerPage);
+        for (Module module : inCategory.subList(from, to)) {
             String state = module.isEnabled() ? "ON" : "OFF";
             Button toggle = Button.builder(Component.literal(module.name + " [" + state + "]"), b -> {
                 module.toggle();
