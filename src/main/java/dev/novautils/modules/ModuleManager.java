@@ -6,9 +6,13 @@ import dev.novautils.modules.combat.Surround;
 import dev.novautils.modules.misc.AntiAfk;
 import dev.novautils.modules.misc.AutoRespawn;
 import dev.novautils.modules.misc.HudInfo;
+import dev.novautils.modules.misc.PlayerRadar;
+import dev.novautils.modules.movement.AntiVoid;
 import dev.novautils.modules.movement.AutoJump;
 import dev.novautils.modules.movement.AutoSprint;
 import dev.novautils.modules.movement.Flight;
+import dev.novautils.modules.movement.NoFall;
+import dev.novautils.modules.player.AutoEat;
 import dev.novautils.modules.render.Esp;
 import dev.novautils.modules.render.Fullbright;
 import dev.novautils.modules.render.StorageEsp;
@@ -46,6 +50,10 @@ public class ModuleManager {
         register(new AutoSprint());
         register(new AutoJump());
         register(new Flight());
+        register(new NoFall());
+        register(new AntiVoid());
+        register(new PlayerRadar());
+        register(new AutoEat());
         register(new AutoFight());
         register(new Surround());
 
