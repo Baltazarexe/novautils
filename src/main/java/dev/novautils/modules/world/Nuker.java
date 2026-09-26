@@ -70,7 +70,7 @@ public class Nuker extends Module {
         if (current != null) {
             if (!mc.gameMode.isDestroying()) mc.gameMode.startDestroyBlock(current, Direction.UP);
             mc.gameMode.continueDestroyBlock(current, Direction.UP);
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            dev.novautils.utils.InvUtils.swing();
         }
     }
 }

@@ -56,7 +56,7 @@ public class Scaffold extends Module {
                 neighbor.getY() + 0.5 + face.getStepY() * 0.5,
                 neighbor.getZ() + 0.5 + face.getStepZ() * 0.5);
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, new BlockHitResult(hit, face, neighbor, false));
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            dev.novautils.utils.InvUtils.swing();
             return;
         }
     }

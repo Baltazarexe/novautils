@@ -1,7 +1,7 @@
 package dev.novautils.mixin;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import dev.novautils.modules.ModuleManager;
 import dev.novautils.modules.render.Fullbright;
 import net.minecraft.client.renderer.Lightmap;

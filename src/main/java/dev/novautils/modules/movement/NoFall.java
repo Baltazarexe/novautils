@@ -2,22 +2,25 @@ package dev.novautils.modules.movement;
 
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 /**
- * Keeps resetting the client's fall distance. Whether that actually prevents damage depends on the
- * server: servers that track your falling themselves will still hurt you. It reliably removes
- * client-side fall damage/animation, and works where the server trusts the client's state.
+ * While you are falling far enough to get hurt, keeps resetting your client fall distance and tells
+ * the server you are on the ground (a status-only movement packet), so it never counts the fall.
+ * Works on servers that trust the reported on-ground flag (2b2t-style servers usually do); a server
+ * that recomputes movement fully on its own can still hurt you.
  */
 public class NoFall extends Module {
     public NoFall() {
-        super("NoFall", "Resets your fall distance (server may still apply damage).", Category.MOVEMENT);
+        super("NoFall", "Cancels fall damage by spoofing the on-ground flag.", Category.MOVEMENT);
     }
 
     @Override
     public void onTick() {
-        if (mc.player == null) return;
-        if (mc.player.fallDistance > 2.0) {
-            mc.player.resetFallDistance();
-        }
+        if (mc.player == null || mc.getConnection() == null) return;
+        if (mc.player.fallDistance <= 2.5 || mc.player.isFallFlying() || mc.player.getAbilities().flying) return;
+
+        mc.player.resetFallDistance();
+        mc.getConnection().send(new ServerboundMovePlayerPacket.StatusOnly(true, mc.player.horizontalCollision));
     }
 }

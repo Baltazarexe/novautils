@@ -49,7 +49,7 @@ public class Surround extends Module {
             BlockHitResult hitResult = new BlockHitResult(hitPos, Direction.UP, below, false);
 
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            dev.novautils.utils.InvUtils.swing();
             placedAny = true;
         }
 

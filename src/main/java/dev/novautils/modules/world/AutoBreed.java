@@ -27,7 +27,7 @@ public class AutoBreed extends Module {
             if (e instanceof Animal animal && animal.getAge() == 0 && animal.canFallInLove()
                 && animal.isFood(mc.player.getMainHandItem()) && mc.player.distanceToSqr(e) <= 16) {
                 mc.gameMode.interact(mc.player, e, new EntityHitResult(e), InteractionHand.MAIN_HAND);
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                dev.novautils.utils.InvUtils.swing();
                 cooldown = 6;
                 return;
             }

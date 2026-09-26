@@ -36,6 +36,15 @@ public final class InvUtils {
         click(menuSlot, 0, ContainerInput.PICKUP);
     }
 
+    /** Main-hand swing animation (the API now wants an explicit SwingAnimation). */
+    public static void swing() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND,
+                net.minecraft.world.item.component.SwingAnimation.DEFAULT, true);
+        }
+    }
+
     public static void selectHotbar(int slot) {
         Minecraft mc = Minecraft.getInstance();
         mc.player.getInventory().setSelectedSlot(slot);

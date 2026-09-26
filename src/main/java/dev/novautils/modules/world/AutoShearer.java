@@ -27,7 +27,7 @@ public class AutoShearer extends Module {
             if (e instanceof Player) continue;
             if (e instanceof Shearable s && s.readyForShearing() && mc.player.distanceToSqr(e) <= 16) {
                 mc.gameMode.interact(mc.player, e, new EntityHitResult(e), InteractionHand.MAIN_HAND);
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                dev.novautils.utils.InvUtils.swing();
                 cooldown = 6;
                 return;
             }

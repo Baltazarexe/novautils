@@ -1,5 +1,6 @@
 package dev.novautils.modules;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.config.Config;
 import dev.novautils.modules.combat.AutoArmor;
 import dev.novautils.modules.combat.AutoFight;
@@ -61,7 +62,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -174,12 +174,11 @@ public class ModuleManager {
     public void tick() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getWindow() == null) return;
-        long handle = mc.getWindow().handle();
 
         for (Module module : modules) {
             int key = module.getKeyBind();
             if (key != -1 && mc.gui.screen() == null) {
-                boolean down = GLFW.glfwGetKey(handle, key) == GLFW.GLFW_PRESS;
+                boolean down = InputConstants.isKeyDown(key);
                 if (down && !module.isKeyWasDown()) module.toggle();
                 module.setKeyWasDown(down);
             } else if (key != -1) {

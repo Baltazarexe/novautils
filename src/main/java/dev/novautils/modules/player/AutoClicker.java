@@ -36,7 +36,7 @@ public class AutoClicker extends Module {
             if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
                 if (!mc.gameMode.isDestroying()) mc.gameMode.startDestroyBlock(hit.getBlockPos(), hit.getDirection());
                 mc.gameMode.continueDestroyBlock(hit.getBlockPos(), hit.getDirection());
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                dev.novautils.utils.InvUtils.swing();
             }
         } else if (cooldown-- <= 0) {
             mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);

@@ -216,9 +216,7 @@ public class ClickGuiScreen extends Screen {
 
     private String keyName(int keyCode) {
         if (keyCode == -1) return "none";
-        return org.lwjgl.glfw.GLFW.glfwGetKeyName(keyCode, 0) != null
-            ? org.lwjgl.glfw.GLFW.glfwGetKeyName(keyCode, 0).toUpperCase()
-            : ("KEY_" + keyCode);
+        return com.mojang.blaze3d.platform.InputConstants.Type.KEYBOARD.getOrCreate(keyCode).getDisplayName().getString();
     }
 
     @Override

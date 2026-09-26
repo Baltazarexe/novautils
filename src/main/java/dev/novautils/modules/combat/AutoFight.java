@@ -72,7 +72,7 @@ public class AutoFight extends Module {
 
         if (target != null) {
             mc.gameMode.attack(mc.player, target);
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            dev.novautils.utils.InvUtils.swing();
             cooldown = delayTicks.get();
         }
     }

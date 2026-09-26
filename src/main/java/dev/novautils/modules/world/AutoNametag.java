@@ -25,7 +25,7 @@ public class AutoNametag extends Module {
         for (Entity e : mc.level.entitiesForRendering()) {
             if (e instanceof Mob mob && !mob.hasCustomName() && mc.player.distanceToSqr(e) <= 16) {
                 mc.gameMode.interact(mc.player, e, new EntityHitResult(e), InteractionHand.MAIN_HAND);
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                dev.novautils.utils.InvUtils.swing();
                 cooldown = 10;
                 return;
             }
