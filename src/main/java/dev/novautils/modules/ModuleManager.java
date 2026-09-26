@@ -2,12 +2,18 @@ package dev.novautils.modules;
 
 import dev.novautils.config.Config;
 import dev.novautils.modules.combat.AutoFight;
+import dev.novautils.modules.combat.Surround;
+import dev.novautils.modules.misc.AntiAfk;
+import dev.novautils.modules.misc.AutoRespawn;
 import dev.novautils.modules.misc.HudInfo;
+import dev.novautils.modules.movement.AutoJump;
 import dev.novautils.modules.movement.AutoSprint;
+import dev.novautils.modules.movement.Flight;
 import dev.novautils.modules.render.Esp;
 import dev.novautils.modules.render.Fullbright;
 import dev.novautils.modules.render.StorageEsp;
 import dev.novautils.modules.render.Waypoints;
+import dev.novautils.modules.render.Xray;
 import dev.novautils.modules.render.Zoom;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.DeltaTracker;
@@ -33,9 +39,15 @@ public class ModuleManager {
         register(new Esp());
         register(new StorageEsp());
         register(new Waypoints());
+        register(new Xray());
         register(new HudInfo());
+        register(new AntiAfk());
+        register(new AutoRespawn());
         register(new AutoSprint());
+        register(new AutoJump());
+        register(new Flight());
         register(new AutoFight());
+        register(new Surround());
 
         Config.get().load(modules);
     }
