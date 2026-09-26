@@ -56,6 +56,11 @@ public abstract class Module {
         enabled = value;
         if (enabled) onEnable();
         else onDisable();
+
+        // Null while the manager is still building its module list (config load), which is exactly
+        // when we don't want to mark anything dirty.
+        ModuleManager manager = ModuleManager.getIfReady();
+        if (manager != null) manager.markDirty();
     }
 
     public int getKeyBind() {

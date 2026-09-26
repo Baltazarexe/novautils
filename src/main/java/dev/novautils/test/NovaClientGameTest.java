@@ -113,6 +113,23 @@ public class NovaClientGameTest implements FabricClientGameTest {
             context.waitTicks(40);
             context.takeScreenshot("6d_fullbright_lightmap");
 
+            // Autosave: flip something, wait past the interval, and check it reached disk.
+            context.runOnClient(client -> ModuleManager.get().get(dev.novautils.modules.misc.Notifier.class).setEnabled(true));
+            context.waitTicks(230);
+            java.nio.file.Path configFile = net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getConfigDir().resolve("novautils.json");
+            try {
+                String json = java.nio.file.Files.readString(configFile);
+                if (!json.contains("\"Notifier\"")) throw new AssertionError("autosave did not write Notifier");
+                int at = json.indexOf("\"Notifier\"");
+                if (!json.substring(at, Math.min(json.length(), at + 120)).contains("\"enabled\": true")) {
+                    throw new AssertionError("autosave wrote Notifier but not as enabled");
+                }
+                System.out.println("[novautils-test] autosave verified at " + configFile);
+            } catch (java.io.IOException e) {
+                throw new AssertionError("autosave never created " + configFile, e);
+            }
+
             context.runOnClient(client -> {
                 for (dev.novautils.modules.Module m : ModuleManager.get().getModules()) m.setEnabled(false);
             });

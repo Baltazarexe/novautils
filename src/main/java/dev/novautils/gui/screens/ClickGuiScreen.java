@@ -443,14 +443,14 @@ public class ClickGuiScreen extends Screen {
                         if (!EXPANDED.remove(row.module())) EXPANDED.add(row.module());
                     } else {
                         row.module().toggle();
-                        ModuleManager.get().saveConfig();
+                        ModuleManager.get().markDirty();
                     }
                 }
                 case BOOL -> {
                     @SuppressWarnings("unchecked")
                     Setting<Boolean> setting = (Setting<Boolean>) row.setting();
                     setting.set(!setting.get());
-                    ModuleManager.get().saveConfig();
+                    ModuleManager.get().markDirty();
                 }
                 case NUMBER -> {
                     slidingSetting = row.setting();
@@ -505,7 +505,7 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (slidingSetting != null) ModuleManager.get().saveConfig();
+        if (slidingSetting != null) ModuleManager.get().markDirty();
         dragging = null;
         slidingSetting = null;
         slidingRow = null;
@@ -544,7 +544,7 @@ public class ClickGuiScreen extends Screen {
         int index = 0;
         for (int i = 0; i < constants.length; i++) if (constants[i] == setting.get()) index = i;
         ((Setting) setting).set(constants[Math.floorMod(index + direction, constants.length)]);
-        ModuleManager.get().saveConfig();
+        ModuleManager.get().markDirty();
     }
 
     @Override
@@ -552,7 +552,7 @@ public class ClickGuiScreen extends Screen {
         if (bindingFor != null) {
             bindingFor.setKeyBind(event.key() == InputConstants.KEY_ESCAPE ? -1 : event.key());
             bindingFor = null;
-            ModuleManager.get().saveConfig();
+            ModuleManager.get().markDirty();
             return true;
         }
         if (event.key() == InputConstants.KEY_BACKSPACE && !search.isEmpty()) {

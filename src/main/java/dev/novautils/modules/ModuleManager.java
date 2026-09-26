@@ -76,9 +76,18 @@ import java.util.List;
 public class ModuleManager {
     private static final ModuleManager INSTANCE = new ModuleManager();
 
+    private static final int AUTOSAVE_INTERVAL = 200; // 10 seconds
+
     private final List<Module> modules = new ArrayList<>();
+    private boolean dirty;
+    private int autosaveTimer = AUTOSAVE_INTERVAL;
 
     public static ModuleManager get() {
+        return INSTANCE;
+    }
+
+    /** Null until the singleton finished constructing (i.e. while modules are still registering). */
+    public static ModuleManager getIfReady() {
         return INSTANCE;
     }
 
@@ -189,11 +198,19 @@ public class ModuleManager {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getWindow() == null) return;
 
+        if (autosaveTimer-- <= 0) {
+            autosaveTimer = AUTOSAVE_INTERVAL;
+            saveIfDirty();
+        }
+
         for (Module module : modules) {
             int key = module.getKeyBind();
             if (key != -1 && mc.gui.screen() == null) {
                 boolean down = InputConstants.isKeyDown(key);
-                if (down && !module.isKeyWasDown()) module.toggle();
+                if (down && !module.isKeyWasDown()) {
+                    module.toggle();
+                    markDirty();
+                }
                 module.setKeyWasDown(down);
             } else if (key != -1) {
                 module.setKeyWasDown(false);
@@ -217,6 +234,19 @@ public class ModuleManager {
         }
     }
 
+    /**
+     * Flags the config as changed. Writing happens on the autosave tick instead of right away, so
+     * dragging a slider doesn't rewrite the file on every frame.
+     */
+    public void markDirty() {
+        dirty = true;
+    }
+
+    /** Writes the config if anything changed since the last write. */
+    public void saveIfDirty() {
+        if (dirty) saveConfig();
+    }
+
     /** Turns everything off at once; returns how many were on. Bound to the panic key. */
     public int disableAll() {
         int count = 0;
@@ -232,5 +262,6 @@ public class ModuleManager {
 
     public void saveConfig() {
         Config.get().save(modules);
+        dirty = false;
     }
 }

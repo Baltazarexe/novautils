@@ -7,6 +7,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.KeyMapping;
@@ -52,7 +53,9 @@ public class NovaUtilsClient implements ClientModInitializer {
         });
         LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(manager::renderWorld);
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(MOD_ID, "hud"), manager::renderHud);
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> manager.saveConfig());
+        // Autosave runs on a timer in ModuleManager#tick; these are the "don't lose it" moments.
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> manager.saveIfDirty());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> manager.saveIfDirty());
 
         LOG.info("NovaUtils loaded, {} modules registered.", manager.getModules().size());
     }
