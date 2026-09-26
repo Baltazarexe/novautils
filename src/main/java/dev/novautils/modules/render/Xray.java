@@ -102,7 +102,7 @@ public class Xray extends Module {
             context.poseStack().pushPose();
             context.poseStack().translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(),
+            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
                 (pose, buffer) -> RenderUtils.drawFilledBox(pose, buffer, box, color));
 
             context.poseStack().popPose();

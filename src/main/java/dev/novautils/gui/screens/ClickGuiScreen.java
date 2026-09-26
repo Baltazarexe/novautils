@@ -39,6 +39,7 @@ public class ClickGuiScreen extends Screen {
     private void rebuild() {
         clearWidgets();
 
+        int tabW = Math.max(40, Math.min(70, (this.width - 16) / Category.values().length - 4));
         int tabX = 8;
         for (Category category : Category.values()) {
             Button tab = Button.builder(Component.literal(category.name()), b -> {
@@ -46,9 +47,9 @@ public class ClickGuiScreen extends Screen {
                 selectedModule = null;
                 page = 0;
                 rebuild();
-            }).pos(tabX, 6).size(70, 18).build();
+            }).pos(tabX, 6).size(tabW, 18).build();
             addRenderableWidget(tab);
-            tabX += 74;
+            tabX += tabW + 4;
         }
 
         java.util.List<Module> inCategory = new java.util.ArrayList<>();

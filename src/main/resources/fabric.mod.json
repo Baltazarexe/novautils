@@ -12,6 +12,9 @@
   "entrypoints": {
     "client": [
       "dev.novautils.NovaUtilsClient"
+    ],
+    "fabric-client-gametest": [
+      "dev.novautils.test.NovaClientGameTest"
     ]
   },
   "mixins": [

@@ -70,7 +70,7 @@ public class Esp extends Module {
             context.poseStack().translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
             int finalColor = color;
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(),
+            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
                 (pose, buffer) -> RenderUtils.drawFilledBox(pose, buffer, box, finalColor));
 
             context.poseStack().popPose();

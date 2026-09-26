@@ -44,7 +44,7 @@ public class Trail extends Module {
 
         context.poseStack().pushPose();
         context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(), (pose, buffer) -> {
+        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(), (pose, buffer) -> {
             for (int i = 1; i < points.size(); i++) {
                 RenderUtils.drawRibbon(pose, buffer, points.get(i - 1), points.get(i), 0.03, color);
             }

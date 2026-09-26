@@ -55,7 +55,7 @@ public class Tracers extends Module {
             Vec3 end = e.getBoundingBox().getCenter();
             context.poseStack().pushPose();
             context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(),
+            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
                 (pose, buffer) -> RenderUtils.drawRibbon(pose, buffer, start, end, 0.012, color));
             context.poseStack().popPose();
         }

@@ -67,7 +67,7 @@ public abstract class BlockScanEsp extends Module {
         for (AABB box : boxes) {
             context.poseStack().pushPose();
             context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(),
+            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
                 (pose, buffer) -> RenderUtils.drawFilledBox(pose, buffer, box, color));
             context.poseStack().popPose();
         }

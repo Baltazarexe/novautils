@@ -49,3 +49,15 @@ tasks {
         options.release.set(libs.versions.jdk.get().toInt())
     }
 }
+
+// In-game automated test (creates a world, takes framebuffer screenshots). Run: ./gradlew runClientGametest
+fabricApi {
+    configureTests {
+        createSourceSet = false
+        modId = "novautils"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+        clearRunDirectory = true
+    }
+}

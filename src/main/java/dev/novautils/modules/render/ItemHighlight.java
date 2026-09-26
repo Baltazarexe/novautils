@@ -33,7 +33,7 @@ public class ItemHighlight extends Module {
             AABB box = e.getBoundingBox().inflate(0.05);
             context.poseStack().pushPose();
             context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), RenderTypes.debugFilledBox(),
+            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
                 (pose, buffer) -> RenderUtils.drawFilledBox(pose, buffer, box, color));
             context.poseStack().popPose();
         }
