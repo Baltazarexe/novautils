@@ -17,6 +17,7 @@ import dev.novautils.modules.movement.AntiVoid;
 import dev.novautils.modules.movement.AutoJump;
 import dev.novautils.modules.movement.AutoSprint;
 import dev.novautils.modules.movement.ElytraBoost;
+import dev.novautils.modules.movement.ElytraFly;
 import dev.novautils.modules.movement.FastClimb;
 import dev.novautils.modules.movement.Flight;
 import dev.novautils.modules.movement.HighJump;
@@ -108,6 +109,7 @@ public class ModuleManager {
         register(new Spider());
         register(new FastClimb());
         register(new ElytraBoost());
+        register(new ElytraFly());
         register(new Scaffold());
         register(new Sneak());
         register(new SafeWalk());
