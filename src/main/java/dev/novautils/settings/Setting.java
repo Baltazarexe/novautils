@@ -13,6 +13,8 @@ public class Setting<T> {
     public final double min;
     public final double max;
     public final Class<T> type;
+    /** Integer settings flagged as colours are edited with an ARGB picker instead of a slider. */
+    public final boolean color;
 
     private T value;
     private Supplier<Boolean> visiblePredicate = () -> true;
@@ -25,6 +27,7 @@ public class Setting<T> {
         this.min = builder.min;
         this.max = builder.max;
         this.type = builder.type;
+        this.color = builder.color;
         if (builder.visible != null) this.visiblePredicate = builder.visible;
     }
 
@@ -57,6 +60,7 @@ public class Setting<T> {
         private double min = Double.NEGATIVE_INFINITY;
         private double max = Double.POSITIVE_INFINITY;
         private Supplier<Boolean> visible;
+        private boolean color;
 
         public Builder(Class<T> type, String name) {
             this.type = type;
@@ -76,6 +80,12 @@ public class Setting<T> {
         public Builder<T> range(double min, double max) {
             this.min = min;
             this.max = max;
+            return this;
+        }
+
+        /** Marks an Integer setting as an ARGB colour. */
+        public Builder<T> asColor() {
+            this.color = true;
             return this;
         }
 

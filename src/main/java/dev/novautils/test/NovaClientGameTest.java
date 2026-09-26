@@ -23,7 +23,14 @@ public class NovaClientGameTest implements FabricClientGameTest {
             sp.getServer().runCommand("/fill -4 199 -6 14 199 6 minecraft:stone");
             sp.getServer().runCommand("/tp @a 0 200 0 -90 0");
             sp.getServer().runCommand("/fill 3 200 -3 5 204 3 minecraft:stone");
-            sp.getServer().runCommand("/setblock 4 201 0 minecraft:diamond_ore");
+            sp.getServer().runCommand("/setblock 4 202 -2 minecraft:diamond_ore");
+            sp.getServer().runCommand("/setblock 4 202 0 minecraft:gold_ore");
+            sp.getServer().runCommand("/setblock 4 202 2 minecraft:redstone_ore");
+            sp.getServer().runCommand("/setblock 4 201 -2 minecraft:copper_ore");
+            sp.getServer().runCommand("/setblock 4 201 2 minecraft:iron_ore");
+            sp.getServer().runCommand("/setblock 4 200 -2 minecraft:lapis_ore");
+            sp.getServer().runCommand("/setblock 4 200 0 minecraft:deepslate_emerald_ore");
+            sp.getServer().runCommand("/setblock 4 200 2 minecraft:coal_ore");
             sp.getServer().runCommand("/summon zombie 8 200 0 {NoAI:1b,PersistenceRequired:1b}");
             sp.getConnection().waitForChunksRender();
             context.waitTicks(20);
@@ -52,10 +59,19 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 ModuleManager.get().get(Esp.class).setEnabled(true);
                 ModuleManager.get().get(dev.novautils.modules.render.Xray.class).setEnabled(true);
                 dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.movement.Speed.class).setEnabled(true);
-                ClickGuiScreen.setExpanded(ModuleManager.get().get(Esp.class), true);
-                client.gui.setScreen(new ClickGuiScreen());
+                ClickGuiScreen.setExpanded(ModuleManager.get().get(Esp.class), false);
+                ClickGuiScreen.setExpanded(ModuleManager.get().get(dev.novautils.modules.render.Xray.class), true);
+                for (dev.novautils.settings.Setting<?> s : ModuleManager.get().get(dev.novautils.modules.render.Xray.class).getSettings()) {
+                    if (s.name.equals("diamond")) ClickGuiScreen.setColorExpanded(s, true);
+                }
+                ClickGuiScreen screen = new ClickGuiScreen();
+                client.gui.setScreen(screen);
             });
-            context.waitTicks(15);
+            context.waitTicks(5);
+            context.runOnClient(client -> {
+                if (client.gui.screen() instanceof ClickGuiScreen s) s.mouseScrolled(60, 90, 0, -4);
+            });
+            context.waitTicks(10);
             context.takeScreenshot("5_menu_active");
 
             sp.getServer().runCommand("/give @a minecraft:diamond_chestplate");

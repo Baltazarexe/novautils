@@ -34,9 +34,13 @@ public class ClickGuiScreen extends Screen {
     private static final int ROW_H = 13;
     private static final int SETTING_H = 12;
 
-    private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND }
+    private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND, COLOR, CHANNEL }
 
-    private record Row(Panel panel, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting) {}
+    private record Row(Panel panel, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting, int channel) {
+        Row(Panel panel, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting) {
+            this(panel, type, x, y, w, h, module, setting, -1);
+        }
+    }
 
     private static final class Panel {
         final Category category;
@@ -61,6 +65,7 @@ public class ClickGuiScreen extends Screen {
     /** Expanded modules, hover animation and panel placement survive closing the screen. */
     private static final Set<Module> EXPANDED = new HashSet<>();
     private static final Map<Module, Float> HOVER = new HashMap<>();
+    private static final Set<Setting<?>> OPEN_COLORS = new HashSet<>();
     private static final Map<Category, Panel> PANELS = new EnumMap<>(Category.class);
 
     private final List<Row> rows = new ArrayList<>();
@@ -76,6 +81,12 @@ public class ClickGuiScreen extends Screen {
     public static void setExpanded(Module module, boolean expanded) {
         if (expanded) EXPANDED.add(module);
         else EXPANDED.remove(module);
+    }
+
+    /** Opens or closes a colour setting's R/G/B/A sliders (also used by the in-game test). */
+    public static void setColorExpanded(Setting<?> setting, boolean expanded) {
+        if (expanded) OPEN_COLORS.add(setting);
+        else OPEN_COLORS.remove(setting);
     }
 
     public ClickGuiScreen() {
@@ -137,6 +148,7 @@ public class ClickGuiScreen extends Screen {
 
     private RowType rowTypeOf(Setting<?> setting) {
         Object value = setting.get();
+        if (setting.color) return RowType.COLOR;
         if (value instanceof Boolean) return RowType.BOOL;
         if (value instanceof Number) return RowType.NUMBER;
         if (value instanceof Enum<?>) return RowType.ENUM;
@@ -158,7 +170,11 @@ public class ClickGuiScreen extends Screen {
                 contentH += ROW_H;
                 if (!EXPANDED.contains(module)) continue;
                 for (Setting<?> setting : module.getSettings()) {
-                    if (setting.isVisible() && rowTypeOf(setting) != null) contentH += SETTING_H;
+                    if (!setting.isVisible()) continue;
+                    RowType type = rowTypeOf(setting);
+                    if (type == null) continue;
+                    contentH += SETTING_H;
+                    if (type == RowType.COLOR && OPEN_COLORS.contains(setting)) contentH += SETTING_H * 4;
                 }
                 contentH += SETTING_H;
             }
@@ -180,6 +196,13 @@ public class ClickGuiScreen extends Screen {
                     if (type == null) continue;
                     rows.add(new Row(panel, type, panel.x, y, PANEL_W, SETTING_H, module, setting));
                     y += SETTING_H;
+
+                    if (type == RowType.COLOR && OPEN_COLORS.contains(setting)) {
+                        for (int channel = 0; channel < 4; channel++) {
+                            rows.add(new Row(panel, RowType.CHANNEL, panel.x, y, PANEL_W, SETTING_H, module, setting, channel));
+                            y += SETTING_H;
+                        }
+                    }
                 }
                 rows.add(new Row(panel, RowType.KEYBIND, panel.x, y, PANEL_W, SETTING_H, module, null));
                 y += SETTING_H;
@@ -252,6 +275,8 @@ public class ClickGuiScreen extends Screen {
                 case NUMBER -> drawNumberRow(g, row);
                 case ENUM -> drawEnumRow(g, row, mouseX, mouseY);
                 case KEYBIND -> drawKeybindRow(g, row, mouseX, mouseY);
+                case COLOR -> drawColorRow(g, row, mouseX, mouseY);
+                case CHANNEL -> drawChannelRow(g, row);
             }
         }
         g.disableScissor();
@@ -313,6 +338,58 @@ public class ClickGuiScreen extends Screen {
         g.fill(tx, ty, tx + (int) (tw * frac), ty + 2, Theme.ACCENT);
         int knob = tx + (int) (tw * frac);
         g.fill(knob - 1, ty - 2, knob + 2, ty + 4, 0xFFFFFFFF);
+    }
+
+    private void drawColorRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
+        Setting<?> setting = row.setting();
+        if (hovered(row, mouseX, mouseY)) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x14FFFFFF);
+
+        boolean open = OPEN_COLORS.contains(setting);
+        g.text(this.font, (open ? "▾ " : "▸ ") + setting.name, row.x() + 8, row.y() + 2, Theme.TEXT_DIM);
+
+        int color = (Integer) setting.get();
+        int sx = row.x() + row.w() - 22, sy = row.y() + 2;
+        g.fill(sx - 1, sy - 1, sx + 15, sy + 9, 0xFF000000);
+        // checkerboard so alpha is readable
+        g.fill(sx, sy, sx + 14, sy + 8, 0xFF777777);
+        g.fill(sx, sy, sx + 7, sy + 4, 0xFF444444);
+        g.fill(sx + 7, sy + 4, sx + 14, sy + 8, 0xFF444444);
+        g.fill(sx, sy, sx + 14, sy + 8, color);
+    }
+
+    private void drawChannelRow(GuiGraphicsExtractor g, Row row) {
+        int color = (Integer) row.setting().get();
+        int channel = row.channel();
+        int value = channelValue(color, channel);
+        String name = switch (channel) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
+
+        g.text(this.font, name + " " + value, row.x() + 18, row.y() + 1, Theme.TEXT_DIM);
+
+        int tx = row.x() + 34, ty = row.y() + 5, tw = row.w() - 44;
+        int bar = switch (channel) { case 0 -> 0xFFFF5555; case 1 -> 0xFF55DD66; case 2 -> 0xFF5B8CFF; default -> 0xFFCCCCCC; };
+        g.fill(tx, ty, tx + tw, ty + 2, Theme.TRACK);
+        g.fill(tx, ty, tx + (int) (tw * (value / 255f)), ty + 2, bar);
+        int knob = tx + (int) (tw * (value / 255f));
+        g.fill(knob - 1, ty - 2, knob + 2, ty + 4, 0xFFFFFFFF);
+    }
+
+    private static int channelValue(int color, int channel) {
+        return switch (channel) {
+            case 0 -> (color >> 16) & 0xFF;
+            case 1 -> (color >> 8) & 0xFF;
+            case 2 -> color & 0xFF;
+            default -> (color >>> 24) & 0xFF;
+        };
+    }
+
+    private static int withChannel(int color, int channel, int value) {
+        value = Math.max(0, Math.min(255, value));
+        return switch (channel) {
+            case 0 -> (color & 0xFF00FFFF) | (value << 16);
+            case 1 -> (color & 0xFFFF00FF) | (value << 8);
+            case 2 -> (color & 0xFFFFFF00) | value;
+            default -> (color & 0x00FFFFFF) | (value << 24);
+        };
     }
 
     private void drawEnumRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
@@ -382,6 +459,14 @@ public class ClickGuiScreen extends Screen {
                 }
                 case ENUM -> cycleEnum(row.setting(), event.button() == 1 ? -1 : 1);
                 case KEYBIND -> bindingFor = row.module();
+                case COLOR -> {
+                    if (!OPEN_COLORS.remove(row.setting())) OPEN_COLORS.add(row.setting());
+                }
+                case CHANNEL -> {
+                    slidingSetting = row.setting();
+                    slidingRow = row;
+                    applySlider(mx);
+                }
             }
             return true;
         }
@@ -430,6 +515,15 @@ public class ClickGuiScreen extends Screen {
     @SuppressWarnings("unchecked")
     private void applySlider(int mouseX) {
         if (slidingSetting == null || slidingRow == null) return;
+
+        if (slidingRow.type() == RowType.CHANNEL) {
+            int tx = slidingRow.x() + 34, tw = slidingRow.w() - 44;
+            double frac = Math.max(0, Math.min(1, (mouseX - tx) / (double) tw));
+            Setting<Integer> color = (Setting<Integer>) slidingSetting;
+            color.set(withChannel(color.get(), slidingRow.channel(), (int) Math.round(frac * 255)));
+            return;
+        }
+
         int tx = slidingRow.x() + 12, tw = slidingRow.w() - 24;
         double frac = Math.max(0, Math.min(1, (mouseX - tx) / (double) tw));
         double min = Double.isFinite(slidingSetting.min) ? slidingSetting.min : 0;
