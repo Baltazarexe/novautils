@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.novautils.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LightmapMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

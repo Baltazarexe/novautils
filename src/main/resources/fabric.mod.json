@@ -14,6 +14,9 @@
       "dev.novautils.NovaUtilsClient"
     ]
   },
+  "mixins": [
+    "novautils.mixins.json"
+  ],
   "depends": {
     "java": ">=${jdk_version}",
     "fabricloader": ">=${loader_version}",
