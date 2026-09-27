@@ -1,0 +1,47 @@
+plugins {
+    id 'java-library'
+    alias(libs.plugins.neoforge.moddev)
+}
+
+version = '0.1.0'
+group = 'dev.novautils'
+
+base {
+    archivesName = 'novautils-neoforge'
+}
+
+// common/ is a plain source folder (see settings.gradle.kts), compiled straight into this
+// module against NeoForge's own Minecraft dependency below - same trick as the fabric module.
+sourceSets.main.java.srcDir('../common/src/main/java')
+sourceSets.main.resources.srcDir('../common/src/main/resources')
+
+repositories {
+    mavenCentral()
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.jdk.get().toInteger())
+
+neoForge {
+    version = libs.versions.neoforge.get()
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'novautils'
+        }
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        novautils {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

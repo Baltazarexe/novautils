@@ -1,0 +1,27 @@
+license="MIT"
+
+[[mods]]
+modId="novautils"
+version="0.1.0"
+displayName="NovaUtils"
+
+description='''
+Client-side utility mod: HUD, ESP, waypoints, fullbright, zoom and more. Configured entirely in-game.
+'''
+
+[[mixins]]
+config="novautils.mixins.json"
+
+[[dependencies.novautils]]
+    modId="neoforge"
+    type="required"
+    versionRange="[26.3.0.23-beta,)"
+    ordering="NONE"
+    side="CLIENT"
+
+[[dependencies.novautils]]
+    modId="minecraft"
+    type="required"
+    versionRange="[26.3]"
+    ordering="NONE"
+    side="CLIENT"
