@@ -2,22 +2,26 @@ package dev.novautils.modules.misc;
 
 import dev.novautils.gui.Theme;
 import dev.novautils.modules.Category;
-import dev.novautils.modules.Module;
-import dev.novautils.settings.Setting;
-import net.minecraft.client.DeltaTracker;
+import dev.novautils.modules.HudModule;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-/** WASD + sneak/jump indicator, the kind streamers put in a corner. */
-public class KeyStrokes extends Module {
-    private final Setting<Integer> x = register(Setting.builder(Integer.class, "x")
-        .description("Distance from the left edge.").defaultValue(10).range(0, 400).build());
-
-    private final Setting<Integer> y = register(Setting.builder(Integer.class, "y")
-        .description("Distance from the bottom edge.").defaultValue(70).range(0, 300).build());
+/** WASD + sneak/jump indicator. Movable in the HUD editor. */
+public class KeyStrokes extends HudModule {
+    private static final int SIZE = 16, GAP = 2;
 
     public KeyStrokes() {
         super("KeyStrokes", "Shows which movement keys you are pressing.", Category.MISC);
+    }
+
+    @Override
+    protected int defaultX(int screenW, int w) {
+        return 10;
+    }
+
+    @Override
+    protected int defaultY(int screenH, int h) {
+        return screenH - h - 50;
     }
 
     private void key(GuiGraphicsExtractor g, KeyMapping mapping, String label, int px, int py, int w, int h) {
@@ -28,16 +32,14 @@ public class KeyStrokes extends Module {
     }
 
     @Override
-    public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
-        int size = 16, gap = 2;
-        int left = x.get();
-        int top = g.guiHeight() - y.get();
-
-        key(g, mc.options.keyUp, "W", left + size + gap, top, size, size);
-        key(g, mc.options.keyLeft, "A", left, top + size + gap, size, size);
-        key(g, mc.options.keyDown, "S", left + size + gap, top + size + gap, size, size);
-        key(g, mc.options.keyRight, "D", left + (size + gap) * 2, top + size + gap, size, size);
-        key(g, mc.options.keyShift, "SHIFT", left, top + (size + gap) * 2, size * 3 + gap * 2, size - 4);
-        key(g, mc.options.keyJump, "____", left, top + (size + gap) * 2 + size - 2, size * 3 + gap * 2, size - 4);
+    protected int[] render(GuiGraphicsExtractor g, int left, int top, boolean right) {
+        int wide = SIZE * 3 + GAP * 2;
+        key(g, mc.options.keyUp, "W", left + SIZE + GAP, top, SIZE, SIZE);
+        key(g, mc.options.keyLeft, "A", left, top + SIZE + GAP, SIZE, SIZE);
+        key(g, mc.options.keyDown, "S", left + SIZE + GAP, top + SIZE + GAP, SIZE, SIZE);
+        key(g, mc.options.keyRight, "D", left + (SIZE + GAP) * 2, top + SIZE + GAP, SIZE, SIZE);
+        key(g, mc.options.keyShift, "SHIFT", left, top + (SIZE + GAP) * 2, wide, SIZE - 4);
+        key(g, mc.options.keyJump, "____", left, top + (SIZE + GAP) * 2 + SIZE - 2, wide, SIZE - 4);
+        return new int[]{wide, (SIZE + GAP) * 2 + (SIZE - 2) + (SIZE - 4)};
     }
 }

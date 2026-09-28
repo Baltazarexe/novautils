@@ -5,6 +5,7 @@ import dev.novautils.render.RenderContext;
 import dev.novautils.config.Config;
 import dev.novautils.modules.combat.AutoArmor;
 import dev.novautils.modules.combat.AutoFight;
+import dev.novautils.modules.combat.AutoLog;
 import dev.novautils.modules.combat.AutoTotem;
 import dev.novautils.modules.combat.Surround;
 import dev.novautils.modules.misc.ActiveModules;
@@ -12,6 +13,8 @@ import dev.novautils.modules.misc.AntiAfk;
 import dev.novautils.modules.misc.ArmorHud;
 import dev.novautils.modules.misc.DeathPoint;
 import dev.novautils.modules.misc.KeyStrokes;
+import dev.novautils.modules.misc.Notifications;
+import dev.novautils.modules.misc.TotemCounter;
 import dev.novautils.modules.misc.PotionHud;
 import dev.novautils.modules.misc.AutoReconnect;
 import dev.novautils.modules.misc.AutoRespawn;
@@ -22,6 +25,7 @@ import dev.novautils.modules.movement.AirJump;
 import dev.novautils.modules.movement.AntiVoid;
 import dev.novautils.modules.movement.AutoJump;
 import dev.novautils.modules.movement.AutoSprint;
+import dev.novautils.modules.movement.AutoWalk;
 import dev.novautils.modules.movement.ElytraBoost;
 import dev.novautils.modules.movement.ElytraFly;
 import dev.novautils.modules.movement.FastClimb;
@@ -113,6 +117,7 @@ public class ModuleManager {
 
         // Movement
         register(new AutoSprint());
+        register(new AutoWalk());
         register(new AutoJump());
         register(new Flight());
         register(new Speed());
@@ -137,6 +142,7 @@ public class ModuleManager {
         register(new Surround());
         register(new AutoTotem());
         register(new AutoArmor());
+        register(new AutoLog());
 
         // Player
         register(new AutoEat());
@@ -160,6 +166,8 @@ public class ModuleManager {
         register(new ArmorHud());
         register(new PotionHud());
         register(new KeyStrokes());
+        register(new TotemCounter());
+        register(new Notifications());
         register(new DeathPoint());
         register(new PlayerRadar());
         register(new Notifier());
@@ -210,6 +218,8 @@ public class ModuleManager {
                 if (down && !module.isKeyWasDown()) {
                     module.toggle();
                     markDirty();
+                    dev.novautils.gui.Toasts.push(module.name + (module.isEnabled() ? " ON" : " OFF"),
+                        module.isEnabled() ? dev.novautils.gui.Theme.ACCENT : 0xFF6E6E82);
                 }
                 module.setKeyWasDown(down);
             } else if (key != -1) {

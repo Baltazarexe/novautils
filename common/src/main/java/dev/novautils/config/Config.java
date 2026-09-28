@@ -55,8 +55,10 @@ public class Config {
                 if (!root.has(module.name)) continue;
                 JsonObject obj = root.getAsJsonObject(module.name);
 
-                if (obj.has("enabled") && obj.get("enabled").getAsBoolean()) {
-                    module.setEnabled(true);
+                // Apply the saved state both ways: some modules default to on (Notifications) and
+                // must stay off once the player turned them off.
+                if (obj.has("enabled")) {
+                    module.setEnabled(obj.get("enabled").getAsBoolean());
                 }
                 if (keybindsUsable && obj.has("keyBind")) {
                     module.setKeyBind(obj.get("keyBind").getAsInt());
@@ -77,13 +79,18 @@ public class Config {
 
     @SuppressWarnings("unchecked")
     private void applyValue(Setting<?> setting, JsonElement element) {
+        // Only accept a value of the matching JSON kind. Settings get renamed/retyped between
+        // versions (Xray's "diamond" used to be a colour int and is now an on/off boolean), and
+        // Gson happily reads a number as boolean false - which silently switched every ore off.
+        if (!element.isJsonPrimitive()) return;
+        var primitive = element.getAsJsonPrimitive();
         try {
             if (setting.type == Boolean.class) {
-                ((Setting<Boolean>) setting).set(element.getAsBoolean());
+                if (primitive.isBoolean()) ((Setting<Boolean>) setting).set(primitive.getAsBoolean());
             } else if (setting.type == Integer.class) {
-                ((Setting<Integer>) setting).set(element.getAsInt());
+                if (primitive.isNumber()) ((Setting<Integer>) setting).set(primitive.getAsInt());
             } else if (setting.type == Double.class) {
-                ((Setting<Double>) setting).set(element.getAsDouble());
+                if (primitive.isNumber()) ((Setting<Double>) setting).set(primitive.getAsDouble());
             } else if (setting.type == String.class) {
                 ((Setting<String>) setting).set(element.getAsString());
             } else if (Enum.class.isAssignableFrom(setting.type)) {

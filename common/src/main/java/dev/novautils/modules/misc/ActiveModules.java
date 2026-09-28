@@ -1,26 +1,24 @@
 package dev.novautils.modules.misc;
 
-import dev.novautils.utils.PlatformCompat;
+import dev.novautils.gui.Theme;
 import dev.novautils.modules.Category;
+import dev.novautils.modules.HudModule;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
 import dev.novautils.settings.Setting;
-import net.minecraft.client.DeltaTracker;
+import dev.novautils.utils.PlatformCompat;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** On-screen list of your modules, so you can tell at a glance what is running. */
-public class ActiveModules extends Module {
-    public enum Corner { TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT }
-
+/**
+ * On-screen list of your modules, so you can tell at a glance what is running. Drag it anywhere in
+ * the HUD editor; lines align to whichever side of the screen it sits on.
+ */
+public class ActiveModules extends HudModule {
     public enum Sort { LENGTH, ALPHABETICAL, CATEGORY }
-
-    private final Setting<Corner> corner = register(Setting.builder(Corner.class, "corner")
-        .description("Which corner of the screen to draw in.")
-        .defaultValue(Corner.TOP_RIGHT).build());
 
     private final Setting<Sort> sort = register(Setting.builder(Sort.class, "sort")
         .description("LENGTH gives the usual staircase look.")
@@ -30,6 +28,10 @@ public class ActiveModules extends Module {
         .description("Also list modules that are turned off, dimmed.")
         .defaultValue(false).build());
 
+    private final Setting<Boolean> hideHud = register(Setting.builder(Boolean.class, "hide-hud-modules")
+        .description("Leave HUD elements (this list, HudInfo, ...) out of the list.")
+        .defaultValue(true).build());
+
     private final Setting<Boolean> showKeybind = register(Setting.builder(Boolean.class, "show-keybind")
         .description("Show the bound key next to the name.")
         .defaultValue(false).build());
@@ -38,39 +40,56 @@ public class ActiveModules extends Module {
         .description("Draw a dark strip behind each line.")
         .defaultValue(true).build());
 
+    private final Setting<Boolean> gradient = register(Setting.builder(Boolean.class, "gradient")
+        .description("Fade from the active colour to the second colour down the list.")
+        .defaultValue(true).build());
+
     private final Setting<Integer> activeColor = register(Setting.builder(Integer.class, "active-color")
-        .description("Colour for modules that are on.")
+        .description("Colour for modules that are on (top of the list when gradient is on).")
         .defaultValue(0xFF7C5CFF).asColor().build());
+
+    private final Setting<Integer> secondColor = register(Setting.builder(Integer.class, "second-color")
+        .description("Bottom colour of the gradient.")
+        .defaultValue(0xFF35D6C8).asColor()
+        .visible(() -> gradient.get()).build());
 
     private final Setting<Integer> disabledColor = register(Setting.builder(Integer.class, "disabled-color")
         .description("Colour for modules that are off.")
-        .defaultValue(0xFF6E6E82).asColor().build());
-
-    private int lastHeight;
+        .defaultValue(0xFF6E6E82).asColor()
+        .visible(() -> showDisabled.get()).build());
 
     public ActiveModules() {
         super("ActiveModules", "Lists your modules on screen so you can see what is on.", Category.MISC);
     }
 
-    /** Pixels this list used last frame in that corner, so other HUDs can move out of the way. */
-    public int heightIn(Corner where) {
-        return isEnabled() && corner.get() == where ? lastHeight : 0;
+    @Override
+    protected int defaultX(int screenW, int w) {
+        return screenW - w - 3;
+    }
+
+    @Override
+    protected int defaultY(int screenH, int h) {
+        return 2;
     }
 
     private String label(Module module) {
         if (!showKeybind.get() || module.getKeyBind() == -1) return module.name;
-        String key = PlatformCompat.keyDisplayName(module.getKeyBind());
-        return module.name + " [" + key + "]";
+        return module.name + " [" + PlatformCompat.keyDisplayName(module.getKeyBind()) + "]";
     }
 
     @Override
-    public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
+    protected int[] render(GuiGraphicsExtractor g, int x, int y, boolean right) {
         List<Module> list = new ArrayList<>();
         for (Module module : ModuleManager.get().getModules()) {
+            if (hideHud.get() && module instanceof HudModule) continue;
             if (module.isEnabled() || showDisabled.get()) list.add(module);
         }
-        lastHeight = list.size() * (mc.font.lineHeight + 2) + 2;
-        if (list.isEmpty()) return;
+        if (list.isEmpty()) {
+            if (!editing) return new int[]{0, 0};
+            String sample = "Esp";
+            g.text(mc.font, sample, x, y + 1, 0x807C5CFF);
+            return new int[]{mc.font.width(sample), mc.font.lineHeight + 2};
+        }
 
         Comparator<Module> order = switch (sort.get()) {
             case LENGTH -> Comparator.comparingInt((Module m) -> mc.font.width(label(m))).reversed();
@@ -80,28 +99,37 @@ public class ActiveModules extends Module {
         // Enabled first, so turning something off drops it to the dimmed part of the list.
         list.sort(Comparator.comparing((Module m) -> !m.isEnabled()).thenComparing(order));
 
-        Corner where = corner.get();
-        boolean right = where == Corner.TOP_RIGHT || where == Corner.BOTTOM_RIGHT;
-        boolean bottom = where == Corner.BOTTOM_LEFT || where == Corner.BOTTOM_RIGHT;
+        int blockW = 0;
+        for (Module m : list) blockW = Math.max(blockW, mc.font.width(label(m)));
 
         int lineH = mc.font.lineHeight + 2;
-        int y = bottom ? g.guiHeight() - 4 - list.size() * lineH : 2;
+        int enabledCount = 0;
+        for (Module m : list) if (m.isEnabled()) enabledCount++;
 
-        for (Module module : list) {
+        for (int i = 0; i < list.size(); i++) {
+            Module module = list.get(i);
             String text = label(module);
             int w = mc.font.width(text);
-            int x = right ? g.guiWidth() - 3 - w : 3;
-            int color = module.isEnabled() ? activeColor.get() : disabledColor.get();
+            int lx = right ? x + blockW - w : x;
+            int ly = y + i * lineH;
 
-            if (background.get()) {
-                g.fill(x - 2, y - 1, x + w + 2, y + lineH - 1, 0x80101018);
-                // accent edge on the side the list is anchored to
-                if (right) g.fill(x + w + 2, y - 1, x + w + 3, y + lineH - 1, color);
-                else g.fill(x - 3, y - 1, x - 2, y + lineH - 1, color);
+            int color;
+            if (!module.isEnabled()) {
+                color = disabledColor.get();
+            } else if (gradient.get() && enabledCount > 1) {
+                color = Theme.mix(activeColor.get(), secondColor.get(), i / (float) (enabledCount - 1));
+            } else {
+                color = activeColor.get();
             }
 
-            g.text(mc.font, text, x, y + 1, color);
-            y += lineH;
+            if (background.get()) {
+                g.fill(lx - 2, ly - 1, lx + w + 2, ly + lineH - 1, 0x80101018);
+                // accent edge on the side the list is anchored to
+                if (right) g.fill(lx + w + 2, ly - 1, lx + w + 3, ly + lineH - 1, color);
+                else g.fill(lx - 3, ly - 1, lx - 2, ly + lineH - 1, color);
+            }
+            g.text(mc.font, text, lx, ly + 1, color);
         }
+        return new int[]{blockW, list.size() * lineH};
     }
 }

@@ -1,13 +1,15 @@
 package dev.novautils.modules.misc;
 
 import dev.novautils.modules.Category;
-import dev.novautils.modules.Module;
-import net.minecraft.client.DeltaTracker;
+import dev.novautils.modules.HudModule;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.effect.MobEffectInstance;
 
-/** Lists your active potion effects with the time left, on the right-hand side. */
-public class PotionHud extends Module {
+import java.util.ArrayList;
+import java.util.List;
+
+/** Your active potion effects with the time left. Movable in the HUD editor. */
+public class PotionHud extends HudModule {
     private static final String[] ROMAN = {"", " II", " III", " IV", " V"};
 
     public PotionHud() {
@@ -20,21 +22,37 @@ public class PotionHud extends Module {
     }
 
     @Override
-    public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
-        if (mc.player == null) return;
+    protected int defaultX(int screenW, int w) {
+        return screenW - w - 4;
+    }
 
-        // Start below the module list if it is sitting in the same corner.
-        int y = 4 + dev.novautils.modules.ModuleManager.get().get(ActiveModules.class)
-            .heightIn(ActiveModules.Corner.TOP_RIGHT);
+    @Override
+    protected int defaultY(int screenH, int h) {
+        return screenH / 3;
+    }
+
+    @Override
+    protected int[] render(GuiGraphicsExtractor g, int x, int y, boolean right) {
+        List<String> lines = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+
         for (MobEffectInstance effect : mc.player.getActiveEffects()) {
             String name = effect.getEffect().value().getDisplayName().getString();
             int amplifier = Math.min(effect.getAmplifier(), ROMAN.length - 1);
-            String left = time(effect.getDuration());
-            String line = name + ROMAN[amplifier] + " " + left;
-
-            int color = effect.getDuration() < 200 ? 0xFFFF6B6B : 0xFFE9E9F2;
-            g.text(mc.font, line, g.guiWidth() - 4 - mc.font.width(line), y, color);
-            y += mc.font.lineHeight + 1;
+            lines.add(name + ROMAN[amplifier] + " " + time(effect.getDuration()));
+            colors.add(effect.getDuration() < 200 ? 0xFFFF6B6B : 0xFFE9E9F2);
         }
+        if (lines.isEmpty() && editing) {
+            lines.add("Speed II 1:23");
+            colors.add(0x80E9E9F2);
+        }
+
+        int w = 0;
+        for (String l : lines) w = Math.max(w, mc.font.width(l));
+        int lineH = mc.font.lineHeight + 1;
+        for (int i = 0; i < lines.size(); i++) {
+            line(g, lines.get(i), x, y + i * lineH, w, right, colors.get(i));
+        }
+        return new int[]{w, lines.size() * lineH};
     }
 }

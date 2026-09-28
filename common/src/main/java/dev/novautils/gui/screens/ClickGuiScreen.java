@@ -76,6 +76,7 @@ public class ClickGuiScreen extends Screen {
     private Setting<?> slidingSetting;
     private Row slidingRow;
     private Module bindingFor;
+    private Setting<?> hoveredSetting;
 
     /** Opens or closes a module's settings section (also used by the in-game test). */
     public static void setExpanded(Module module, boolean expanded) {
@@ -235,13 +236,36 @@ public class ClickGuiScreen extends Screen {
 
         g.fill(0, 0, this.width, this.height, 0x99101018);
         drawSearch(g);
+        drawHudButton(g, mouseX, mouseY);
 
         for (Panel panel : PANELS.values()) drawPanel(g, panel, mouseX, mouseY, delta);
 
         String hint = bindingFor != null
             ? "Press a key to bind " + bindingFor.name + "   (ESC clears it)"
-            : "L-click toggle · R-click settings · drag title";
-        g.text(this.font, hint, 166, 12, bindingFor != null ? Theme.ACCENT : Theme.TEXT_DIM);
+            : "L-click toggle · R-click settings · M-click resets";
+        int hintX = HUD_BTN_X + HUD_BTN_W + 10;
+        if (hintX + this.font.width(hint) < this.width - 4) {
+            g.text(this.font, hint, hintX, 12, bindingFor != null ? Theme.ACCENT : Theme.TEXT_DIM);
+        }
+
+        // Setting tooltips are set here, after the panels, so they draw on top of everything.
+        if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
+            g.setTooltipForNextFrame(Component.literal(hoveredSetting.description + "  (middle-click: reset)"), mouseX, mouseY);
+        }
+        hoveredSetting = null;
+    }
+
+    private static final int HUD_BTN_X = 164, HUD_BTN_Y = 8, HUD_BTN_W = 56, HUD_BTN_H = 14;
+
+    private boolean overHudButton(int mx, int my) {
+        return mx >= HUD_BTN_X && mx < HUD_BTN_X + HUD_BTN_W && my >= HUD_BTN_Y && my < HUD_BTN_Y + HUD_BTN_H;
+    }
+
+    private void drawHudButton(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        boolean hover = overHudButton(mouseX, mouseY);
+        Theme.roundRect(g, HUD_BTN_X, HUD_BTN_Y, HUD_BTN_W, HUD_BTN_H, hover ? Theme.ACCENT : Theme.ACCENT_DIM);
+        String label = "Edit HUD";
+        g.text(this.font, label, HUD_BTN_X + HUD_BTN_W / 2 - this.font.width(label) / 2, HUD_BTN_Y + 3, 0xFFFFFFFF);
     }
 
     private void drawSearch(GuiGraphicsExtractor g) {
@@ -262,6 +286,16 @@ public class ClickGuiScreen extends Screen {
         g.fillGradient(panel.x + 1, panel.y + 1, panel.x + PANEL_W - 1, panel.y + HEADER_H, Theme.HEADER_TOP, Theme.HEADER_BOTTOM);
         g.fill(panel.x + 1, panel.y + HEADER_H - 1, panel.x + PANEL_W - 1, panel.y + HEADER_H, Theme.ACCENT);
         g.text(this.font, panel.category.name(), panel.x + 6, panel.y + 4, Theme.TEXT);
+
+        int total = 0, on = 0;
+        for (Module m : ModuleManager.get().getModules()) {
+            if (m.category != panel.category) continue;
+            total++;
+            if (m.isEnabled()) on++;
+        }
+        String count = on + "/" + total;
+        g.text(this.font, count, panel.x + PANEL_W - 16 - this.font.width(count), panel.y + 4,
+            on > 0 ? Theme.ACCENT : Theme.TEXT_OFF);
         g.text(this.font, panel.open ? "−" : "+", panel.x + PANEL_W - 11, panel.y + 4, Theme.TEXT_DIM);
 
         if (!panel.open) return;
@@ -277,6 +311,9 @@ public class ClickGuiScreen extends Screen {
                 case KEYBIND -> drawKeybindRow(g, row, mouseX, mouseY);
                 case COLOR -> drawColorRow(g, row, mouseX, mouseY);
                 case CHANNEL -> drawChannelRow(g, row);
+            }
+            if (row.setting() != null && row.type() != RowType.CHANNEL && hovered(row, mouseX, mouseY)) {
+                hoveredSetting = row.setting();
             }
         }
         g.disableScissor();
@@ -302,6 +339,11 @@ public class ClickGuiScreen extends Screen {
 
         g.text(this.font, module.name, row.x() + 7 + (int) (anim * 2), row.y() + 3,
             module.isEnabled() ? Theme.TEXT : Theme.TEXT_OFF);
+        if (module.getKeyBind() != -1) {
+            String key = keyName(module.getKeyBind());
+            if (key.length() > 5) key = key.substring(0, 5);
+            g.text(this.font, key, row.x() + row.w() - 15 - this.font.width(key), row.y() + 3, Theme.TEXT_OFF);
+        }
         g.text(this.font, EXPANDED.contains(module) ? "▾" : "▸", row.x() + row.w() - 11, row.y() + 3, Theme.TEXT_DIM);
 
         if (hover && !module.description.isEmpty()) {
@@ -419,6 +461,26 @@ public class ClickGuiScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         int mx = (int) event.x(), my = (int) event.y();
+
+        if (overHudButton(mx, my)) {
+            dev.novautils.utils.PlatformCompat.openScreen(net.minecraft.client.Minecraft.getInstance(), new HudEditorScreen(this));
+            return true;
+        }
+
+        // Middle click: reset whatever setting is under the mouse (or clear a keybind).
+        if (event.button() == 2) {
+            for (int i = rows.size() - 1; i >= 0; i--) {
+                Row row = rows.get(i);
+                if (!hovered(row, mx, my)) continue;
+                if (row.type() == RowType.KEYBIND) {
+                    row.module().setKeyBind(-1);
+                } else if (row.setting() != null) {
+                    row.setting().reset();
+                }
+                ModuleManager.get().markDirty();
+                return true;
+            }
+        }
 
         for (Panel panel : PANELS.values()) {
             if (mx >= panel.x && mx < panel.x + PANEL_W && my >= panel.y && my < panel.y + HEADER_H) {
@@ -557,6 +619,11 @@ public class ClickGuiScreen extends Screen {
         }
         if (event.key() == InputConstants.KEY_BACKSPACE && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
+            return true;
+        }
+        // First ESC clears the search, the second one closes the menu.
+        if (event.key() == InputConstants.KEY_ESCAPE && !search.isEmpty()) {
+            search = "";
             return true;
         }
         return super.keyPressed(event);
