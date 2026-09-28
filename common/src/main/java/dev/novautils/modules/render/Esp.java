@@ -5,6 +5,7 @@ import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
 import dev.novautils.utils.EspRender;
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.utils.RenderUtils;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.entity.Entity;
@@ -15,7 +16,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
-import net.minecraft.world.scores.TeamColor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -72,11 +72,11 @@ public class Esp extends Module {
             String name = "novautils_" + k.name().toLowerCase();
             PlayerTeam team = board.getPlayerTeam(name);
             if (team == null) team = board.addPlayerTeam(name);
-            team.setColor(java.util.Optional.of(switch (k) {
-                case PLAYER -> TeamColor.RED;
-                case HOSTILE -> TeamColor.GOLD;
-                case PASSIVE -> TeamColor.GREEN;
-            }));
+            switch (k) {
+                case PLAYER -> PlatformCompat.setPlayerColor(team);
+                case HOSTILE -> PlatformCompat.setHostileColor(team);
+                case PASSIVE -> PlatformCompat.setPassiveColor(team);
+            }
             return team;
         });
     }

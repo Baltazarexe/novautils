@@ -1,0 +1,64 @@
+plugins {
+    id 'java-library'
+    alias(libs.plugins.neoforge.moddev)
+}
+
+version = '0.1.0'
+group = 'dev.novautils'
+
+base {
+    archivesName = 'novautils-neoforge-26.1.2'
+}
+
+// common/ is shared with the fabric/ and neoforge/ (26.3) modules, but 26.1.2's Minecraft
+// internals differ enough (screen management still lives on Minecraft, not Gui; team colours are
+// ChatFormatting, not TeamColor; the render pipeline classes are under com.mojang.blaze3d.pipeline,
+// not com.mojang.renderpearl.api.pipeline) that two files need a 26.1.2-specific override, which
+// live in this module's own src/main/java at the same package+filename.
+//
+// A plain srcDir(fileTree(...) { exclude ... }) does not work here: Gradle iterates the FileTree
+// into individual matched files and tries to add each one as its own source *directory*, which
+// fails immediately. Instead, Sync the filtered common tree into a build/ directory first and use
+// that as the srcDir - filtering happens on the filesystem, before Gradle sees it as a source root.
+def commonSrcStaging = layout.buildDirectory.dir('generated/commonSrc')
+def stageCommonSrc = tasks.register('stageCommonSrc', Sync) {
+    from('../common/src/main/java') {
+        exclude 'dev/novautils/utils/PlatformCompat.java'
+        exclude 'dev/novautils/utils/EspRender.java'
+    }
+    into commonSrcStaging
+}
+
+sourceSets.main.java.srcDir(stageCommonSrc.map { it.destinationDir })
+sourceSets.main.resources.srcDir('../common/src/main/resources')
+
+repositories {
+    mavenCentral()
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.jdk.get().toInteger())
+
+neoForge {
+    version = libs.versions.neoforge261.get()
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'novautils'
+        }
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        novautils {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

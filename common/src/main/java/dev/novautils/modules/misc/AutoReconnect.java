@@ -1,5 +1,6 @@
 package dev.novautils.modules.misc;
 
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
@@ -27,7 +28,7 @@ public class AutoReconnect extends Module {
         ServerData current = mc.getCurrentServer();
         if (current != null && mc.player != null) lastServer = current;
 
-        if (mc.gui.screen() instanceof DisconnectedScreen && lastServer != null) {
+        if (PlatformCompat.currentScreen(mc) instanceof DisconnectedScreen && lastServer != null) {
             if (timer < 0) timer = delaySeconds.get() * 20;
             if (timer-- == 0) {
                 timer = -1;

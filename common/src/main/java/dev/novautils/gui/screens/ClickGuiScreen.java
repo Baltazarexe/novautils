@@ -411,7 +411,7 @@ public class ClickGuiScreen extends Screen {
 
     private String keyName(int keyCode) {
         if (keyCode == -1) return "none";
-        return InputConstants.Type.KEYBOARD.getOrCreate(keyCode).getDisplayName().getString();
+        return dev.novautils.utils.PlatformCompat.keyDisplayName(keyCode);
     }
 
     // ------------------------------------------------------------------ input

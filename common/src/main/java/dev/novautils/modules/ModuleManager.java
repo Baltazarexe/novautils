@@ -1,7 +1,7 @@
 package dev.novautils.modules;
 
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.render.RenderContext;
-import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.config.Config;
 import dev.novautils.modules.combat.AutoArmor;
 import dev.novautils.modules.combat.AutoFight;
@@ -205,8 +205,8 @@ public class ModuleManager {
 
         for (Module module : modules) {
             int key = module.getKeyBind();
-            if (key != -1 && mc.gui.screen() == null) {
-                boolean down = InputConstants.isKeyDown(key);
+            if (key != -1 && PlatformCompat.currentScreen(mc) == null) {
+                boolean down = PlatformCompat.isKeyDown(mc, key);
                 if (down && !module.isKeyWasDown()) {
                     module.toggle();
                     markDirty();

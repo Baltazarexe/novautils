@@ -1,5 +1,6 @@
 package dev.novautils.modules.player;
 
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
@@ -30,7 +31,7 @@ public class AutoClicker extends Module {
 
     @Override
     public void onTick() {
-        if (mc.player == null || mc.gameMode == null || mc.gui.screen() != null) return;
+        if (mc.player == null || mc.gameMode == null || PlatformCompat.currentScreen(mc) != null) return;
 
         if (mode.get() == Mode.MINE_BLOCKS) {
             if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {

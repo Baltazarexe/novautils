@@ -9,6 +9,8 @@ loom = "1.17-SNAPSHOT"
 
 # NeoForge (https://projects.neoforged.net/neoforged/neoforge)
 neoforge = "26.3.0.23-beta"
+neoforge261 = "26.1.2.109"
+minecraft261 = "26.1.2"
 moddev = "2.0.147"
 
 [libraries]

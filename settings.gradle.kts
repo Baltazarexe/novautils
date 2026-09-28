@@ -27,3 +27,7 @@ rootProject.name = "novautils"
 // agree on how to produce one.
 include("fabric")
 include("neoforge")
+// A second NeoForge target for MC 26.1.2 (older than the 26.3 build above), because 26.1.2's
+// internals differ enough (GLFW vs SDL keys, different render-pipeline packages, ...) that one
+// build can't cover both - see neoforge261/README-DIFFERENCES.md for what actually changed.
+include("neoforge261")

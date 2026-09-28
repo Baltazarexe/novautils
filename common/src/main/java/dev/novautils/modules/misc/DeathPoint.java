@@ -1,5 +1,6 @@
 package dev.novautils.modules.misc;
 
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.render.RenderContext;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
@@ -24,7 +25,7 @@ public class DeathPoint extends Module {
     public void onTick() {
         if (mc.player == null) return;
 
-        boolean dead = mc.gui.screen() instanceof DeathScreen || mc.player.getHealth() <= 0;
+        boolean dead = PlatformCompat.currentScreen(mc) instanceof DeathScreen || mc.player.getHealth() <= 0;
         if (dead && !wasDead) {
             death = mc.player.position();
             mc.player.sendSystemMessage(Component.literal(String.format(

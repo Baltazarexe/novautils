@@ -1,6 +1,6 @@
 package dev.novautils.modules.misc;
 
-import com.mojang.blaze3d.platform.InputConstants;
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
@@ -59,7 +59,7 @@ public class ActiveModules extends Module {
 
     private String label(Module module) {
         if (!showKeybind.get() || module.getKeyBind() == -1) return module.name;
-        String key = InputConstants.Type.KEYBOARD.getOrCreate(module.getKeyBind()).getDisplayName().getString();
+        String key = PlatformCompat.keyDisplayName(module.getKeyBind());
         return module.name + " [" + key + "]";
     }
 

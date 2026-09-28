@@ -1,5 +1,6 @@
 package dev.novautils.modules.misc;
 
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -13,10 +14,10 @@ public class AutoRespawn extends Module {
 
     @Override
     public void onTick() {
-        if (!(mc.gui.screen() instanceof DeathScreen)) return;
+        if (!(PlatformCompat.currentScreen(mc) instanceof DeathScreen)) return;
         if (mc.getConnection() == null) return;
 
         mc.getConnection().send(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.PERFORM_RESPAWN));
-        mc.gui.setScreen(null);
+        PlatformCompat.openScreen(mc, null);
     }
 }
