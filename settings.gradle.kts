@@ -31,3 +31,6 @@ include("neoforge")
 // internals differ enough (GLFW vs SDL keys, different render-pipeline packages, ...) that one
 // build can't cover both - see neoforge261/README-DIFFERENCES.md for what actually changed.
 include("neoforge261")
+// Fabric for MC 26.1.2 (for modpacks still on 26.1.2). Same common code, with the same two
+// 26.1.2-specific files neoforge261 uses.
+include("fabric261")
