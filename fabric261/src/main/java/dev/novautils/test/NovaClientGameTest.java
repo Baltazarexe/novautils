@@ -250,6 +250,31 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
     }
 
+    /** Waits for full charge, hits the tagged husk once, returns the damage it took. */
+    private static float hitOnce(ClientGameTestContext ctx) {
+        ctx.waitTicks(30);
+        return ctx.computeOnClient(c -> {
+            for (var e : c.level.entitiesForRendering()) {
+                if (e instanceof net.minecraft.world.entity.LivingEntity l && e instanceof net.minecraft.world.entity.monster.zombie.Husk) {
+                    float before = l.getHealth();
+                    c.gameMode.attack(c.player, e);
+                    return before;
+                }
+            }
+            throw new AssertionError("no husk");
+        }) - huskHealthLater(ctx);
+    }
+
+    private static float huskHealthLater(ClientGameTestContext ctx) {
+        ctx.waitTicks(15);
+        return ctx.computeOnClient(c -> {
+            for (var e : c.level.entitiesForRendering()) {
+                if (e instanceof net.minecraft.world.entity.monster.zombie.Husk h) return h.getHealth();
+            }
+            return 0f;
+        });
+    }
+
     private static void only(ClientGameTestContext ctx, Class<? extends Module> type) {
         ctx.runOnClient(c -> {
             allOff();
@@ -351,6 +376,29 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         check(zombieHp < 18f, "AutoFight hits the zombie (health " + zombieHp + ")");
         cmd(sp, "/kill @e[tag=fight]");
+
+        // Criticals: one full-charge sword hit without, one with - the second must do ~1.5x
+        cmd(sp, "/give @a minecraft:iron_sword");
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        cmd(sp, "/summon minecraft:husk 2 200 5 {NoAI:1b,PersistenceRequired:1b,Tags:[\"crit\"]}");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            allOff();
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 9; i++) if (inv.getItem(i).is(net.minecraft.world.item.Items.IRON_SWORD)) dev.novautils.utils.InvUtils.selectHotbar(i);
+        });
+        float normal = hitOnce(ctx);
+        ctx.runOnClient(c -> on(dev.novautils.modules.combat.Criticals.class));
+        float crit = hitOnce(ctx);
+        check(crit > normal * 1.3f, "Criticals (MINI_JUMP): normal hit " + normal + " dmg, with Criticals " + crit + " dmg");
+        cmd(sp, "/kill @e[tag=crit]");
+        // PACKET mode is only for servers before 26.3, which this one is
+        cmd(sp, "/summon minecraft:husk 2 200 5 {NoAI:1b,PersistenceRequired:1b,Tags:[\"crit\"]}");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> ((Setting<Object>) (Setting) setting(dev.novautils.modules.combat.Criticals.class, "mode")).set(dev.novautils.modules.combat.Criticals.Mode.PACKET));
+        float packetCrit = hitOnce(ctx);
+        check(packetCrit > normal * 1.3f, "Criticals (PACKET): " + packetCrit + " dmg");
+        cmd(sp, "/kill @e[tag=crit]");
 
         // Nuker (FLATTEN): two dirt blocks next to us, nothing under our feet level
         cmd(sp, "/tp @a -2 200 5 90 0");

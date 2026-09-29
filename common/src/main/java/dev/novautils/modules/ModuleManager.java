@@ -5,6 +5,7 @@ import dev.novautils.render.RenderContext;
 import dev.novautils.config.Config;
 import dev.novautils.modules.combat.AutoArmor;
 import dev.novautils.modules.combat.AutoFight;
+import dev.novautils.modules.combat.Criticals;
 import dev.novautils.modules.combat.AutoLog;
 import dev.novautils.modules.combat.AutoTotem;
 import dev.novautils.modules.combat.Surround;
@@ -143,6 +144,7 @@ public class ModuleManager {
 
         // Combat (defensive / mobs only - nothing that targets players)
         register(new AutoFight());
+        register(new Criticals());
         register(new Surround());
         register(new AutoTotem());
         register(new AutoArmor());
