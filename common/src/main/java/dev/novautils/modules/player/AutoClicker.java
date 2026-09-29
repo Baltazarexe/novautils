@@ -35,6 +35,7 @@ public class AutoClicker extends Module {
 
         if (mode.get() == Mode.MINE_BLOCKS) {
             if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+                dev.novautils.utils.MiningGuard.hold();
                 if (!mc.gameMode.isDestroying()) mc.gameMode.startDestroyBlock(hit.getBlockPos(), hit.getDirection());
                 mc.gameMode.continueDestroyBlock(hit.getBlockPos(), hit.getDirection());
                 dev.novautils.utils.InvUtils.swing();

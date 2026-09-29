@@ -26,7 +26,6 @@ import dev.novautils.modules.movement.AntiVoid;
 import dev.novautils.modules.movement.AutoJump;
 import dev.novautils.modules.movement.AutoSprint;
 import dev.novautils.modules.movement.AutoWalk;
-import dev.novautils.modules.movement.ElytraBoost;
 import dev.novautils.modules.movement.ElytraFly;
 import dev.novautils.modules.movement.FastClimb;
 import dev.novautils.modules.movement.Flight;
@@ -34,6 +33,8 @@ import dev.novautils.modules.movement.HighJump;
 import dev.novautils.modules.movement.Jesus;
 import dev.novautils.modules.movement.LongJump;
 import dev.novautils.modules.movement.NoFall;
+import dev.novautils.modules.movement.NoSlow;
+import dev.novautils.modules.movement.Velocity;
 import dev.novautils.modules.movement.Parkour;
 import dev.novautils.modules.movement.SafeWalk;
 import dev.novautils.modules.movement.Scaffold;
@@ -50,6 +51,7 @@ import dev.novautils.modules.player.FastBreak;
 import dev.novautils.modules.player.FastUse;
 import dev.novautils.modules.render.Breadcrumbs;
 import dev.novautils.modules.render.Esp;
+import dev.novautils.modules.render.Nametags;
 import dev.novautils.modules.render.Fullbright;
 import dev.novautils.modules.render.HoleEsp;
 import dev.novautils.modules.render.ItemHighlight;
@@ -100,6 +102,7 @@ public class ModuleManager {
         register(new Fullbright());
         register(new Zoom());
         register(new Esp());
+        register(new Nametags());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());
@@ -128,13 +131,14 @@ public class ModuleManager {
         register(new Jesus());
         register(new Spider());
         register(new FastClimb());
-        register(new ElytraBoost());
         register(new ElytraFly());
         register(new Scaffold());
         register(new Sneak());
         register(new SafeWalk());
         register(new Parkour());
         register(new NoFall());
+        register(new NoSlow());
+        register(new Velocity());
         register(new AntiVoid());
 
         // Combat (defensive / mobs only - nothing that targets players)
@@ -176,6 +180,7 @@ public class ModuleManager {
         register(new AutoReconnect());
 
         Config.get().load(modules);
+        dev.novautils.NovaUtils.modulesReady = true;
     }
 
     private void register(Module module) {
@@ -211,9 +216,35 @@ public class ModuleManager {
             saveIfDirty();
         }
 
+        dev.novautils.utils.Rotations.tick();
+        dev.novautils.utils.MiningGuard.tick();
+
         for (Module module : modules) {
             if (module.isEnabled()) module.onTick();
         }
+    }
+
+    public net.minecraft.world.phys.Vec3 onPlayerMove(net.minecraft.world.phys.Vec3 movement) {
+        for (Module module : modules) {
+            if (module.isEnabled()) movement = module.onMove(movement);
+        }
+        return movement;
+    }
+
+    public boolean onSendPacket(net.minecraft.network.protocol.Packet<?> packet) {
+        boolean cancel = false;
+        for (Module module : modules) {
+            if (module.isEnabled() && module.onSendPacket(packet)) cancel = true;
+        }
+        return cancel;
+    }
+
+    public boolean onReceivePacket(net.minecraft.network.protocol.Packet<?> packet) {
+        boolean cancel = false;
+        for (Module module : modules) {
+            if (module.isEnabled() && module.onReceivePacket(packet)) cancel = true;
+        }
+        return cancel;
     }
 
     /** Called from the keyboard handler on every key press; toggles modules bound to that key. */

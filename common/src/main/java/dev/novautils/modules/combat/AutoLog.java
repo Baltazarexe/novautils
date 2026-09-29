@@ -39,6 +39,8 @@ public class AutoLog extends Module {
 
     private void logOut(String reason) {
         setEnabled(false);
+        // reconnecting straight back into whatever made us leave would defeat the point
+        dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.misc.AutoReconnect.class).setEnabled(false);
         if (mc.getConnection() != null) {
             mc.getConnection().getConnection().disconnect(Component.literal("[NovaUtils AutoLog] " + reason));
         }

@@ -11,7 +11,7 @@ import dev.novautils.settings.Setting;
 import dev.novautils.utils.EspRender;
 import dev.novautils.utils.RenderUtils;
 import dev.novautils.utils.Storage;
-import net.minecraft.util.ARGB;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -26,29 +26,48 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persistent named markers you can see through walls. The {@code /waypoint add|remove|list}
- * command is registered by each loader's glue code (Brigadier command trees are tied to a
- * loader-specific source type), which calls straight into {@link #add}, {@link #remove} and
- * {@link #list} below - this class only holds the data and the shared logic.
+ * Persistent named markers you can see through walls, with a floating name + distance label.
+ * Each waypoint remembers its dimension and only shows there - except that Overworld waypoints can
+ * also show in the Nether at their /8 position (and the other way round), which is how you
+ * actually travel on 2b2t. The {@code /waypoint add|remove|list} command is registered by each
+ * loader's glue code and calls {@link #add}, {@link #remove} and {@link #list}.
  */
 public class Waypoints extends Module {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final String OVERWORLD = "minecraft:overworld", NETHER = "minecraft:the_nether";
 
-    private final Setting<Double> opacity = register(Setting.builder(Double.class, "opacity")
-        .description("Opacity of waypoint markers.")
-        .defaultValue(0.5)
-        .range(0.05, 1.0)
-        .build());
+    private final Setting<Integer> color = register(Setting.builder(Integer.class, "color")
+        .description("Beam and label colour.")
+        .defaultValue(0x80FFD91A).asColor().build());
+
+    private final Setting<Boolean> beam = register(Setting.builder(Boolean.class, "beam")
+        .description("Draw a tall beam so you can spot it from far away.")
+        .defaultValue(true).build());
+
+    private final Setting<Boolean> crossDimension = register(Setting.builder(Boolean.class, "nether-overworld")
+        .description("Show Overworld waypoints in the Nether at x/8 (and Nether ones in the Overworld at x8).")
+        .defaultValue(true).build());
+
+    private final Setting<Double> labelScale = register(Setting.builder(Double.class, "label-scale")
+        .description("Size of the name label.")
+        .defaultValue(1.0).range(0.5, 3.0).build());
 
     private final List<Waypoint> waypoints = new ArrayList<>();
 
     public Waypoints() {
-        super("Waypoints", "Persistent markers you can see through walls.", Category.RENDER);
+        super("Waypoints", "Named markers with distance, visible through walls.", Category.RENDER);
         loadWaypoints();
     }
 
+    private String currentDimension() {
+        return mc.level == null ? OVERWORLD : mc.level.dimension().identifier().toString();
+    }
+
     public void add(String name, double x, double y, double z) {
-        waypoints.add(new Waypoint(name, x, y, z));
+        waypoints.removeIf(w -> w.name.equalsIgnoreCase(name));
+        Waypoint w = new Waypoint(name, x, y, z);
+        w.dimension = currentDimension();
+        waypoints.add(w);
         saveWaypoints();
     }
 
@@ -58,32 +77,56 @@ public class Waypoints extends Module {
         return removed;
     }
 
-    /** One formatted "name: x, y, z" line per waypoint, ready to print. */
+    /** One formatted "name: x, y, z (dimension)" line per waypoint, ready to print. */
     public List<String> list() {
         List<String> lines = new ArrayList<>();
         for (Waypoint w : waypoints) {
-            lines.add(String.format("%s: %.1f, %.1f, %.1f", w.name, w.x, w.y, w.z));
+            String dim = w.dimension == null ? "" : " (" + w.dimension.replace("minecraft:", "") + ")";
+            lines.add(String.format("%s: %.0f, %.0f, %.0f%s", w.name, w.x, w.y, w.z, dim));
         }
         return lines;
     }
 
+    /** Where to draw {@code w} in the current dimension, or null if it doesn't belong here. */
+    private Vec3 positionHere(Waypoint w) {
+        String here = currentDimension();
+        if (w.dimension == null || w.dimension.equals(here)) return new Vec3(w.x, w.y, w.z);
+        if (!crossDimension.get()) return null;
+        if (w.dimension.equals(OVERWORLD) && here.equals(NETHER)) return new Vec3(w.x / 8, w.y, w.z / 8);
+        if (w.dimension.equals(NETHER) && here.equals(OVERWORLD)) return new Vec3(w.x * 8, w.y, w.z * 8);
+        return null;
+    }
+
     @Override
     public void onRenderWorld(RenderContext context) {
-        if (waypoints.isEmpty()) return;
-
-        Vec3 cameraPos = context.cameraPos();
-        int color = ARGB.colorFromFloat((float) (double) opacity.get(), 1f, 0.85f, 0.1f);
+        if (waypoints.isEmpty() || mc.player == null) return;
+        Vec3 cam = context.cameraPos();
+        int c = color.get();
 
         for (Waypoint w : waypoints) {
-            AABB box = new AABB(w.x - 0.4, w.y, w.z - 0.4, w.x + 0.4, w.y + 256, w.z + 0.4);
+            Vec3 pos = positionHere(w);
+            if (pos == null) continue;
+            boolean converted = w.dimension != null && !w.dimension.equals(currentDimension());
 
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+            if (beam.get()) {
+                AABB box = new AABB(pos.x - 0.25, pos.y, pos.z - 0.25, pos.x + 0.25,
+                    Math.max(pos.y + 2, mc.level == null ? pos.y + 256 : mc.level.getMaxY()), pos.z + 0.25);
+                context.poseStack().pushPose();
+                context.poseStack().translate(-cam.x, -cam.y, -cam.z);
+                context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
+                    (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, c));
+                context.poseStack().popPose();
+            }
 
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-
-            context.poseStack().popPose();
+            double dist = mc.player.position().distanceTo(pos);
+            String distText = dist >= 1000 ? String.format("%.1fk", dist / 1000) : String.valueOf(Math.round(dist));
+            Component label = Component.literal(w.name).withColor(c & 0xFFFFFF)
+                .append(Component.literal(" " + distText + "m" + (converted ? " ⇄" : "")).withColor(0xAAAAAA));
+            // clamp the label to 64 blocks away along the view line so it's always readable
+            Vec3 eye = mc.player.getEyePosition();
+            Vec3 labelPos = pos.add(0, 1.2, 0);
+            if (dist > 64) labelPos = eye.add(labelPos.subtract(eye).normalize().scale(64));
+            RenderUtils.label(context, labelPos, label, labelScale.get().floatValue(), true);
         }
     }
 
@@ -94,7 +137,6 @@ public class Waypoints extends Module {
     private void loadWaypoints() {
         Path file = waypointsFile();
         if (!Files.exists(file)) return;
-
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             Type listType = new TypeToken<List<Waypoint>>() {}.getType();
             List<Waypoint> loaded = GSON.fromJson(reader, listType);
@@ -118,6 +160,8 @@ public class Waypoints extends Module {
     private static class Waypoint {
         String name;
         double x, y, z;
+        /** e.g. "minecraft:overworld"; null for waypoints saved before dimensions were tracked. */
+        String dimension;
 
         Waypoint(String name, double x, double y, double z) {
             this.name = name;

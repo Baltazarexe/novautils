@@ -2,13 +2,38 @@ package dev.novautils.modules.player;
 
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
+import dev.novautils.settings.Setting;
 import dev.novautils.utils.InvUtils;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
-/** While you hold attack on a block, switches to the fastest tool in your hotbar, then switches back. */
+/**
+ * Switches to the fastest hotbar tool for the block you're mining and back when you stop.
+ * Won't pick a tool that's about to break, can prefer Silk Touch or Fortune, and ignores swords
+ * (a sword is "fast" on cobwebs and leaves but you don't want to wear it out mining).
+ */
 public class AutoTool extends Module {
+    public enum Prefer { NONE, SILK_TOUCH, FORTUNE }
+
+    private final Setting<Prefer> prefer = register(Setting.builder(Prefer.class, "prefer")
+        .description("Break ties toward Silk Touch or Fortune tools.")
+        .defaultValue(Prefer.NONE).build());
+
+    private final Setting<Integer> saveDurability = register(Setting.builder(Integer.class, "anti-break")
+        .description("Don't use a tool with this many uses left or fewer (0 = off).")
+        .defaultValue(10).range(0, 100).build());
+
+    private final Setting<Boolean> switchBack = register(Setting.builder(Boolean.class, "switch-back")
+        .description("Go back to the previous slot when you stop mining.")
+        .defaultValue(true).build());
+
     private int previousSlot = -1;
 
     public AutoTool() {
@@ -21,34 +46,51 @@ public class AutoTool extends Module {
     }
 
     private void restore() {
-        if (previousSlot != -1 && mc.player != null) InvUtils.selectHotbar(previousSlot);
+        if (switchBack.get() && previousSlot != -1 && mc.player != null) InvUtils.selectHotbar(previousSlot);
         previousSlot = -1;
+    }
+
+    private int level(ItemStack stack, ResourceKey<Enchantment> key) {
+        var lookup = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        return lookup.get(key).map(h -> EnchantmentHelper.getItemEnchantmentLevel(h, stack)).orElse(0);
+    }
+
+    private double score(ItemStack stack, BlockState state) {
+        if (stack.isDamageableItem() && saveDurability.get() > 0
+            && stack.getMaxDamage() - stack.getDamageValue() <= saveDurability.get()) return -1;
+        float speed = stack.getDestroySpeed(state);
+        if (speed <= 1f) return 0;
+        double s = speed;
+        if (stack.isCorrectToolForDrops(state)) s += 1000;
+        if (prefer.get() == Prefer.SILK_TOUCH) s += level(stack, Enchantments.SILK_TOUCH) * 50;
+        if (prefer.get() == Prefer.FORTUNE) s += level(stack, Enchantments.FORTUNE) * 50;
+        return s;
     }
 
     @Override
     public void onTick() {
         if (mc.player == null || mc.level == null) return;
-
         if (!mc.options.keyAttack.isDown()) {
             restore();
             return;
         }
         if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
-
         BlockState state = mc.level.getBlockState(hit.getBlockPos());
-        int best = mc.player.getInventory().getSelectedSlot();
-        float bestSpeed = mc.player.getInventory().getItem(best).getDestroySpeed(state);
+        if (state.getDestroySpeed(mc.level, hit.getBlockPos()) == 0) return; // instant-break anyway
 
+        var inv = mc.player.getInventory();
+        int current = inv.getSelectedSlot();
+        int best = current;
+        double bestScore = score(inv.getItem(current), state);
         for (int i = 0; i < 9; i++) {
-            float speed = mc.player.getInventory().getItem(i).getDestroySpeed(state);
-            if (speed > bestSpeed) {
-                bestSpeed = speed;
+            double s = score(inv.getItem(i), state);
+            if (s > bestScore) {
+                bestScore = s;
                 best = i;
             }
         }
-
-        if (best != mc.player.getInventory().getSelectedSlot()) {
-            if (previousSlot == -1) previousSlot = mc.player.getInventory().getSelectedSlot();
+        if (best != current) {
+            if (previousSlot == -1) previousSlot = current;
             InvUtils.selectHotbar(best);
         }
     }

@@ -2,16 +2,47 @@ package dev.novautils.modules.combat;
 
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
+import dev.novautils.settings.Setting;
 import dev.novautils.utils.InvUtils;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.equipment.Equippable;
 
-/** Wears the best armor piece you are carrying (ranked by material). Elytra is left alone. */
+/**
+ * Wears your best armour. Pieces are ranked by their real armour + toughness values plus
+ * protection enchantments (the kind you pick favours blast protection for crystal PvP areas), so a
+ * Protection IV diamond piece beats a plain one. Never swaps in cursed-of-binding pieces, keeps an
+ * elytra on if you're wearing one (optional), and skips nearly broken pieces.
+ */
 public class AutoArmor extends Module {
+    public enum Prefer { PROTECTION, BLAST_PROTECTION, FIRE_PROTECTION, PROJECTILE_PROTECTION }
+
     private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    private final Setting<Prefer> prefer = register(Setting.builder(Prefer.class, "prefer")
+        .description("Which protection enchantment counts the most.")
+        .defaultValue(Prefer.PROTECTION).build());
+
+    private final Setting<Boolean> keepElytra = register(Setting.builder(Boolean.class, "keep-elytra")
+        .description("Don't replace an elytra you're wearing with a chestplate.")
+        .defaultValue(true).build());
+
+    private final Setting<Integer> minDurability = register(Setting.builder(Integer.class, "min-durability")
+        .description("Ignore pieces with less than this % durability left.")
+        .defaultValue(5).range(0, 50).build());
+
+    private final Setting<Integer> delay = register(Setting.builder(Integer.class, "delay-ticks")
+        .description("Ticks between inventory clicks.")
+        .defaultValue(4).range(1, 20).build());
 
     private int cooldown;
 
@@ -19,38 +50,57 @@ public class AutoArmor extends Module {
         super("AutoArmor", "Automatically wears your best armor.", Category.COMBAT);
     }
 
-    /** -1 = not armor for this slot. */
-    private static int score(ItemStack stack, EquipmentSlot slot) {
+    private int level(ItemStack stack, ResourceKey<Enchantment> key) {
+        var lookup = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        return lookup.get(key).map(h -> EnchantmentHelper.getItemEnchantmentLevel(h, stack)).orElse(0);
+    }
+
+    /** -1 = not wearable in this slot (or a piece we refuse to wear). */
+    private double score(ItemStack stack, EquipmentSlot slot) {
         if (stack.isEmpty()) return -1;
         Equippable eq = stack.get(DataComponents.EQUIPPABLE);
-        if (eq == null || eq.slot() != slot) return -1;
+        if (eq == null || eq.slot() != slot || stack.is(Items.ELYTRA)) return -1;
+        if (level(stack, Enchantments.BINDING_CURSE) > 0) return -1;
+        if (stack.isDamageableItem()) {
+            double left = 1.0 - stack.getDamageValue() / (double) stack.getMaxDamage();
+            if (left * 100 < minDurability.get()) return -1;
+        }
 
-        String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
-        if (path.contains("elytra")) return -1;
-        if (path.startsWith("netherite")) return 6;
-        if (path.startsWith("diamond")) return 5;
-        if (path.startsWith("iron")) return 4;
-        if (path.startsWith("chainmail")) return 3;
-        if (path.startsWith("golden")) return 2;
-        if (path.startsWith("copper")) return 2;
-        if (path.startsWith("leather") || path.startsWith("turtle")) return 1;
-        return 0;
+        ItemAttributeModifiers mods = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        double armor = mods.compute(Attributes.ARMOR, 0, slot);
+        double tough = mods.compute(Attributes.ARMOR_TOUGHNESS, 0, slot);
+        double knock = mods.compute(Attributes.KNOCKBACK_RESISTANCE, 0, slot);
+
+        ResourceKey<Enchantment> preferred = switch (prefer.get()) {
+            case PROTECTION -> Enchantments.PROTECTION;
+            case BLAST_PROTECTION -> Enchantments.BLAST_PROTECTION;
+            case FIRE_PROTECTION -> Enchantments.FIRE_PROTECTION;
+            case PROJECTILE_PROTECTION -> Enchantments.PROJECTILE_PROTECTION;
+        };
+        double ench = level(stack, preferred) * 2.0
+            + (level(stack, Enchantments.PROTECTION) + level(stack, Enchantments.BLAST_PROTECTION)
+            + level(stack, Enchantments.FIRE_PROTECTION) + level(stack, Enchantments.PROJECTILE_PROTECTION)) * 0.5
+            + level(stack, Enchantments.UNBREAKING) * 0.1 + level(stack, Enchantments.MENDING) * 0.2;
+        return armor * 10 + tough * 4 + knock * 10 + ench;
     }
 
     @Override
     public void onTick() {
-        if (!InvUtils.canClick()) return;
+        if (!InvUtils.canClick() || mc.level == null) return;
         if (cooldown-- > 0) return;
 
         for (int i = 0; i < 4; i++) {
             EquipmentSlot slot = SLOTS[i];
             int armorMenuSlot = 5 + i;
-            int current = score(mc.player.inventoryMenu.getSlot(armorMenuSlot).getItem(), slot);
+            ItemStack worn = mc.player.inventoryMenu.getSlot(armorMenuSlot).getItem();
+            if (slot == EquipmentSlot.CHEST && keepElytra.get() && worn.is(Items.ELYTRA)) continue;
+            if (!worn.isEmpty() && level(worn, Enchantments.BINDING_CURSE) > 0) continue;
 
+            double current = score(worn, slot);
             int bestSlot = -1;
-            int bestScore = current;
+            double bestScore = current;
             for (int menuSlot = 9; menuSlot < 45; menuSlot++) {
-                int s = score(mc.player.inventoryMenu.getSlot(menuSlot).getItem(), slot);
+                double s = score(mc.player.inventoryMenu.getSlot(menuSlot).getItem(), slot);
                 if (s > bestScore) {
                     bestScore = s;
                     bestSlot = menuSlot;
@@ -58,9 +108,10 @@ public class AutoArmor extends Module {
             }
             if (bestSlot == -1) continue;
 
-            if (current >= 0) InvUtils.quickMove(armorMenuSlot); // take the old piece off first
-            else InvUtils.quickMove(bestSlot);                   // shift-click equips into the empty slot
-            cooldown = 4;
+            // take the old piece off first (next pass puts the new one on), else shift-click it on
+            if (!worn.isEmpty()) InvUtils.quickMove(armorMenuSlot);
+            else InvUtils.quickMove(bestSlot);
+            cooldown = delay.get();
             return;
         }
     }

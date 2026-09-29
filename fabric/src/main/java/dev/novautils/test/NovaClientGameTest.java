@@ -138,7 +138,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(ctx.computeOnClient(c -> !mod(Fullbright.class).isEnabled()), "second left-click disables Fullbright");
 
         // right-click expands; a boolean setting flips on click
-        click(ctx, row(ctx, Xray.class, null), 1);
+        click(ctx, reveal(ctx, RENDER, Xray.class, null), 1);
         check(reveal(ctx, RENDER, Xray.class, "diamond") != null, "right-click shows Xray settings");
         click(ctx, row(ctx, Xray.class, "diamond"), 0);
         check(ctx.computeOnClient(c -> !((Setting<Boolean>) setting(Xray.class, "diamond")).get()), "click turns diamond off");
@@ -233,6 +233,162 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> c.gui.screen() == null), "ESC closes the menu");
+    }
+
+    private static void cmd(TestSingleplayerContext sp, String command) {
+        sp.getServer().runCommand(command);
+    }
+
+    private static double[] pos(ClientGameTestContext ctx) {
+        return ctx.computeOnClient(c -> new double[]{c.player.getX(), c.player.getY(), c.player.getZ()});
+    }
+
+    private static void walk(ClientGameTestContext ctx, int ticks) {
+        ctx.getInput().holdKey(o -> o.keyUp);
+        ctx.waitTicks(ticks);
+        ctx.getInput().releaseKey(o -> o.keyUp);
+        ctx.waitTicks(3);
+    }
+
+    private static void only(ClientGameTestContext ctx, Class<? extends Module> type) {
+        ctx.runOnClient(c -> {
+            allOff();
+            on(type);
+        });
+        ctx.waitTicks(2);
+    }
+
+    /**
+     * Checks that the reworked modules actually do their job in a real (singleplayer) world, in
+     * survival: movement through the physics hook, packet edits, silent rotations, block placing
+     * and breaking, eating, fighting, plus screenshots of the new world labels.
+     */
+    private static void featureChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        ctx.runOnClient(c -> {
+            c.gui.setScreen(null);
+            allOff();
+        });
+        cmd(sp, "/difficulty easy");
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/effect clear @a");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/effect give @a minecraft:instant_health 1 10");
+        ctx.waitTicks(10);
+
+        // Speed: 15 ticks of W, walking covers ~3.2 blocks, Speed(0.36) ~5.4
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.movement.Speed.class);
+        double x0 = pos(ctx)[0];
+        walk(ctx, 15);
+        double moved = pos(ctx)[0] - x0;
+        check(moved > 4.5, "Speed moves faster than walking (" + String.format("%.2f", moved) + " blocks in 15 ticks)");
+
+        // SafeWalk: walk west off the platform edge (x=-4) - must stay on it
+        cmd(sp, "/tp @a -2 200 5 90 0");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.movement.SafeWalk.class);
+        walk(ctx, 40);
+        double[] p = pos(ctx);
+        check(p[1] > 199.5 && p[0] > -4.5, "SafeWalk stops at the edge (x=" + String.format("%.2f", p[0]) + ", y=" + String.format("%.2f", p[1]) + ")");
+
+        // NoFall: 25-block drop in survival would nearly kill; must take no damage
+        cmd(sp, "/tp @a 0 225 5 -90 0");
+        ctx.runOnClient(c -> { allOff(); on(dev.novautils.modules.movement.NoFall.class); });
+        ctx.waitTicks(60);
+        float hp = ctx.computeOnClient(c -> c.player.getHealth());
+        check(hp >= 19.5f && pos(ctx)[1] < 200.5, "NoFall: 25-block fall, health still " + hp);
+
+        // Scaffold: walk east off the platform (ends at x=14) with stone in the hotbar
+        cmd(sp, "/give @a minecraft:stone 64");
+        cmd(sp, "/tp @a 12 200 5 -90 0");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.movement.Scaffold.class);
+        walk(ctx, 50);
+        p = pos(ctx);
+        boolean bridged = ctx.computeOnClient(c -> !c.level.getBlockState(new net.minecraft.core.BlockPos(15, 199, 5)).isAir());
+        check(bridged && p[1] > 199.5 && p[0] > 15, "Scaffold builds a bridge over the void (x=" + String.format("%.1f", p[0]) + ", y=" + String.format("%.1f", p[1]) + ")");
+        ctx.takeScreenshot("13_scaffold");
+
+        // Jesus: walk from the platform onto a pool
+        cmd(sp, "/fill -3 196 7 3 199 11 minecraft:stone");
+        cmd(sp, "/fill -2 199 8 2 199 10 minecraft:water");
+        cmd(sp, "/tp @a 0 200 6 0 0");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.movement.Jesus.class);
+        walk(ctx, 12);
+        p = pos(ctx);
+        boolean wet = ctx.computeOnClient(c -> c.player.isInWater());
+        check(p[2] > 8 && p[1] > 199.9 && !wet, "Jesus walks on water (z=" + String.format("%.1f", p[2]) + ", y=" + String.format("%.2f", p[1]) + ", inWater=" + wet + ")");
+        ctx.takeScreenshot("14_jesus");
+
+        // AutoEat: drain the food bar, then it must eat the bread by itself
+        cmd(sp, "/tp @a -2 200 5 90 0");
+        cmd(sp, "/effect give @a minecraft:hunger 30 255");
+        ctx.runOnClient(c -> allOff());
+        ctx.waitFor(c -> c.player.getFoodData().getFoodLevel() <= 10, 600);
+        cmd(sp, "/effect clear @a minecraft:hunger");
+        cmd(sp, "/give @a minecraft:bread 16");
+        ctx.waitTicks(5);
+        int before = ctx.computeOnClient(c -> c.player.getFoodData().getFoodLevel());
+        only(ctx, dev.novautils.modules.player.AutoEat.class);
+        ctx.waitTicks(80);
+        int after = ctx.computeOnClient(c -> c.player.getFoodData().getFoodLevel());
+        boolean released = ctx.computeOnClient(c -> !c.options.keyUse.isDown());
+        check(after > before + 4 && released, "AutoEat ate bread (food " + before + " -> " + after + ") and let go of the use key");
+
+        // AutoFight: zombie in the open next to us gets hit (with silent rotations)
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        cmd(sp, "/summon minecraft:zombie 2 200 5 {NoAI:1b,PersistenceRequired:1b,Tags:[\"fight\"]}");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.combat.AutoFight.class);
+        ctx.waitTicks(60);
+        float zombieHp = ctx.computeOnClient(c -> {
+            for (var e : c.level.entitiesForRendering()) {
+                if (e instanceof net.minecraft.world.entity.monster.zombie.Zombie z && e.distanceToSqr(2, 200, 5) < 4) return z.getHealth();
+            }
+            return 0f;
+        });
+        check(zombieHp < 18f, "AutoFight hits the zombie (health " + zombieHp + ")");
+        cmd(sp, "/kill @e[tag=fight]");
+
+        // Nuker (FLATTEN): two dirt blocks next to us, nothing under our feet level
+        cmd(sp, "/tp @a -2 200 5 90 0");
+        cmd(sp, "/setblock -3 200 3 minecraft:dirt");
+        cmd(sp, "/setblock -3 201 3 minecraft:dirt");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.world.Nuker.class);
+        ctx.waitFor(c -> c.level.getBlockState(new net.minecraft.core.BlockPos(-3, 200, 3)).isAir()
+            && c.level.getBlockState(new net.minecraft.core.BlockPos(-3, 201, 3)).isAir(), 200);
+        boolean floorKept = ctx.computeOnClient(c -> !c.level.getBlockState(new net.minecraft.core.BlockPos(-2, 199, 5)).isAir());
+        check(floorKept, "Nuker cleared the dirt and left the floor alone");
+
+        // Zoom, Nametags and a waypoint label: screenshot only
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        cmd(sp, "/summon minecraft:zombie 7 200 1 {NoAI:1b,PersistenceRequired:1b}");
+        cmd(sp, "/summon minecraft:villager 2 200 -5 {NoAI:1b,PersistenceRequired:1b}");
+        cmd(sp, "/effect give @e[type=minecraft:zombie] minecraft:fire_resistance infinite 0 true");
+        ctx.runOnClient(c -> {
+            allOff();
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Nametags.class, "mobs")).set(true);
+            on(dev.novautils.modules.render.Nametags.class);
+            on(dev.novautils.modules.render.Waypoints.class);
+            ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).add("base", 60, 200, 30);
+        });
+        ctx.waitTicks(20);
+        ctx.takeScreenshot("15_nametags_waypoint");
+        ctx.runOnClient(c -> {
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Zoom.class, "hold")).set(false);
+            on(dev.novautils.modules.render.Zoom.class);
+        });
+        ctx.waitTicks(30);
+        ctx.takeScreenshot("16_zoom");
+        ctx.runOnClient(c -> {
+            allOff();
+            ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("base");
+        });
+        cmd(sp, "/gamemode creative @a");
+        ctx.waitTicks(20);
     }
 
     @Override
@@ -332,6 +488,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             context.takeScreenshot("07_storage_esp");
 
             menuInteraction(context);
+            featureChecks(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

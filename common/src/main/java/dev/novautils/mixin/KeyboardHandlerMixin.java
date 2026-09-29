@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class KeyboardHandlerMixin {
     @Inject(method = "keyPress", at = @At("HEAD"))
     private void novautils$onKeyPress(long window, int action, KeyEvent event, CallbackInfo ci) {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
         if (action == InputConstants.PRESS) ModuleManager.get().onKeyPressed(event.key());
     }
 }

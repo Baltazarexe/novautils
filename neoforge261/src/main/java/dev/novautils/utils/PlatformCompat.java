@@ -48,4 +48,8 @@ public final class PlatformCompat {
     public static void swingMainHand(LocalPlayer player) {
         player.swing(InteractionHand.MAIN_HAND);
     }
+
+    public static net.minecraft.client.Camera camera(Minecraft mc) {
+        return mc.gameRenderer.getMainCamera();
+    }
 }

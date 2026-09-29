@@ -5,10 +5,21 @@
   "client": [
     "LightmapMixin",
     "KeyboardHandlerMixin",
+    "LocalPlayerMixin",
+    "NametagMixin",
+    "AvatarNametagMixin",
+    "PlayerMixin",
+    "PacketSendMixin",
+    "ClientPacketListenerMixin",
+    "LiquidBlockMixin",
+    "CameraMixin",
+    "MouseHandlerMixin",
+    "MovePlayerPacketAccessor",
     "MinecraftAccessor",
     "DeltaTrackerTimerAccessor",
     "EntityAccessor",
-    "MultiPlayerGameModeAccessor"
+    "MultiPlayerGameModeAccessor",
+    "GameModeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

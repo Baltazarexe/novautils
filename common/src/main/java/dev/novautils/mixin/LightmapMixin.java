@@ -23,6 +23,7 @@ public abstract class LightmapMixin {
 
     @Inject(method = "render", at = @At("HEAD"))
     private void novautils$fullbright(LightmapRenderState state, CallbackInfo ci) {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
         Fullbright fullbright = ModuleManager.get().get(Fullbright.class);
         boolean active = fullbright.isEnabled();
 

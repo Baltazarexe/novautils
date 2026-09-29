@@ -79,4 +79,26 @@ public abstract class Module {
 
     /** Only called for enabled modules by ModuleManager's single global HUD hook. */
     public void onRenderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {}
+
+    /**
+     * The movement the local player is about to make this tick (self-propelled only). Return the
+     * vector to use instead - this runs inside vanilla's own physics step, so unlike setting the
+     * velocity after the tick nothing overwrites it.
+     */
+    public net.minecraft.world.phys.Vec3 onMove(net.minecraft.world.phys.Vec3 movement) {
+        return movement;
+    }
+
+    /** An outgoing packet. Return true to drop it. */
+    public boolean onSendPacket(net.minecraft.network.protocol.Packet<?> packet) {
+        return false;
+    }
+
+    /**
+     * An incoming game packet, already on the client thread. Only the packet types
+     * ClientPacketListenerMixin forwards arrive here. Return true to cancel vanilla's handling.
+     */
+    public boolean onReceivePacket(net.minecraft.network.protocol.Packet<?> packet) {
+        return false;
+    }
 }

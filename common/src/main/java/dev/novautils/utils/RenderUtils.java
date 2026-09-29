@@ -50,6 +50,32 @@ public final class RenderUtils {
         drawRibbon(pose, buffer, c, g, w, edge); drawRibbon(pose, buffer, d, h, w, edge);
     }
 
+    /**
+     * A floating text label at a world position that always faces the camera and keeps about the
+     * same size on screen however far away it is. Drawn through walls when {@code seeThrough}.
+     */
+    public static void label(dev.novautils.render.RenderContext context, Vec3 pos,
+                             net.minecraft.network.chat.Component text, float scale, boolean seeThrough) {
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        Vec3 cam = context.cameraPos();
+        double dist = Math.max(4.0, cam.distanceTo(pos));
+        float s = (float) (0.004 * dist * scale);
+
+        var pose = context.poseStack();
+        pose.pushPose();
+        pose.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
+        pose.rotateAround(PlatformCompat.camera(mc).rotation(), 0f, 0f, 0f);
+        pose.scale(s, -s, s);
+
+        var seq = text.getVisualOrderText();
+        float x = -mc.font.width(seq) / 2f;
+        var mode = seeThrough ? net.minecraft.client.gui.Font.DisplayMode.SEE_THROUGH
+            : net.minecraft.client.gui.Font.DisplayMode.NORMAL;
+        context.submitNodeCollector().submitText(pose, x, 0, seq, false, mode,
+            net.minecraft.util.LightCoordsUtil.FULL_BRIGHT, 0xFFFFFFFF, 0x90000000, 0);
+        pose.popPose();
+    }
+
     /** Thin two-plane ribbon between two world-space points (a stand-in for a line). */
     public static void drawRibbon(PoseStack.Pose pose, VertexConsumer buffer, Vec3 a, Vec3 b, double width, int color) {
         Vec3 d = b.subtract(a);
