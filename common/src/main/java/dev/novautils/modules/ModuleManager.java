@@ -212,21 +212,20 @@ public class ModuleManager {
         }
 
         for (Module module : modules) {
-            int key = module.getKeyBind();
-            if (key != -1 && PlatformCompat.currentScreen(mc) == null) {
-                boolean down = PlatformCompat.isKeyDown(mc, key);
-                if (down && !module.isKeyWasDown()) {
-                    module.toggle();
-                    markDirty();
-                    dev.novautils.gui.Toasts.push(module.name + (module.isEnabled() ? " ON" : " OFF"),
-                        module.isEnabled() ? dev.novautils.gui.Theme.ACCENT : 0xFF6E6E82);
-                }
-                module.setKeyWasDown(down);
-            } else if (key != -1) {
-                module.setKeyWasDown(false);
-            }
-
             if (module.isEnabled()) module.onTick();
+        }
+    }
+
+    /** Called from the keyboard handler on every key press; toggles modules bound to that key. */
+    public void onKeyPressed(int key) {
+        Minecraft mc = Minecraft.getInstance();
+        if (key == -1 || mc.player == null || PlatformCompat.currentScreen(mc) != null) return;
+        for (Module module : modules) {
+            if (module.getKeyBind() != key) continue;
+            module.toggle();
+            markDirty();
+            dev.novautils.gui.Toasts.push(module.name + (module.isEnabled() ? " ON" : " OFF"),
+                module.isEnabled() ? dev.novautils.gui.Theme.ACCENT : 0xFF6E6E82);
         }
     }
 

@@ -22,7 +22,7 @@ public class AutoEat extends Module {
     private int previousSlot = -1;
 
     public AutoEat() {
-        super("AutoEat", "Eats food from your hotbar when you're hungry.", Category.MISC);
+        super("AutoEat", "Eats food from your hotbar when you're hungry.", Category.PLAYER);
     }
 
     @Override

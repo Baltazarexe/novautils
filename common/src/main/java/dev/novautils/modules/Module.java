@@ -24,9 +24,8 @@ public abstract class Module {
     private final List<Setting<?>> settings = new ArrayList<>();
     private boolean enabled = false;
 
-    /** GLFW key code bound to this module, -1 = unbound. Polled each tick by ModuleManager. */
+    /** Key code bound to this module, -1 = unbound. Toggled from the key press event (KeyboardHandlerMixin). */
     private int keyBind = -1;
-    private boolean keyWasDown = false;
 
     protected Module(String name, String description, Category category) {
         this.name = name;
@@ -71,15 +70,6 @@ public abstract class Module {
         this.keyBind = keyCode;
     }
 
-    public boolean isKeyWasDown() {
-        return keyWasDown;
-    }
-
-    public void setKeyWasDown(boolean value) {
-        this.keyWasDown = value;
-    }
-
-    /** Called every client tick regardless of enabled state (used for keybind polling by ModuleManager). */
     public void onEnable() {}
     public void onDisable() {}
     public void onTick() {}

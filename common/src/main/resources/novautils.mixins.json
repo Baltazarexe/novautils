@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "LightmapMixin",
+    "KeyboardHandlerMixin",
     "MinecraftAccessor",
     "DeltaTrackerTimerAccessor",
     "EntityAccessor",

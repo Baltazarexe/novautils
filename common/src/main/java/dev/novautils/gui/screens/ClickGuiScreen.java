@@ -90,6 +90,29 @@ public class ClickGuiScreen extends Screen {
         else OPEN_COLORS.remove(setting);
     }
 
+    /**
+     * Centre of a row as laid out in the last frame: the module row ({@code setting == null}), one of
+     * its settings, or its keybind row ({@code "bind"}). Null unless the whole row is shown. Used by
+     * the in-game test to click things like a player would.
+     */
+    public int[] rowCenter(Module module, String setting) {
+        for (Row row : rows) {
+            if (row.module() != module) continue;
+            Panel panel = row.panel();
+            if (!panel.open || row.y() < panel.y + HEADER_H || row.y() + row.h() > panel.y + panelHeight(panel)) continue;
+            boolean match = setting == null ? row.type() == RowType.MODULE
+                : setting.equals("bind") ? row.type() == RowType.KEYBIND
+                : row.setting() != null && row.type() != RowType.CHANNEL && row.setting().name.equals(setting);
+            if (match) return new int[]{row.x() + row.w() / 2, row.y() + row.h() / 2};
+        }
+        return null;
+    }
+
+    /** Current search text (test hook). */
+    public String searchText() {
+        return search;
+    }
+
     public ClickGuiScreen() {
         super(Component.literal("NovaUtils"));
     }
