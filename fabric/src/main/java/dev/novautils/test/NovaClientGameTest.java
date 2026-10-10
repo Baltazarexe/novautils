@@ -462,6 +462,25 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(true, "AutoFish caught something on its own");
         ctx.runOnClient(c -> allOff());
 
+        // LightOverlay: torch suggestion must actually light what it promises
+        cmd(sp, "/tp @a 8 200 -4 90 45");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.render.LightOverlay.class);
+        ctx.waitTicks(5);
+        int darkBefore = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).darkCount());
+        var spot = ctx.computeOnClient(c -> {
+            var s = ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).torchSpots();
+            return s.isEmpty() ? null : s.get(0);
+        });
+        check(spot != null && spot.lights() > 0, "LightOverlay suggests a torch spot (" + (spot == null ? "none" : spot.pos().toShortString() + " lights " + spot.lights()) + " of " + darkBefore + " dark tiles)");
+        ctx.takeScreenshot("17_light_overlay_torch");
+        cmd(sp, "/setblock " + spot.pos().getX() + " " + spot.pos().getY() + " " + spot.pos().getZ() + " minecraft:torch");
+        ctx.waitTicks(50);
+        int darkAfter = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).darkCount());
+        int removed = darkBefore - darkAfter;
+        check(removed >= spot.lights() * 0.9, "placing the torch there lit " + removed + " tiles (predicted " + spot.lights() + ")");
+        ctx.runOnClient(c -> allOff());
+
         // Zoom, Nametags and a waypoint label: screenshot only
         cmd(sp, "/tp @a 0 200 0 -90 0");
         cmd(sp, "/summon minecraft:zombie 7 200 1 {NoAI:1b,PersistenceRequired:1b}");
