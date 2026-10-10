@@ -47,6 +47,11 @@ public abstract class ClientPacketListenerMixin {
         observe(packet);
     }
 
+    @Inject(method = "handleDamageEvent", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$damage(net.minecraft.network.protocol.game.ClientboundDamageEventPacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
     @Inject(method = "handleChunkBlocksUpdate", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
     private void novautils$blocks(net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket packet, CallbackInfo ci) {
         observe(packet);

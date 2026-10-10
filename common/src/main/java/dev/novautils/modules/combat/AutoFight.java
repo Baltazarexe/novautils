@@ -62,9 +62,11 @@ public class AutoFight extends Module {
         .description("Attack hostile mobs (zombies, skeletons, ...).")
         .defaultValue(true).build());
 
-    private final Setting<Boolean> neutrals = register(Setting.builder(Boolean.class, "neutral-mobs")
-        .description("Attack neutral mobs (endermen, piglins, wolves, bees...). Off = don't provoke them.")
-        .defaultValue(false).build());
+    public enum Neutral { NEVER, WHEN_ANGRY, ALWAYS }
+
+    private final Setting<Neutral> neutrals = register(Setting.builder(Neutral.class, "neutral-mobs")
+        .description("Endermen, piglins, zombified piglins, wolves, bees, golems... WHEN_ANGRY: only once they come after you.")
+        .defaultValue(Neutral.WHEN_ANGRY).build());
 
     private final Setting<Boolean> passives = register(Setting.builder(Boolean.class, "passive-mobs")
         .description("Attack animals (cows, pigs, chickens...).")
@@ -87,6 +89,10 @@ public class AutoFight extends Module {
         .defaultValue(true).build());
 
     private int cooldown;
+    /** entity id -> client tick it last hurt us (from damage packets). */
+    private final java.util.Map<Integer, Integer> hurtBy = new java.util.HashMap<>();
+    private int ticks;
+    private static java.lang.reflect.Method isCreepy;
 
     public AutoFight() {
         super("AutoFight", "Automatically attacks nearby mobs. Never targets other players.", Category.COMBAT);
@@ -109,19 +115,71 @@ public class AutoFight extends Module {
         if (entity == mc.player || entity.isPassengerOfSameVehicle(mc.player)) return false;
 
         if (ignoreNamed.get() && entity.hasCustomName()) return false;
-        if (ignoreBabies.get() && living.isBaby()) return false;
         if (entity instanceof TamableAnimal t && t.isTame()) return false;
 
-        if (entity instanceof NeutralMob) {
-            if (!neutrals.get()) return false;
+        boolean hostile;
+        if (isNeutral(entity)) {
+            if (neutrals.get() == Neutral.NEVER) return false;
+            hostile = angryAtMe(living);
+            if (neutrals.get() == Neutral.WHEN_ANGRY && !hostile) return false;
         } else if (entity instanceof Monster) {
             if (!hostiles.get()) return false;
-        } else if (!passives.get()) {
-            return false;
+            hostile = true;
+        } else {
+            if (!passives.get()) return false;
+            hostile = false;
         }
+        // babies are left alone unless they're coming for you (baby zombies are!)
+        if (ignoreBabies.get() && living.isBaby() && !hostile) return false;
 
         if (!inReach(living)) return false;
         return throughWalls.get() || mc.player.hasLineOfSight(entity);
+    }
+
+    /**
+     * Mobs that leave you alone until provoked. Piglins aren't NeutralMob in code (they decide by
+     * gold armour), but hitting a calm one turns every piglin nearby against you, so they count.
+     * Piglin brutes always attack, so they stay hostile.
+     */
+    private static boolean isNeutral(Entity e) {
+        if (e instanceof NeutralMob) return true;
+        return e instanceof net.minecraft.world.entity.monster.piglin.AbstractPiglin
+            && !(e instanceof net.minecraft.world.entity.monster.piglin.PiglinBrute);
+    }
+
+    /** Enderman "screaming" state. The class is Enderman on 26.3 and EnderMan on 26.1.2, so by name. */
+    private static boolean screaming(Entity e) {
+        if (!e.getClass().getSimpleName().equalsIgnoreCase("enderman")) return false;
+        try {
+            if (isCreepy == null) isCreepy = e.getClass().getMethod("isCreepy");
+            return (Boolean) isCreepy.invoke(e);
+        } catch (ReflectiveOperationException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * The client isn't told who a mob is angry at, so combine what the server does send: the mob
+     * is in attack mode (or an enderman is screaming) AND it's either looking at you or hurt you
+     * in the last 10 seconds. A golem chasing a zombie, or a piglin attacking someone else, doesn't
+     * count.
+     */
+    private boolean angryAtMe(LivingEntity e) {
+        Integer hit = hurtBy.get(e.getId());
+        if (hit != null && ticks - hit < 200) return true;
+        boolean aggressive = (e instanceof net.minecraft.world.entity.Mob m && m.isAggressive()) || screaming(e);
+        if (!aggressive) return false;
+        Vec3 toMe = mc.player.getEyePosition().subtract(e.getEyePosition()).normalize();
+        return e.getViewVector(1f).dot(toMe) > Math.cos(Math.toRadians(40));
+    }
+
+    @Override
+    public boolean onReceivePacket(net.minecraft.network.protocol.Packet<?> packet) {
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundDamageEventPacket dmg
+            && mc.player != null && dmg.entityId() == mc.player.getId() && dmg.sourceCauseId() > 0) {
+            hurtBy.put(dmg.sourceCauseId(), ticks);
+        }
+        return false;
     }
 
     private boolean inReach(LivingEntity e) {
@@ -148,6 +206,8 @@ public class AutoFight extends Module {
     @Override
     public void onTick() {
         if (mc.player == null || mc.level == null || mc.gameMode == null) return;
+        ticks++;
+        if (ticks % 200 == 0) hurtBy.values().removeIf(t -> ticks - t > 200);
         if (pauseOnUse.get() && mc.player.isUsingItem()) return;
         if (onlyWeapon.get()) {
             var held = mc.player.getMainHandItem();

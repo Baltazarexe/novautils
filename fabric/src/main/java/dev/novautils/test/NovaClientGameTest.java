@@ -377,6 +377,31 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(zombieHp < 18f, "AutoFight hits the zombie (health " + zombieHp + ")");
         cmd(sp, "/kill @e[tag=fight]");
 
+        // AutoFight + neutral mobs: a calm piglin (we wear gold) is left alone, an angry one is fought
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        cmd(sp, "/item replace entity @a armor.head with minecraft:golden_helmet");
+        cmd(sp, "/summon minecraft:piglin 2 200 5 {NoAI:1b,PersistenceRequired:1b,IsImmuneToZombification:1b,Tags:[\"calm\"]}");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.combat.AutoFight.class);
+        ctx.waitTicks(60);
+        float calmHp = ctx.computeOnClient(c -> {
+            for (var e : c.level.entitiesForRendering()) if (e instanceof net.minecraft.world.entity.monster.piglin.Piglin pg) return pg.getHealth() / pg.getMaxHealth();
+            return -1f;
+        });
+        check(calmHp == 1f, "AutoFight leaves a calm piglin alone (health " + calmHp + ")");
+        cmd(sp, "/kill @e[tag=calm]");
+        cmd(sp, "/item replace entity @a armor.head with minecraft:air");
+        cmd(sp, "/effect give @a minecraft:resistance 30 4 true");
+        cmd(sp, "/summon minecraft:piglin 3 200 5 {PersistenceRequired:1b,IsImmuneToZombification:1b,Tags:[\"angry\"],HandItems:[{id:\"minecraft:golden_sword\",count:1},{}]}");
+        ctx.waitFor(c -> {
+            for (var e : c.level.entitiesForRendering()) if (e instanceof net.minecraft.world.entity.monster.piglin.Piglin pg) return pg.getHealth() < pg.getMaxHealth();
+            return false;
+        }, 300);
+        check(true, "AutoFight fights back against a piglin that's angry at us");
+        cmd(sp, "/kill @e[tag=angry]");
+        cmd(sp, "/effect clear @a");
+        ctx.runOnClient(c -> allOff());
+
         // Criticals: one full-charge sword hit without, one with - the second must do ~1.5x
         cmd(sp, "/give @a minecraft:iron_sword");
         cmd(sp, "/tp @a 0 200 5 -90 0");
