@@ -24,6 +24,15 @@ public abstract class LocalPlayerMixin {
         original.call(type, movement);
     }
 
+    /** Freecam: your body ignores the movement keys (they move the camera instead). */
+    @Inject(method = "aiStep", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;tick()V", shift = At.Shift.AFTER))
+    private void novautils$freecamInput(CallbackInfo ci) {
+        if (dev.novautils.modules.render.Freecam.active() == null) return;
+        var input = ((LocalPlayer) (Object) this).input;
+        input.keyPresses = net.minecraft.world.entity.player.Input.EMPTY;
+        ((ClientInputAccessor) input).novautils$setMoveVector(net.minecraft.world.phys.Vec2.ZERO);
+    }
+
     @Inject(method = "sendPosition", at = @At("HEAD"))
     private void novautils$rotationsPre(CallbackInfo ci) {
         Rotations.preSend((LocalPlayer) (Object) this);

@@ -65,8 +65,11 @@ public class LightOverlay extends BlockScanEsp {
     }
 
     @Override
-    protected void scan(BlockPos center, List<AABB> out) {
+    protected void scan(BlockPos playerPos, List<AABB> out) {
         dark.clear();
+        // centre on a 4-block grid so the area doesn't slide with every step you take
+        BlockPos center = new BlockPos(Math.floorDiv(playerPos.getX(), 4) * 4 + 2, playerPos.getY(),
+            Math.floorDiv(playerPos.getZ(), 4) * 4 + 2);
         int r = radius.get();
         for (int x = -r; x <= r; x++) {
             for (int z = -r; z <= r; z++) {
@@ -112,6 +115,7 @@ public class LightOverlay extends BlockScanEsp {
     }
 
     private void findTorchSpots() {
+        List<TorchSpot> previous = new ArrayList<>(spots);
         spots.clear();
         if (torchSpots.get() == 0 || dark.isEmpty()) return;
 
@@ -142,6 +146,20 @@ public class LightOverlay extends BlockScanEsp {
                 if (best == null || covered.size() > best.lights()) {
                     best = new TorchSpot(c, covered.size());
                     bestCovered = covered;
+                }
+            }
+            // stick with an earlier suggestion unless the new one is clearly better, so the
+            // markers don't hop around as you walk and the area shifts a little
+            for (TorchSpot old : previous) {
+                if (!remaining.contains(old.pos().asLong())) continue;
+                Set<Long> covered = new HashSet<>(lit(old.pos()));
+                covered.retainAll(remaining);
+                if (covered.isEmpty()) continue;
+                if (best == null || covered.size() * 1.15 >= best.lights()) {
+                    best = new TorchSpot(old.pos(), covered.size());
+                    bestCovered = covered;
+                    previous.remove(old);
+                    break;
                 }
             }
             if (best == null || best.lights() == 0) break;

@@ -21,7 +21,12 @@
     "MultiPlayerGameModeAccessor",
     "GameModeMixin",
     "NoRenderMixin",
-    "HurtCamMixin"
+    "HurtCamMixin",
+    "EntityTurnMixin",
+    "ClientInputAccessor",
+    "KeyMappingAccessor",
+    "ChatComponentMixin",
+    "ChatComponentAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

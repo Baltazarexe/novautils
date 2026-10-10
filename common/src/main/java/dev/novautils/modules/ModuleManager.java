@@ -56,6 +56,11 @@ import dev.novautils.modules.render.Nametags;
 import dev.novautils.modules.render.Search;
 import dev.novautils.modules.render.NewChunks;
 import dev.novautils.modules.render.NoRender;
+import dev.novautils.modules.render.Trajectories;
+import dev.novautils.modules.render.Freecam;
+import dev.novautils.modules.movement.InventoryMove;
+import dev.novautils.modules.misc.InventoryHud;
+import dev.novautils.modules.misc.BetterChat;
 import dev.novautils.modules.player.AutoMend;
 import dev.novautils.modules.player.ElytraReplace;
 import dev.novautils.modules.world.AutoFish;
@@ -115,6 +120,8 @@ public class ModuleManager {
         register(new Search());
         register(new NewChunks());
         register(new NoRender());
+        register(new Trajectories());
+        register(new Freecam());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());
@@ -150,6 +157,7 @@ public class ModuleManager {
         register(new Parkour());
         register(new NoFall());
         register(new NoSlow());
+        register(new InventoryMove());
         register(new Velocity());
         register(new AntiVoid());
 
@@ -189,6 +197,8 @@ public class ModuleManager {
         register(new TotemCounter());
         register(new Notifications());
         register(new FriendsModule());
+        register(new InventoryHud());
+        register(new BetterChat());
         register(new DeathPoint());
         register(new PlayerRadar());
         register(new Notifier());

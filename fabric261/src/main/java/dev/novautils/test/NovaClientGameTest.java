@@ -513,6 +513,100 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(removed >= spot.lights() * 0.9, "placing the torch there lit " + removed + " tiles (predicted " + spot.lights() + ")");
         ctx.runOnClient(c -> allOff());
 
+        // LightOverlay: suggestions stay put when you take a few steps
+        cmd(sp, "/tp @a 8 200 -4 90 45");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill -4 200 -6 14 200 6 minecraft:air replace minecraft:torch");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.render.LightOverlay.class);
+        ctx.waitTicks(5);
+        var firstSpot = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).torchSpots().get(0).pos());
+        cmd(sp, "/tp @a 10 200 -2 90 45");
+        ctx.waitTicks(45);
+        cmd(sp, "/tp @a 7 200 -3 90 45");
+        ctx.waitTicks(45);
+        var laterSpot = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).torchSpots().get(0).pos());
+        check(firstSpot.equals(laterSpot), "torch suggestion stays put while walking (" + firstSpot.toShortString() + " -> " + laterSpot.toShortString() + ")");
+        ctx.runOnClient(c -> allOff());
+
+        // Freecam: camera flies, body stays
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        ctx.waitTicks(10);
+        double[] bodyBefore = pos(ctx);
+        only(ctx, dev.novautils.modules.render.Freecam.class);
+        ctx.waitTicks(5);
+        walk(ctx, 30);
+        double[] bodyAfter = pos(ctx);
+        double camMoved = ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.camera(c).position().distanceTo(new net.minecraft.world.phys.Vec3(bodyAfter[0], bodyAfter[1] + 1.62, bodyAfter[2])));
+        double bodyMoved = Math.hypot(bodyAfter[0] - bodyBefore[0], bodyAfter[2] - bodyBefore[2]);
+        check(bodyMoved < 0.1 && camMoved > 3, "Freecam: camera moved " + String.format("%.1f", camMoved) + " blocks, body " + String.format("%.2f", bodyMoved));
+        // turn around (1200 x 0.15 = 180 degrees) to look back at the body we left
+        ctx.runOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Freecam.class).turn(1200, 60));
+        ctx.waitTicks(3);
+        ctx.takeScreenshot("18_freecam");
+        ctx.runOnClient(c -> allOff());
+        ctx.waitTicks(5);
+
+        // InventoryMove: walking with the inventory open
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.movement.InventoryMove.class);
+        ctx.runOnClient(c -> dev.novautils.utils.PlatformCompat.openScreen(c, new net.minecraft.client.gui.screens.inventory.InventoryScreen(c.player)));
+        ctx.waitTicks(5);
+        double invX = pos(ctx)[0];
+        walk(ctx, 20);
+        double invMoved = pos(ctx)[0] - invX;
+        ctx.runOnClient(c -> dev.novautils.utils.PlatformCompat.openScreen(c, null));
+        ctx.waitTicks(5);
+        boolean upReleased = ctx.computeOnClient(c -> !c.options.keyUp.isDown());
+        check(invMoved > 2 && upReleased, "InventoryMove: walked " + String.format("%.1f", invMoved) + " blocks with the inventory open, key released after");
+
+        // Trajectories: predicted pearl landing vs where the pearl really takes us
+        cmd(sp, "/clear @a");
+        cmd(sp, "/give @a minecraft:ender_pearl 4");
+        cmd(sp, "/tp @a 0 200 0 -90 30");
+        ctx.waitTicks(10);
+        only(ctx, dev.novautils.modules.render.Trajectories.class);
+        ctx.runOnClient(c -> {
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 9; i++) if (inv.getItem(i).is(net.minecraft.world.item.Items.ENDER_PEARL)) dev.novautils.utils.InvUtils.selectHotbar(i);
+        });
+        ctx.waitTicks(5);
+        var predicted = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Trajectories.class).lastLanding());
+        ctx.takeScreenshot("19_trajectories");
+        ctx.runOnClient(c -> c.gameMode.useItem(c.player, net.minecraft.world.InteractionHand.MAIN_HAND));
+        ctx.waitTicks(60);
+        double[] landed = pos(ctx);
+        double miss = predicted == null ? 99 : Math.hypot(landed[0] - predicted.x, landed[2] - predicted.z);
+        check(miss < 1.0, "Trajectories: pearl landed " + String.format("%.2f", miss) + " blocks from the prediction " + (predicted == null ? "" : predicted));
+        ctx.runOnClient(c -> allOff());
+
+        // BetterChat: repeats collapse into one line with a counter, timestamps, long history
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.misc.BetterChat.class);
+            for (int i = 0; i < 3; i++) c.player.sendSystemMessage(net.minecraft.network.chat.Component.literal("spam test"));
+        });
+        ctx.waitTicks(3);
+        String newest = ctx.computeOnClient(c -> dev.novautils.modules.misc.BetterChat.history().get(0).content().getString());
+        long copies = ctx.computeOnClient(c -> dev.novautils.modules.misc.BetterChat.history().stream().filter(m -> m.content().getString().contains("spam test")).count());
+        check(copies == 1 && newest.contains("(x3)") && newest.startsWith("["), "BetterChat: 3 repeats -> one line \"" + newest + "\"");
+        ctx.runOnClient(c -> {
+            for (int i = 0; i < 160; i++) c.player.sendSystemMessage(net.minecraft.network.chat.Component.literal("line " + i));
+        });
+        ctx.waitTicks(3);
+        int kept = ctx.computeOnClient(c -> dev.novautils.modules.misc.BetterChat.history().size());
+        check(kept > 150, "BetterChat keeps more than vanilla's 100 messages (" + kept + ")");
+
+        // InventoryHUD: screenshot
+        cmd(sp, "/give @a minecraft:diamond 23");
+        cmd(sp, "/give @a minecraft:cobblestone 640");
+        cmd(sp, "/give @a minecraft:oak_log 64");
+        cmd(sp, "/give @a minecraft:golden_apple 5");
+        ctx.runOnClient(c -> { allOff(); on(dev.novautils.modules.misc.InventoryHud.class); });
+        ctx.waitTicks(10);
+        ctx.takeScreenshot("20_inventory_hud");
+        ctx.runOnClient(c -> allOff());
+
         // Zoom, Nametags and a waypoint label: screenshot only
         cmd(sp, "/tp @a 0 200 0 -90 0");
         cmd(sp, "/summon minecraft:zombie 7 200 1 {NoAI:1b,PersistenceRequired:1b}");

@@ -14,4 +14,10 @@ public abstract class HurtCamMixin {
     private void novautils$hurtCam(CallbackInfo ci) {
         if (NoRender.hideHurtCam()) ci.cancel();
     }
+
+    /** Freecam: no first-person hand floating in front of the free camera. */
+    @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+    private void novautils$freecamHand(CallbackInfo ci) {
+        if (dev.novautils.modules.render.Freecam.active() != null) ci.cancel();
+    }
 }
