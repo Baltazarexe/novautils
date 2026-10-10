@@ -256,26 +256,87 @@ public class ClickGuiScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         layout();
+        float t = openProgress();
 
-        g.fill(0, 0, this.width, this.height, 0x99101018);
+        drawBackground(g);
+
+        // slide up a few pixels while opening
+        g.pose().pushMatrix();
+        g.pose().translate(0, (1f - t) * 8f);
+
         drawSearch(g);
         drawHudButton(g, mouseX, mouseY);
-
+        drawLogo(g);
         for (Panel panel : PANELS.values()) drawPanel(g, panel, mouseX, mouseY, delta);
 
         String hint = bindingFor != null
             ? "Press a key to bind " + bindingFor.name + "   (ESC clears it)"
-            : "L-click toggle · R-click settings · M-click resets";
-        int hintX = HUD_BTN_X + HUD_BTN_W + 10;
-        if (hintX + this.font.width(hint) < this.width - 4) {
-            g.text(this.font, hint, hintX, 12, bindingFor != null ? Theme.ACCENT : Theme.TEXT_DIM);
-        }
+            : "L-click toggle  ·  R-click settings  ·  M-click reset  ·  type to search";
+        int hw = this.font.width(hint);
+        int hy = this.height - 10;
+        Theme.roundRect(g, this.width / 2 - hw / 2 - 6, hy - 2, hw + 12, 11, 0xA0070A12);
+        g.text(this.font, hint, this.width / 2 - hw / 2, hy,
+            bindingFor != null ? Theme.alpha(Theme.ACCENT, 0.6f + 0.4f * Theme.pulse(6f)) : Theme.TEXT_OFF);
+
+        g.pose().popMatrix();
+
+        // fade in: a dark veil that clears as the menu opens
+        if (t < 1f) g.fill(0, 0, this.width, this.height, Theme.alpha(0xFF05070D, 1f - t));
 
         // Setting tooltips are set here, after the panels, so they draw on top of everything.
         if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
             g.setTooltipForNextFrame(Component.literal(hoveredSetting.description + "  (middle-click: reset)"), mouseX, mouseY);
         }
         hoveredSetting = null;
+    }
+
+    private final long openedAt = System.nanoTime();
+
+    /** 0 -> 1 over the first ~250 ms, eased. */
+    private float openProgress() {
+        float raw = Math.min(1f, (System.nanoTime() - openedAt) / 250_000_000f);
+        return 1f - (1f - raw) * (1f - raw) * (1f - raw);
+    }
+
+    /** Deep blue-black glass, a slowly drifting grid and a scan line - the "HUD" backdrop. */
+    private void drawBackground(GuiGraphicsExtractor g) {
+        g.fillGradient(0, 0, this.width, this.height, 0xB8040710, 0xD0090516);
+        float time = Theme.time();
+        int step = 22;
+        int off = (int) (time * 4f) % step;
+        for (int x = -step + off; x < this.width; x += step) g.fill(x, 0, x + 1, this.height, 0x0A22D3EE);
+        for (int y = -step + off; y < this.height; y += step) g.fill(0, y, this.width, y + 1, 0x0A8B5CF6);
+        int scan = (int) (time * 45f) % (this.height + 40) - 20;
+        g.fillGradient(0, scan - 14, this.width, scan, 0x0022D3EE, 0x1222D3EE);
+        g.fill(0, scan, this.width, scan + 1, 0x2222D3EE);
+        // vignette
+        g.fillGradient(0, 0, this.width, 40, 0x60000000, 0x00000000);
+        g.fillGradient(0, this.height - 40, this.width, this.height, 0x00000000, 0x70000000);
+    }
+
+    private void drawLogo(GuiGraphicsExtractor g) {
+        String nova = "NOVA", utils = "UTILS";
+        int total = 0, on = 0;
+        for (Module m : ModuleManager.get().getModules()) {
+            total++;
+            if (m.isEnabled()) on++;
+        }
+        String sub = on + " / " + total + " active";
+        int w = this.font.width(nova) + 3 + this.font.width(utils);
+        int x = this.width - 10 - w, y = 9;
+        if (x < HUD_BTN_X + HUD_BTN_W + 10) return;
+        float shift = Theme.time() * 0.35f;
+        int cx = x;
+        for (int i = 0; i < nova.length(); i++) {
+            String ch = String.valueOf(nova.charAt(i));
+            float p = (float) ((Math.sin(shift * 3 + i * 0.7) + 1) / 2);
+            g.text(this.font, ch, cx, y, Theme.accentAt(p));
+            cx += this.font.width(ch);
+        }
+        g.text(this.font, utils, cx + 3, y, Theme.TEXT);
+        Theme.accentLine(g, x, y + 11, x + w, 0.8f);
+        int sx = x - 10 - this.font.width(sub);
+        if (sx > HUD_BTN_X + HUD_BTN_W + 8) g.text(this.font, sub, sx, y, on > 0 ? Theme.ACCENT_DIM : Theme.TEXT_OFF);
     }
 
     private static final int HUD_BTN_X = 164, HUD_BTN_Y = 8, HUD_BTN_W = 56, HUD_BTN_H = 14;
@@ -286,29 +347,60 @@ public class ClickGuiScreen extends Screen {
 
     private void drawHudButton(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         boolean hover = overHudButton(mouseX, mouseY);
-        Theme.roundRect(g, HUD_BTN_X, HUD_BTN_Y, HUD_BTN_W, HUD_BTN_H, hover ? Theme.ACCENT : Theme.ACCENT_DIM);
-        String label = "Edit HUD";
-        g.text(this.font, label, HUD_BTN_X + HUD_BTN_W / 2 - this.font.width(label) / 2, HUD_BTN_Y + 3, 0xFFFFFFFF);
+        int x = HUD_BTN_X, y = HUD_BTN_Y, w = HUD_BTN_W, h = HUD_BTN_H;
+        if (hover) Theme.glow(g, x, y, w, h, Theme.ACCENT, 1f);
+        Theme.roundRect(g, x, y, w, h, hover ? 0xE0102233 : 0xD00A0F1A);
+        Theme.hGradient(g, x + 1, y + h - 1, x + w - 1, y + h, Theme.ACCENT, Theme.ACCENT2);
+        Theme.corners(g, x, y, w, h, 3, hover ? Theme.ACCENT : Theme.alpha(Theme.ACCENT, 0.5f));
+        String label = "◇ Edit HUD";
+        g.text(this.font, label, x + w / 2 - this.font.width(label) / 2, y + 3, hover ? 0xFFFFFFFF : Theme.TEXT);
     }
 
     private void drawSearch(GuiGraphicsExtractor g) {
         int w = 150, h = 14, x = 8, y = 8;
-        Theme.roundRect(g, x, y, w, h, 0xF01B1B26);
-        Theme.border(g, x, y, w, h, search.isEmpty() ? Theme.PANEL_BORDER : Theme.ACCENT);
-        g.text(this.font, search.isEmpty() ? "Type to search..." : search, x + 5, y + 3,
-            search.isEmpty() ? Theme.TEXT_OFF : Theme.TEXT);
+        boolean typing = !search.isEmpty();
+        if (typing) Theme.glow(g, x, y, w, h, Theme.ACCENT, 0.8f);
+        Theme.roundRect(g, x, y, w, h, 0xD00A0F1A);
+        Theme.border(g, x, y, w, h, typing ? Theme.alpha(Theme.ACCENT, 0.7f) : Theme.PANEL_BORDER);
+        Theme.accentLine(g, x + 1, y + h - 2, x + w - 1, typing ? 1f : 0.35f);
+        g.text(this.font, "⌕", x + 5, y + 3, typing ? Theme.ACCENT : Theme.TEXT_OFF);
+        boolean caret = (Theme.time() % 1f) < 0.5f;
+        String shown = typing ? search + (caret ? "_" : "") : "Search modules...";
+        g.text(this.font, shown, x + 16, y + 3, typing ? Theme.TEXT : Theme.TEXT_OFF);
+    }
+
+    private static String icon(Category c) {
+        return switch (c.name()) {
+            case "RENDER" -> "◉";
+            case "MOVEMENT" -> "➤";
+            case "COMBAT" -> "⚔";
+            case "PLAYER" -> "☻";
+            case "WORLD" -> "⛏";
+            default -> "✦";
+        };
+    }
+
+    private static String title(Category c) {
+        String n = c.name();
+        return n.charAt(0) + n.substring(1).toLowerCase(Locale.ROOT);
     }
 
     private void drawPanel(GuiGraphicsExtractor g, Panel panel, int mouseX, int mouseY, float delta) {
-        int h = panelHeight(panel);
+        int x = panel.x, y = panel.y, h = panelHeight(panel);
+        float accentT = panel.category.ordinal() / (float) Math.max(1, Category.values().length - 1);
+        int accent = Theme.accentAt(accentT);
 
-        Theme.shadow(g, panel.x, panel.y, PANEL_W, h);
-        Theme.roundRect(g, panel.x, panel.y, PANEL_W, h, Theme.PANEL_BG);
-        Theme.border(g, panel.x, panel.y, PANEL_W, h, Theme.PANEL_BORDER);
+        // body: dark halo, glass, hairline border, glowing corner brackets
+        Theme.glow(g, x, y, PANEL_W, h, 0xFF000000, 1.2f);
+        Theme.roundRect(g, x, y, PANEL_W, h, Theme.PANEL_BG);
+        g.fillGradient(x + 1, y + 1, x + PANEL_W - 1, y + HEADER_H, Theme.HEADER_TOP, Theme.HEADER_BOTTOM);
+        Theme.border(g, x, y, PANEL_W, h, Theme.PANEL_BORDER);
+        Theme.accentLine(g, x + 1, y + HEADER_H - 1, x + PANEL_W - 1, 1f);
+        Theme.corners(g, x, y, PANEL_W, h, 4, Theme.alpha(accent, 0.55f + 0.35f * Theme.pulse(2f + accentT)));
 
-        g.fillGradient(panel.x + 1, panel.y + 1, panel.x + PANEL_W - 1, panel.y + HEADER_H, Theme.HEADER_TOP, Theme.HEADER_BOTTOM);
-        g.fill(panel.x + 1, panel.y + HEADER_H - 1, panel.x + PANEL_W - 1, panel.y + HEADER_H, Theme.ACCENT);
-        g.text(this.font, panel.category.name(), panel.x + 6, panel.y + 4, Theme.TEXT);
+        // header: icon, title, on/total pill, open/closed chevron
+        g.text(this.font, icon(panel.category), x + 5, y + 4, accent);
+        g.text(this.font, title(panel.category), x + 16, y + 4, Theme.TEXT);
 
         int total = 0, on = 0;
         for (Module m : ModuleManager.get().getModules()) {
@@ -317,19 +409,21 @@ public class ClickGuiScreen extends Screen {
             if (m.isEnabled()) on++;
         }
         String count = on + "/" + total;
-        g.text(this.font, count, panel.x + PANEL_W - 16 - this.font.width(count), panel.y + 4,
-            on > 0 ? Theme.ACCENT : Theme.TEXT_OFF);
-        g.text(this.font, panel.open ? "−" : "+", panel.x + PANEL_W - 11, panel.y + 4, Theme.TEXT_DIM);
+        int cw = this.font.width(count) + 6;
+        int px = x + PANEL_W - 15 - cw;
+        Theme.roundRect(g, px, y + 3, cw, 9, on > 0 ? Theme.alpha(accent, 0.22f) : 0x40000000);
+        g.text(this.font, count, px + 3, y + 4, on > 0 ? accent : Theme.TEXT_OFF);
+        g.text(this.font, panel.open ? "⌄" : "›", x + PANEL_W - 10, y + (panel.open ? 2 : 4), Theme.TEXT_DIM);
 
         if (!panel.open) return;
 
-        g.enableScissor(panel.x, panel.y + HEADER_H, panel.x + PANEL_W, panel.y + h);
+        g.enableScissor(x, y + HEADER_H, x + PANEL_W, y + h);
         for (Row row : rows) {
             if (row.panel() != panel || !visible(row)) continue;
             switch (row.type()) {
                 case MODULE -> drawModuleRow(g, row, mouseX, mouseY, delta);
                 case BOOL -> drawBoolRow(g, row, mouseX, mouseY);
-                case NUMBER -> drawNumberRow(g, row);
+                case NUMBER -> drawNumberRow(g, row, mouseX, mouseY);
                 case ENUM -> drawEnumRow(g, row, mouseX, mouseY);
                 case KEYBIND -> drawKeybindRow(g, row, mouseX, mouseY);
                 case COLOR -> drawColorRow(g, row, mouseX, mouseY);
@@ -342,11 +436,23 @@ public class ClickGuiScreen extends Screen {
         g.disableScissor();
 
         if (panel.scrollable()) {
-            int trackTop = panel.y + HEADER_H + 1, trackH = h - HEADER_H - 2;
+            int trackTop = y + HEADER_H + 2, trackH = h - HEADER_H - 4;
             int thumbH = Math.max(12, (int) (trackH * (panel.viewH / (float) panel.contentH)));
             int thumbY = trackTop + (int) ((trackH - thumbH) * (panel.scroll / (float) (panel.contentH - panel.viewH)));
-            g.fill(panel.x + PANEL_W - 3, trackTop, panel.x + PANEL_W - 1, trackTop + trackH, 0x30FFFFFF);
-            g.fill(panel.x + PANEL_W - 3, thumbY, panel.x + PANEL_W - 1, thumbY + thumbH, Theme.ACCENT);
+            g.fill(x + PANEL_W - 3, trackTop, x + PANEL_W - 2, trackTop + trackH, 0x18FFFFFF);
+            g.fillGradient(x + PANEL_W - 3, thumbY, x + PANEL_W - 1, thumbY + thumbH, Theme.ACCENT, Theme.ACCENT2);
+        }
+    }
+
+    /** Thin vertical guide on the left of settings, so it's clear which module they belong to. */
+    private void settingGuide(GuiGraphicsExtractor g, Row row) {
+        g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x26000000);
+        g.fill(row.x() + 5, row.y(), row.x() + 6, row.y() + row.h(), Theme.alpha(Theme.ACCENT, 0.28f));
+    }
+
+    private void hoverFill(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
+        if (hovered(row, mouseX, mouseY)) {
+            Theme.hGradient(g, row.x() + 6, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x1A22D3EE, 0x058B5CF6);
         }
     }
 
@@ -355,19 +461,28 @@ public class ClickGuiScreen extends Screen {
         boolean hover = hovered(row, mouseX, mouseY);
         float anim = Theme.approach(HOVER.getOrDefault(module, 0f), hover ? 1f : 0f, delta + 0.6f);
         HOVER.put(module, anim);
+        int x = row.x(), y = row.y(), w = row.w(), h = row.h();
 
-        if (module.isEnabled()) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), Theme.ROW_ACTIVE);
-        if (anim > 0.01f) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), Theme.alpha(Theme.ROW_HOVER, anim));
-        if (module.isEnabled()) g.fill(row.x() + 1, row.y(), row.x() + 3, row.y() + row.h(), Theme.ACCENT);
+        if (module.isEnabled()) {
+            Theme.hGradient(g, x + 1, y, x + w - 1, y + h, 0x3822D3EE, 0x068B5CF6);
+            g.fillGradient(x + 1, y, x + 3, y + h, Theme.ACCENT, Theme.ACCENT2);
+            g.fill(x + 3, y, x + 4, y + h, 0x3022D3EE);
+        }
+        if (anim > 0.01f) g.fill(x + 1, y, x + w - 1, y + h, Theme.alpha(Theme.ROW_HOVER, anim));
+        g.fill(x + 6, y + h - 1, x + w - 6, y + h, 0x0CFFFFFF);
 
-        g.text(this.font, module.name, row.x() + 7 + (int) (anim * 2), row.y() + 3,
-            module.isEnabled() ? Theme.TEXT : Theme.TEXT_OFF);
+        int textColor = module.isEnabled() ? Theme.TEXT : Theme.mix(Theme.TEXT_OFF, Theme.TEXT_DIM, anim);
+        g.text(this.font, module.name, x + 7 + (int) (anim * 2), y + 3, textColor);
         if (module.getKeyBind() != -1) {
             String key = keyName(module.getKeyBind());
             if (key.length() > 5) key = key.substring(0, 5);
-            g.text(this.font, key, row.x() + row.w() - 15 - this.font.width(key), row.y() + 3, Theme.TEXT_OFF);
+            int kw = this.font.width(key);
+            int kx = x + w - 16 - kw;
+            Theme.roundRect(g, kx - 2, y + 2, kw + 4, 9, 0x50000000);
+            g.text(this.font, key, kx, y + 3, Theme.TEXT_OFF);
         }
-        g.text(this.font, EXPANDED.contains(module) ? "▾" : "▸", row.x() + row.w() - 11, row.y() + 3, Theme.TEXT_DIM);
+        boolean open = EXPANDED.contains(module);
+        g.text(this.font, open ? "⌄" : "›", x + w - 9, y + (open ? 1 : 3), open ? Theme.ACCENT : Theme.TEXT_OFF);
 
         if (hover && !module.description.isEmpty()) {
             g.setTooltipForNextFrame(Component.literal(module.description), mouseX, mouseY);
@@ -378,42 +493,61 @@ public class ClickGuiScreen extends Screen {
         @SuppressWarnings("unchecked")
         Setting<Boolean> setting = (Setting<Boolean>) row.setting();
         boolean on = setting.get();
-        if (hovered(row, mouseX, mouseY)) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x14FFFFFF);
+        settingGuide(g, row);
+        hoverFill(g, row, mouseX, mouseY);
 
         g.text(this.font, setting.name, row.x() + 12, row.y() + 2, on ? Theme.TEXT : Theme.TEXT_DIM);
 
-        int bx = row.x() + row.w() - 20, by = row.y() + 3;
-        Theme.roundRect(g, bx, by, 14, 7, on ? Theme.ACCENT_DIM : Theme.TRACK);
-        Theme.roundRect(g, on ? bx + 8 : bx + 1, by + 1, 5, 5, on ? 0xFFFFFFFF : 0xFF9A9AAE);
+        // neon pill switch
+        int bx = row.x() + row.w() - 21, by = row.y() + 2, bw = 15, bh = 8;
+        if (on) {
+            Theme.glow(g, bx, by, bw, bh, Theme.ACCENT, 0.6f);
+            Theme.hGradient(g, bx + 1, by, bx + bw - 1, by + bh, Theme.ACCENT, Theme.ACCENT2);
+            g.fill(bx, by + 1, bx + 1, by + bh - 1, Theme.ACCENT);
+            g.fill(bx + bw - 1, by + 1, bx + bw, by + bh - 1, Theme.ACCENT2);
+        } else {
+            Theme.roundRect(g, bx, by, bw, bh, Theme.TRACK);
+            Theme.border(g, bx, by, bw, bh, 0xFF2A3446);
+        }
+        int kx = on ? bx + bw - 7 : bx + 1;
+        Theme.roundRect(g, kx, by + 1, 6, 6, on ? 0xFFFFFFFF : 0xFF6B778C);
     }
 
-    private void drawNumberRow(GuiGraphicsExtractor g, Row row) {
+    private void drawNumberRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
         Setting<?> setting = row.setting();
+        settingGuide(g, row);
+        hoverFill(g, row, mouseX, mouseY);
         double value = ((Number) setting.get()).doubleValue();
         double min = Double.isFinite(setting.min) ? setting.min : 0;
         double max = Double.isFinite(setting.max) ? setting.max : 1;
         float frac = max > min ? (float) ((value - min) / (max - min)) : 0f;
 
         boolean isInt = setting.get() instanceof Integer;
-        String label = setting.name + ": " + (isInt ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value));
-        g.text(this.font, label, row.x() + 12, row.y() + 1, Theme.TEXT_DIM);
+        String shown = isInt ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value);
+        g.text(this.font, setting.name, row.x() + 12, row.y() + 1, Theme.TEXT_DIM);
+        g.text(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 1, Theme.ACCENT);
 
+        // track + gradient fill + glowing knob (same geometry the slider input uses)
         int tx = row.x() + 12, ty = row.y() + row.h() - 3, tw = row.w() - 24;
+        int fill = (int) (tw * frac);
         g.fill(tx, ty, tx + tw, ty + 2, Theme.TRACK);
-        g.fill(tx, ty, tx + (int) (tw * frac), ty + 2, Theme.ACCENT);
-        int knob = tx + (int) (tw * frac);
-        g.fill(knob - 1, ty - 2, knob + 2, ty + 4, 0xFFFFFFFF);
+        if (fill > 0) Theme.hGradient(g, tx, ty, tx + fill, ty + 2, Theme.ACCENT, Theme.accentAt(frac));
+        int knob = tx + fill;
+        g.fill(knob - 2, ty - 2, knob + 3, ty + 4, Theme.alpha(Theme.accentAt(frac), 0.35f));
+        g.fill(knob - 1, ty - 1, knob + 2, ty + 3, 0xFFFFFFFF);
     }
 
     private void drawColorRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
         Setting<?> setting = row.setting();
-        if (hovered(row, mouseX, mouseY)) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x14FFFFFF);
+        settingGuide(g, row);
+        hoverFill(g, row, mouseX, mouseY);
 
         boolean open = OPEN_COLORS.contains(setting);
-        g.text(this.font, (open ? "▾ " : "▸ ") + setting.name, row.x() + 8, row.y() + 2, Theme.TEXT_DIM);
+        g.text(this.font, (open ? "⌄ " : "› ") + setting.name, row.x() + 9, row.y() + (open ? 1 : 2), Theme.TEXT_DIM);
 
         int color = (Integer) setting.get();
         int sx = row.x() + row.w() - 22, sy = row.y() + 2;
+        if (hovered(row, mouseX, mouseY)) Theme.glow(g, sx, sy, 14, 8, color | 0xFF000000, 0.8f);
         g.fill(sx - 1, sy - 1, sx + 15, sy + 9, 0xFF000000);
         // checkerboard so alpha is readable
         g.fill(sx, sy, sx + 14, sy + 8, 0xFF777777);
@@ -423,19 +557,20 @@ public class ClickGuiScreen extends Screen {
     }
 
     private void drawChannelRow(GuiGraphicsExtractor g, Row row) {
+        settingGuide(g, row);
         int color = (Integer) row.setting().get();
         int channel = row.channel();
         int value = channelValue(color, channel);
         String name = switch (channel) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
 
-        g.text(this.font, name + " " + value, row.x() + 18, row.y() + 1, Theme.TEXT_DIM);
+        g.text(this.font, name + " " + value, row.x() + 14, row.y() + 1, Theme.TEXT_DIM);
 
         int tx = row.x() + 34, ty = row.y() + 5, tw = row.w() - 44;
-        int bar = switch (channel) { case 0 -> 0xFFFF5555; case 1 -> 0xFF55DD66; case 2 -> 0xFF5B8CFF; default -> 0xFFCCCCCC; };
+        int bar = switch (channel) { case 0 -> 0xFFFF4D6D; case 1 -> 0xFF34D399; case 2 -> 0xFF60A5FA; default -> 0xFFCBD5E1; };
+        int fill = (int) (tw * (value / 255f));
         g.fill(tx, ty, tx + tw, ty + 2, Theme.TRACK);
-        g.fill(tx, ty, tx + (int) (tw * (value / 255f)), ty + 2, bar);
-        int knob = tx + (int) (tw * (value / 255f));
-        g.fill(knob - 1, ty - 2, knob + 2, ty + 4, 0xFFFFFFFF);
+        Theme.hGradient(g, tx, ty, tx + fill, ty + 2, Theme.alpha(bar, 0.4f), bar);
+        g.fill(tx + fill - 1, ty - 1, tx + fill + 2, ty + 3, 0xFFFFFFFF);
     }
 
     private static int channelValue(int color, int channel) {
@@ -459,19 +594,26 @@ public class ClickGuiScreen extends Screen {
 
     private void drawEnumRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
         Setting<?> setting = row.setting();
-        if (hovered(row, mouseX, mouseY)) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x14FFFFFF);
+        settingGuide(g, row);
+        hoverFill(g, row, mouseX, mouseY);
         g.text(this.font, setting.name, row.x() + 12, row.y() + 2, Theme.TEXT_DIM);
-        String value = ((Enum<?>) setting.get()).name();
-        g.text(this.font, value, row.x() + row.w() - 8 - this.font.width(value), row.y() + 2, Theme.ACCENT);
+        String value = ((Enum<?>) setting.get()).name().replace('_', ' ');
+        String shown = "‹ " + value + " ›";
+        g.text(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 2, Theme.ACCENT);
     }
 
     private void drawKeybindRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
         Module module = row.module();
-        if (hovered(row, mouseX, mouseY)) g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x14FFFFFF);
+        settingGuide(g, row);
+        hoverFill(g, row, mouseX, mouseY);
         g.text(this.font, "bind", row.x() + 12, row.y() + 2, Theme.TEXT_DIM);
-        String key = bindingFor == module ? "..." : keyName(module.getKeyBind());
-        g.text(this.font, key, row.x() + row.w() - 8 - this.font.width(key), row.y() + 2,
-            bindingFor == module ? Theme.ACCENT : Theme.TEXT_OFF);
+        boolean binding = bindingFor == module;
+        String key = binding ? "press a key..." : keyName(module.getKeyBind());
+        int kw = this.font.width(key);
+        int kx = row.x() + row.w() - 8 - kw;
+        Theme.roundRect(g, kx - 3, row.y() + 1, kw + 6, 10,
+            binding ? Theme.alpha(Theme.ACCENT, 0.15f + 0.2f * Theme.pulse(8f)) : 0x50000000);
+        g.text(this.font, key, kx, row.y() + 2, binding ? Theme.ACCENT : Theme.TEXT_OFF);
     }
 
     private String keyName(int keyCode) {

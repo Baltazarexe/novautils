@@ -46,11 +46,11 @@ public class ActiveModules extends HudModule {
 
     private final Setting<Integer> activeColor = register(Setting.builder(Integer.class, "active-color")
         .description("Colour for modules that are on (top of the list when gradient is on).")
-        .defaultValue(0xFF7C5CFF).asColor().build());
+        .defaultValue(0xFF22D3EE).asColor().build());
 
     private final Setting<Integer> secondColor = register(Setting.builder(Integer.class, "second-color")
         .description("Bottom colour of the gradient.")
-        .defaultValue(0xFF35D6C8).asColor()
+        .defaultValue(0xFF8B5CF6).asColor()
         .visible(() -> gradient.get()).build());
 
     private final Setting<Integer> disabledColor = register(Setting.builder(Integer.class, "disabled-color")
@@ -87,7 +87,7 @@ public class ActiveModules extends HudModule {
         if (list.isEmpty()) {
             if (!editing) return new int[]{0, 0};
             String sample = "Esp";
-            g.text(mc.font, sample, x, y + 1, 0x807C5CFF);
+            g.text(mc.font, sample, x, y + 1, 0x8022D3EE);
             return new int[]{mc.font.width(sample), mc.font.lineHeight + 2};
         }
 

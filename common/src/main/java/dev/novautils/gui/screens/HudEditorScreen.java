@@ -85,8 +85,8 @@ public class HudEditorScreen extends Screen {
         // light dim + centre guides
         g.fill(0, 0, this.width, this.height, 0x30000000);
         int cx = this.width / 2, cy = this.height / 2;
-        g.fill(cx, 0, cx + 1, this.height, snappedX ? 0x907C5CFF : 0x18FFFFFF);
-        g.fill(0, cy, this.width, cy + 1, snappedY ? 0x907C5CFF : 0x18FFFFFF);
+        g.fill(cx, 0, cx + 1, this.height, snappedX ? 0x9022D3EE : 0x18FFFFFF);
+        g.fill(0, cy, this.width, cy + 1, snappedY ? 0x9022D3EE : 0x18FFFFFF);
 
         // header
         g.fill(0, 0, this.width, 18, 0xC0101018);
@@ -108,7 +108,7 @@ public class HudEditorScreen extends Screen {
             int x = m.hudX() - 2, y = m.hudY() - 2, w = m.hudWidth() + 4, h = m.hudHeight() + 4;
             boolean hover = m == dragging || (mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h);
 
-            g.fill(x, y, x + w, y + h, hover ? 0x307C5CFF : 0x14FFFFFF);
+            g.fill(x, y, x + w, y + h, hover ? 0x2622D3EE : 0x14FFFFFF);
             Theme.border(g, x, y, w, h, hover ? Theme.ACCENT : 0x80FFFFFF);
 
             String label = m.name + (m.isMoved() ? "" : " (default)");

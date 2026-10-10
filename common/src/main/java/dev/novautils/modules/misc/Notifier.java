@@ -69,7 +69,7 @@ public class Notifier extends Module {
     private void alert(String text, int color) {
         Toasts.push(text, color);
         if (chat.get() && mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal("[NovaUtils] ").withColor(0x7C5CFF)
+            mc.player.sendSystemMessage(Component.literal("[NovaUtils] ").withColor(0x22D3EE)
                 .append(Component.literal(text).withColor(color & 0xFFFFFF)));
         }
     }

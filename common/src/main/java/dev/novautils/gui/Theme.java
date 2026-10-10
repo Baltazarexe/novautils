@@ -3,26 +3,40 @@ package dev.novautils.gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.ARGB;
 
-/** Colours and small drawing helpers shared by the whole GUI. */
+/**
+ * Colours and drawing helpers shared by the whole GUI. The look: dark glass panels, a neon
+ * cyan-to-violet accent that runs through borders, switches and sliders, soft glows instead of
+ * hard shadows, and small "tech" corner brackets. Everything is built from plain rectangles, so it
+ * works the same on every loader and version.
+ */
 public final class Theme {
-    public static final int ACCENT = 0xFF7C5CFF;
-    public static final int ACCENT_DIM = 0xFF5B44C4;
+    /** Main accent (neon cyan) and the second end of every gradient (violet). */
+    public static final int ACCENT = 0xFF22D3EE;
+    public static final int ACCENT2 = 0xFF8B5CF6;
+    public static final int ACCENT_DIM = 0xFF1A8FA8;
 
-    public static final int PANEL_BG = 0xF0161620;
-    public static final int PANEL_BORDER = 0xFF2A2A38;
-    public static final int HEADER_TOP = 0xFF242431;
-    public static final int HEADER_BOTTOM = 0xFF1B1B26;
+    public static final int PANEL_BG = 0xE00A0D16;
+    public static final int PANEL_BORDER = 0xFF1C2433;
+    public static final int HEADER_TOP = 0xFF111827;
+    public static final int HEADER_BOTTOM = 0xFF0B1020;
 
-    public static final int ROW_HOVER = 0x22FFFFFF;
-    public static final int ROW_ACTIVE = 0x1A7C5CFF;
+    public static final int ROW_HOVER = 0x1AFFFFFF;
+    public static final int ROW_ACTIVE = 0x2622D3EE;
 
-    public static final int TEXT = 0xFFE9E9F2;
-    public static final int TEXT_DIM = 0xFF8C8CA0;
-    public static final int TEXT_OFF = 0xFF6E6E82;
+    public static final int TEXT = 0xFFEAF6FF;
+    public static final int TEXT_DIM = 0xFF8A97AD;
+    public static final int TEXT_OFF = 0xFF5D6880;
 
-    public static final int TRACK = 0xFF2E2E3E;
+    public static final int TRACK = 0xFF1A2232;
 
     private Theme() {}
+
+    /** Seconds since the GUI code first ran - drives pulses and the background animation. */
+    public static float time() {
+        return (System.nanoTime() - START) / 1e9f;
+    }
+
+    private static final long START = System.nanoTime();
 
     /** Flat rect with 1px clipped corners, which reads as slightly rounded at GUI scale. */
     public static void roundRect(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
@@ -39,9 +53,57 @@ public final class Theme {
         g.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
     }
 
+    /** Soft glow around a box: a few widening rings that fade out. */
+    public static void glow(GuiGraphicsExtractor g, int x, int y, int w, int h, int color, float strength) {
+        for (int i = 1; i <= 4; i++) {
+            int a = (int) (ARGB.alpha(color) * strength * (0.22f / i));
+            if (a <= 0) continue;
+            border(g, x - i, y - i, w + i * 2, h + i * 2, ARGB.color(a, color & 0xFFFFFF));
+        }
+    }
+
+    /** Kept for older callers: now a soft dark glow instead of a hard drop shadow. */
     public static void shadow(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-        g.fill(x + 2, y + h, x + w + 2, y + h + 2, 0x40000000);
-        g.fill(x + w, y + 2, x + w + 2, y + h, 0x40000000);
+        glow(g, x, y + 1, w, h, 0xFF000000, 0.9f);
+    }
+
+    /** Left-to-right gradient (vanilla only has top-to-bottom), drawn as thin columns. */
+    public static void hGradient(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int left, int right) {
+        int w = x2 - x1;
+        if (w <= 0 || y2 <= y1) return;
+        int steps = Math.max(1, Math.min(48, w / 2));
+        for (int i = 0; i < steps; i++) {
+            int a = x1 + w * i / steps, b = x1 + w * (i + 1) / steps;
+            if (b > a) g.fill(a, y1, b, y2, mix(left, right, (i + 0.5f) / steps));
+        }
+    }
+
+    /** The signature accent line: cyan to violet, with a faint glow under it. */
+    public static void accentLine(GuiGraphicsExtractor g, int x1, int y, int x2, float alpha) {
+        hGradient(g, x1, y, x2, y + 1, Theme.alpha(ACCENT, alpha), Theme.alpha(ACCENT2, alpha));
+        hGradient(g, x1, y + 1, x2, y + 2, Theme.alpha(ACCENT, alpha * 0.25f), Theme.alpha(ACCENT2, alpha * 0.25f));
+    }
+
+    /** Little L-shaped brackets on the four corners - the "HUD" look. */
+    public static void corners(GuiGraphicsExtractor g, int x, int y, int w, int h, int len, int color) {
+        g.fill(x, y, x + len, y + 1, color);
+        g.fill(x, y, x + 1, y + len, color);
+        g.fill(x + w - len, y, x + w, y + 1, color);
+        g.fill(x + w - 1, y, x + w, y + len, color);
+        g.fill(x, y + h - 1, x + len, y + h, color);
+        g.fill(x, y + h - len, x + 1, y + h, color);
+        g.fill(x + w - len, y + h - 1, x + w, y + h, color);
+        g.fill(x + w - 1, y + h - len, x + w, y + h, color);
+    }
+
+    /** Accent colour at a position along a gradient (0 = cyan, 1 = violet). */
+    public static int accentAt(float t) {
+        return mix(ACCENT, ACCENT2, t);
+    }
+
+    /** 0..1..0 wave, for pulsing glows. */
+    public static float pulse(float speed) {
+        return 0.5f + 0.5f * (float) Math.sin(time() * speed);
     }
 
     public static int alpha(int color, float a) {
