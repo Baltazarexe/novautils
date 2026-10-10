@@ -25,7 +25,7 @@ public abstract class LightmapMixin {
     private void novautils$fullbright(LightmapRenderState state, CallbackInfo ci) {
         if (!dev.novautils.NovaUtils.modulesReady) return;
         Fullbright fullbright = ModuleManager.get().get(Fullbright.class);
-        boolean active = fullbright.isEnabled();
+        boolean active = fullbright.isEnabled() || dev.novautils.modules.render.Xray.forcesBright();
 
         // Force one more upload on the frame it switches, otherwise the old lightmap sticks around.
         if (active != novautils$wasActive) {
@@ -38,7 +38,7 @@ public abstract class LightmapMixin {
         state.darknessEffectScale = 0f;
         state.bossOverlayWorldDarkening = 0f;
 
-        if (fullbright.useNightVision()) {
+        if (fullbright.useNightVision() && !dev.novautils.modules.render.Xray.forcesBright()) {
             // Vanilla's own bright path, so the tints stay consistent.
             state.nightVisionEffectIntensity = 1f;
             state.nightVisionColor = LightmapRenderStateExtractor.WHITE;

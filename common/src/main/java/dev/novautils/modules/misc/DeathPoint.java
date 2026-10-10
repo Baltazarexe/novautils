@@ -54,11 +54,7 @@ public class DeathPoint extends Module {
         Vec3 cam = context.cameraPos();
         int color = ARGB.colorFromFloat(0.55f, 1f, 0.3f, 0.3f);
         AABB box = new AABB(death.x - 0.3, death.y, death.z - 0.3, death.x + 0.3, death.y + 256, death.z + 0.3);
-        context.poseStack().pushPose();
-        context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-            (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-        context.poseStack().popPose();
+        RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
 
         double dist = mc.player.position().distanceTo(death);
         Vec3 eye = mc.player.getEyePosition();

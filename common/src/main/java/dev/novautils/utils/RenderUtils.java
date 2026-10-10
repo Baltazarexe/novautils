@@ -32,6 +32,10 @@ public final class RenderUtils {
      * is used for the fill and boosted for the edges.
      */
     public static void drawBox(PoseStack.Pose pose, VertexConsumer buffer, AABB box, int color) {
+        if (ScreenSpace.capturing()) {
+            ScreenSpace.queueBox(box, color);
+            return;
+        }
         int alpha = net.minecraft.util.ARGB.alpha(color);
         int fill = net.minecraft.util.ARGB.color(Math.max(10, (int) (alpha * 0.45)), color & 0xFFFFFF);
         int edge = net.minecraft.util.ARGB.color(Math.min(255, (int) (alpha * 2.4) + 60), color & 0xFFFFFF);
@@ -48,6 +52,31 @@ public final class RenderUtils {
         drawRibbon(pose, buffer, g, h, w, edge); drawRibbon(pose, buffer, h, e, w, edge);
         drawRibbon(pose, buffer, a, e, w, edge); drawRibbon(pose, buffer, b, f, w, edge);
         drawRibbon(pose, buffer, c, g, w, edge); drawRibbon(pose, buffer, d, h, w, edge);
+    }
+
+    /**
+     * Draws see-through world geometry (boxes, lines) in world coordinates. Normally it's submitted
+     * to the world pass with the no-depth ESP type; while a shaderpack is on, the same drawBox /
+     * drawRibbon calls are captured and drawn on the HUD instead (ScreenSpace), because shaders
+     * drop custom world geometry.
+     */
+    public static void world(dev.novautils.render.RenderContext context,
+                             java.util.function.BiConsumer<PoseStack.Pose, VertexConsumer> draw) {
+        if (ShaderCompat.shadersActive()) {
+            ScreenSpace.setCapturing(true);
+            try {
+                draw.accept(null, null);
+            } finally {
+                ScreenSpace.setCapturing(false);
+            }
+            return;
+        }
+        Vec3 cam = context.cameraPos();
+        var pose = context.poseStack();
+        pose.pushPose();
+        pose.translate(-cam.x, -cam.y, -cam.z);
+        context.submitNodeCollector().submitCustomGeometry(pose, EspRender.filledNoDepth(), draw::accept);
+        pose.popPose();
     }
 
     /**
@@ -78,6 +107,10 @@ public final class RenderUtils {
 
     /** Thin two-plane ribbon between two world-space points (a stand-in for a line). */
     public static void drawRibbon(PoseStack.Pose pose, VertexConsumer buffer, Vec3 a, Vec3 b, double width, int color) {
+        if (ScreenSpace.capturing()) {
+            ScreenSpace.queueLine(a, b, color);
+            return;
+        }
         Vec3 d = b.subtract(a);
         double len = d.length();
         if (len < 1.0E-4) return;

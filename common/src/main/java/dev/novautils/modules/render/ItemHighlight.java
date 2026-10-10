@@ -31,11 +31,7 @@ public class ItemHighlight extends Module {
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof ItemEntity)) continue;
             AABB box = e.getBoundingBox().inflate(0.05);
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-            context.poseStack().popPose();
+            RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
         }
     }
 }

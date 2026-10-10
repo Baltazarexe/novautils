@@ -97,11 +97,7 @@ public class LogoutSpots extends Module {
         for (Spot s : spots.values()) {
             if (!s.dimension().equals(dim)) continue;
             AABB box = new AABB(s.pos().x - 0.3, s.pos().y, s.pos().z - 0.3, s.pos().x + 0.3, s.pos().y + 1.8, s.pos().z + 0.3);
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, c));
-            context.poseStack().popPose();
+            RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, c));
 
             Component label = Component.literal(s.name()).withColor(0xFFFFFF)
                 .append(Component.literal(String.format(" %.0f", s.health())).withColor(0xFF5555))

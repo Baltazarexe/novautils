@@ -42,13 +42,10 @@ public class Trail extends Module {
         Vec3 cam = context.cameraPos();
         int color = ARGB.colorFromFloat(0.8f, 0.3f, 0.8f, 1f);
 
-        context.poseStack().pushPose();
-        context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(), (pose, buffer) -> {
+                RenderUtils.world(context, (pose, buffer) -> {
             for (int i = 1; i < points.size(); i++) {
                 RenderUtils.drawRibbon(pose, buffer, points.get(i - 1), points.get(i), 0.03, color);
             }
         });
-        context.poseStack().popPose();
     }
 }

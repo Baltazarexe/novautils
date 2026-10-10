@@ -119,11 +119,7 @@ public class NewChunks extends Module {
     private void square(RenderContext ctx, Vec3 cam, long key, double y, int color) {
         int x = ChunkPos.getX(key) * 16, z = ChunkPos.getZ(key) * 16;
         AABB box = new AABB(x + 0.1, y, z + 0.1, x + 15.9, y + 0.05, z + 15.9);
-        ctx.poseStack().pushPose();
-        ctx.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        ctx.submitNodeCollector().submitCustomGeometry(ctx.poseStack(), EspRender.filledNoDepth(),
-            (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-        ctx.poseStack().popPose();
+        RenderUtils.world(ctx, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
     }
 
     @Override

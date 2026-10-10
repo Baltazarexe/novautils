@@ -68,6 +68,10 @@ public class AutoFight extends Module {
         .description("Endermen, piglins, zombified piglins, wolves, bees, golems... WHEN_ANGRY: only once they come after you.")
         .defaultValue(Neutral.WHEN_ANGRY).build());
 
+    private final Setting<Boolean> projectiles = register(Setting.builder(Boolean.class, "projectiles")
+        .description("Hit shulker bullets and ghast fireballs out of the air (destroys / sends them back).")
+        .defaultValue(true).build());
+
     private final Setting<Boolean> passives = register(Setting.builder(Boolean.class, "passive-mobs")
         .description("Attack animals (cows, pigs, chickens...).")
         .defaultValue(false).build());
@@ -111,6 +115,10 @@ public class AutoFight extends Module {
     private boolean valid(Entity entity) {
         // Hard exclusion: never a real player, regardless of settings.
         if (entity instanceof Player) return false;
+        if (isProjectile(entity)) {
+            return projectiles.get() && entity.isAlive() && inReach(entity)
+                && (throughWalls.get() || mc.player.hasLineOfSight(entity));
+        }
         if (!(entity instanceof LivingEntity living) || !living.isAlive() || living.isInvulnerable()) return false;
         if (entity == mc.player || entity.isPassengerOfSameVehicle(mc.player)) return false;
 
@@ -122,7 +130,7 @@ public class AutoFight extends Module {
             if (neutrals.get() == Neutral.NEVER) return false;
             hostile = angryAtMe(living);
             if (neutrals.get() == Neutral.WHEN_ANGRY && !hostile) return false;
-        } else if (entity instanceof Monster) {
+        } else if (entity instanceof Monster || entity instanceof net.minecraft.world.entity.monster.Enemy) {
             if (!hostiles.get()) return false;
             hostile = true;
         } else {
@@ -182,7 +190,13 @@ public class AutoFight extends Module {
         return false;
     }
 
-    private boolean inReach(LivingEntity e) {
+    /** Shulker bullets and ghast fireballs: hitting one destroys or deflects it, like in vanilla. */
+    private static boolean isProjectile(Entity e) {
+        return e instanceof net.minecraft.world.entity.projectile.ShulkerBullet
+            || e instanceof net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball;
+    }
+
+    private boolean inReach(Entity e) {
         // distance to the closest point of the hitbox, like the server measures it
         Vec3 eyes = mc.player.getEyePosition();
         var box = e.getBoundingBox();
@@ -192,10 +206,12 @@ public class AutoFight extends Module {
         return eyes.distanceToSqr(cx, cy, cz) <= range.get() * range.get();
     }
 
-    private double score(LivingEntity e) {
+    private double score(Entity e) {
+        if (isProjectile(e)) return -1e9 + mc.player.distanceToSqr(e); // incoming: always first
+        if (priority.get() == Priority.LOWEST_HEALTH && e instanceof LivingEntity l) return l.getHealth();
         return switch (priority.get()) {
             case CLOSEST -> mc.player.distanceToSqr(e);
-            case LOWEST_HEALTH -> e.getHealth();
+            case LOWEST_HEALTH -> mc.player.distanceToSqr(e);
             case CROSSHAIR -> {
                 float[] a = Rotations.anglesTo(e.getBoundingBox().getCenter());
                 yield Math.abs(Mth.wrapDegrees(a[0] - mc.player.getYRot())) + Math.abs(a[1] - mc.player.getXRot());
@@ -215,19 +231,19 @@ public class AutoFight extends Module {
         }
         if (Rotations.busy() || !ready()) return;
 
-        LivingEntity target = null;
+        Entity target = null;
         double best = Double.MAX_VALUE;
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!valid(entity)) continue;
-            double s = score((LivingEntity) entity);
+            double s = score(entity);
             if (s < best) {
                 best = s;
-                target = (LivingEntity) entity;
+                target = entity;
             }
         }
         if (target == null) return;
 
-        LivingEntity t = target;
+        Entity t = target;
         Runnable hit = () -> {
             if (!t.isAlive() || !inReach(t)) return;
             mc.gameMode.attack(mc.player, t);

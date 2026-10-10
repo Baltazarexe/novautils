@@ -402,6 +402,29 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/effect clear @a");
         ctx.runOnClient(c -> allOff());
 
+        // AutoFight: shulkers count as hostile, and their bullets get hit out of the air
+        cmd(sp, "/tp @a 0 200 5 -90 0");
+        cmd(sp, "/effect give @a minecraft:resistance 30 4 true");
+        cmd(sp, "/summon minecraft:shulker 2 200 5 {NoAI:1b,PersistenceRequired:1b,Peek:100b,Tags:[\"shul\"]}");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.combat.AutoFight.class);
+        ctx.waitFor(c -> {
+            for (var e : c.level.entitiesForRendering()) if (e instanceof net.minecraft.world.entity.monster.Shulker sh) return sh.getHealth() < sh.getMaxHealth();
+            return false;
+        }, 200);
+        check(true, "AutoFight attacks shulkers");
+        cmd(sp, "/kill @e[tag=shul]");
+        cmd(sp, "/summon minecraft:shulker_bullet 2.5 201 5 {NoGravity:1b,Tags:[\"bullet\"]}");
+        ctx.waitTicks(3);
+        ctx.waitFor(c -> {
+            for (var e : c.level.entitiesForRendering()) if (e instanceof net.minecraft.world.entity.projectile.ShulkerBullet) return false;
+            return true;
+        }, 200);
+        check(true, "AutoFight hits a shulker bullet out of the air");
+        cmd(sp, "/kill @e[tag=bullet]");
+        cmd(sp, "/effect clear @a");
+        ctx.runOnClient(c -> allOff());
+
         // Criticals: one full-charge sword hit without, one with - the second must do ~1.5x
         cmd(sp, "/give @a minecraft:iron_sword");
         cmd(sp, "/tp @a 0 200 5 -90 0");

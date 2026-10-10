@@ -155,11 +155,7 @@ public class Esp extends Module {
             // Smooth between ticks instead of snapping to the tick position.
             AABB box = e.getBoundingBox().move(e.getPosition(pt).subtract(e.position()));
 
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-            context.poseStack().popPose();
+                        RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
         }
     }
 }

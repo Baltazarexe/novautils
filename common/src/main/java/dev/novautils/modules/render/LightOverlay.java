@@ -191,13 +191,10 @@ public class LightOverlay extends BlockScanEsp {
             // a torch-shaped stick standing where the torch should go
             AABB stick = new AABB(p.getX() + 0.4, p.getY(), p.getZ() + 0.4, p.getX() + 0.6, p.getY() + 0.65, p.getZ() + 0.6);
             AABB tile = new AABB(p.getX(), p.getY(), p.getZ(), p.getX() + 1, p.getY() + 0.06, p.getZ() + 1);
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(), (pose, buffer) -> {
+            RenderUtils.world(context, (pose, buffer) -> {
                 RenderUtils.drawBox(pose, buffer, stick, c);
                 RenderUtils.drawBox(pose, buffer, tile, c);
             });
-            context.poseStack().popPose();
 
             Component label = Component.literal("Torch " + (i + 1)).withColor(c & 0xFFFFFF)
                 .append(Component.literal(" lights " + s.lights()).withColor(0xAAAAAA));

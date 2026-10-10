@@ -111,11 +111,7 @@ public class Waypoints extends Module {
             if (beam.get()) {
                 AABB box = new AABB(pos.x - 0.25, pos.y, pos.z - 0.25, pos.x + 0.25,
                     Math.max(pos.y + 2, mc.level == null ? pos.y + 256 : mc.level.getMaxY()), pos.z + 0.25);
-                context.poseStack().pushPose();
-                context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-                context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-                    (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, c));
-                context.poseStack().popPose();
+                    RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, c));
             }
 
             double dist = mc.player.position().distanceTo(pos);

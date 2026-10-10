@@ -65,11 +65,7 @@ public abstract class BlockScanEsp extends Module {
         int color = ARGB.colorFromFloat((float) (double) opacity.get(), c[0], c[1], c[2]);
 
         for (AABB box : boxes) {
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-            context.poseStack().popPose();
+            RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
         }
     }
 }

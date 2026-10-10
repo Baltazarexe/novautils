@@ -26,7 +26,15 @@
     "ClientInputAccessor",
     "KeyMappingAccessor",
     "ChatComponentMixin",
-    "ChatComponentAccessor"
+    "ChatComponentAccessor",
+    "XrayMixin",
+    "XrayFaceMixin",
+    "SodiumXrayMixin",
+    "SodiumXrayFaceMixin",
+    "SodiumXrayAoMixin",
+    "XrayLightMixin",
+    "SodiumXrayLightMixin",
+    "XrayLightCacheMixin"
   ],
   "injectors": {
     "defaultRequire": 1

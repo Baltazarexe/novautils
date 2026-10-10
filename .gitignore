@@ -22,3 +22,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# third-party jars/shaderpacks for optional local test runs (-PwithSodium / -PwithShaders)
+fabric261/testmods/
+fabric261/testshaders/

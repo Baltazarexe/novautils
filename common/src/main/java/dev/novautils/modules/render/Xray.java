@@ -25,8 +25,11 @@ import java.util.List;
  * <p>"exposed-only" keeps ores that touch air/water - useful on servers with anti-xray, which
  * hides real ores and scatters fake ones inside solid stone.
  *
- * <p>This scans loaded blocks and draws boxes rather than making stone transparent, which would
- * need a chunk-mesh mixin.
+ * <p>Two ways to show them (mode): SEE_THROUGH works like Meteor's xray - everything that isn't an
+ * ore you picked (plus spawners and chests) simply isn't drawn, so you look straight through the
+ * world at the ores themselves, fully lit. BOXES keeps the world and draws coloured boxes around
+ * ores through it. BOTH does both. SEE_THROUGH works with plain Minecraft and with Sodium (XrayMixin,
+ * SodiumXrayMixin): chunk meshes are rebuilt without the hidden blocks.
  */
 public class Xray extends Module {
     private static final int DEFAULT_ALPHA = 0x73000000;
@@ -35,6 +38,20 @@ public class Xray extends Module {
     private record Ore(String match, Setting<Boolean> shown, Setting<Integer> color) {}
 
     private record Found(BlockPos pos, Ore ore) {}
+
+    public enum Mode { SEE_THROUGH, BOXES, BOTH }
+
+    private final Setting<Mode> mode = register(Setting.builder(Mode.class, "mode")
+        .description("SEE_THROUGH: hide everything but ores (like Meteor). BOXES: boxes through walls. BOTH.")
+        .defaultValue(Mode.SEE_THROUGH).build());
+
+    private final Setting<Boolean> showFluids = register(Setting.builder(Boolean.class, "show-fluids")
+        .description("SEE_THROUGH: keep water and lava visible.")
+        .defaultValue(false).visible(() -> mode.get() != Mode.BOXES).build());
+
+    private final Setting<Boolean> extras = register(Setting.builder(Boolean.class, "spawners-and-chests")
+        .description("SEE_THROUGH: also keep spawners, chests, barrels and shulkers visible.")
+        .defaultValue(true).visible(() -> mode.get() != Mode.BOXES).build());
 
     private final Setting<Integer> radius = register(Setting.builder(Integer.class, "radius")
         .description("Horizontal scan radius in blocks. Higher costs more when it rescans.")
@@ -82,14 +99,74 @@ public class Xray extends Module {
         ores.add(new Ore(match, shown, color));
     }
 
+    // ---- see-through state, read by the chunk-building threads (so: immutable snapshots + volatile)
+
+    private static volatile boolean seeThrough;
+    private static volatile boolean hideFluids;
+    private static volatile java.util.Set<net.minecraft.world.level.block.Block> keep = java.util.Set.of();
+    private String appliedConfig;
+
+    private static final String[] EXTRA_BLOCKS = {"spawner", "trial_spawner", "vault", "chest", "trapped_chest",
+        "ender_chest", "barrel", "shulker_box", "end_portal_frame"};
+
+    /** Chunk meshing: should this block be left out (SEE_THROUGH active and it isn't one we keep)? */
+    public static boolean hides(BlockState state) {
+        return seeThrough && !state.isAir() && !keep.contains(state.getBlock());
+    }
+
+    /** Chunk meshing: should water/lava be left out? */
+    public static boolean hidesFluids() {
+        return seeThrough && hideFluids;
+    }
+
+    /** LightmapMixin: light everything up while see-through is on, or the ores are pitch black. */
+    public static boolean forcesBright() {
+        return seeThrough;
+    }
+
+    private String currentConfig() {
+        StringBuilder sb = new StringBuilder(mode.get().name()).append(showFluids.get()).append(extras.get());
+        for (Ore ore : ores) sb.append(ore.shown().get() ? '1' : '0');
+        return sb.toString();
+    }
+
+    /** Recompute what stays visible and rebuild the world's chunk meshes if anything changed. */
+    private void applySeeThrough() {
+        String config = isEnabled() ? currentConfig() : "off";
+        if (config.equals(appliedConfig)) return;
+        appliedConfig = config;
+
+        boolean on = isEnabled() && mode.get() != Mode.BOXES;
+        java.util.Set<net.minecraft.world.level.block.Block> blocks = new java.util.HashSet<>();
+        if (on) {
+            for (var block : BuiltInRegistries.BLOCK) {
+                Ore ore = oreOf(block.defaultBlockState());
+                if (ore != null && ore.shown().get()) blocks.add(block);
+                if (extras.get()) {
+                    String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
+                    for (String e : EXTRA_BLOCKS) if (path.equals(e) || path.endsWith("_" + e)) blocks.add(block);
+                }
+            }
+        }
+        keep = java.util.Set.copyOf(blocks);
+        hideFluids = !showFluids.get();
+        boolean changed = seeThrough != on || on;
+        seeThrough = on;
+        if (changed && mc.level != null) dev.novautils.utils.PlatformCompat.reloadChunks(mc);
+    }
+
     @Override
     public void onEnable() {
         rescanTimer = 0;
+        appliedConfig = null;
+        applySeeThrough();
     }
 
     @Override
     public void onDisable() {
         found.clear();
+        appliedConfig = null;
+        applySeeThrough();
     }
 
     /** Which ore bucket a block falls in, or null when it is not an ore at all. */
@@ -122,6 +199,12 @@ public class Xray extends Module {
     @Override
     public void onTick() {
         if (mc.level == null || mc.player == null) return;
+        applySeeThrough();
+        // with a shaderpack the kept ores render dark, so add the coloured boxes on top
+        if (mode.get() == Mode.SEE_THROUGH && !dev.novautils.utils.ShaderCompat.shadersActive()) {
+            found.clear();
+            return;
+        }
         if (rescanTimer-- > 0) return;
         rescanTimer = 40;
 
@@ -163,11 +246,7 @@ public class Xray extends Module {
             int color = entry.ore().color().get();
             AABB box = new AABB(entry.pos());
 
-            context.poseStack().pushPose();
-            context.poseStack().translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
-            context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-            context.poseStack().popPose();
+                        RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
         }
     }
 }

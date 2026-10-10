@@ -47,7 +47,7 @@ fabricApi {
         enableGameTests = false
         enableClientGameTests = true
         eula = true
-        clearRunDirectory = true
+        clearRunDirectory = !project.hasProperty("withShaders")
     }
 }
 
@@ -75,5 +75,28 @@ tasks {
     withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
         options.release.set(libs.versions.jdk.get().toInt())
+    }
+}
+
+// Optional local test runs with the modpack's renderer mods (not part of the build or the jar):
+//   ./gradlew :fabric261:runClientGameTest -PwithSodium              Sodium + Iris, no shader
+//   ./gradlew :fabric261:runClientGameTest -PwithSodium -PwithShaders with a shaderpack enabled
+// Drop the jars in fabric261/testmods/ and a shaderpack zip in fabric261/testshaders/ (gitignored).
+if (project.hasProperty("withSodium")) {
+    dependencies {
+        runtimeOnly(fileTree("testmods") { include("*.jar") })
+    }
+    if (project.hasProperty("withShaders")) {
+        tasks.matching { it.name == "runClientGameTest" }.configureEach {
+            doFirst {
+                val run = layout.buildDirectory.dir("run/clientGameTest").get().asFile
+                run.deleteRecursively()
+                val packs = File(run, "shaderpacks").apply { mkdirs() }
+                val pack = file("testshaders").listFiles()!!.first { it.name.endsWith(".zip") }
+                pack.copyTo(File(packs, pack.name), overwrite = true)
+                File(run, "config").mkdirs()
+                File(run, "config/iris.properties").writeText("enableShaders=true\nshaderPack=${pack.name}\n")
+            }
+        }
     }
 }

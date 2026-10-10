@@ -300,6 +300,8 @@ public class ModuleManager {
 
     /** Registered once with HudElementRegistry; dispatches to every enabled module. */
     public void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+        // boxes/lines the world pass handed over because a shaderpack is on
+        dev.novautils.utils.ScreenSpace.draw(graphics);
         for (Module module : modules) {
             if (module.isEnabled()) module.onRenderHud(graphics, deltaTracker);
         }

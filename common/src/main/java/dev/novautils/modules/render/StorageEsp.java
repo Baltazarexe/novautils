@@ -128,11 +128,7 @@ public class StorageEsp extends Module {
     }
 
     private void box(RenderContext context, Vec3 cam, AABB box, int color) {
-        context.poseStack().pushPose();
-        context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(),
-            (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-        context.poseStack().popPose();
+        RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
     }
 
     @Override

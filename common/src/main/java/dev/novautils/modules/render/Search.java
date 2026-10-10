@@ -162,13 +162,10 @@ public class Search extends Module {
                 if (drawn++ >= maxShown.get()) return;
                 int c = h.kind().color().get();
                 AABB box = new AABB(h.pos());
-                context.poseStack().pushPose();
-                context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-                context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(), (pose, buffer) -> {
+                RenderUtils.world(context, (pose, buffer) -> {
                     RenderUtils.drawBox(pose, buffer, box, c);
                     if (tracers.get()) RenderUtils.drawRibbon(pose, buffer, start, box.getCenter(), 0.012, c | 0xFF000000);
                 });
-                context.poseStack().popPose();
             }
         }
     }

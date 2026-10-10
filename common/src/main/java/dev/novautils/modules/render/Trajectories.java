@@ -135,14 +135,11 @@ public class Trajectories extends Module {
         Vec3 cam = context.cameraPos();
         int c = color.get(), hc = hitColor.get();
         AABB box = hitBox, arrival = arrivalBox;
-        context.poseStack().pushPose();
-        context.poseStack().translate(-cam.x, -cam.y, -cam.z);
-        context.submitNodeCollector().submitCustomGeometry(context.poseStack(), EspRender.filledNoDepth(), (pose, buffer) -> {
+        RenderUtils.world(context, (pose, buffer) -> {
             // skip the first bit so the line doesn't cover the crosshair
             for (int i = 2; i < path.size(); i++) RenderUtils.drawRibbon(pose, buffer, path.get(i - 1), path.get(i), 0.02, c);
             if (box != null) RenderUtils.drawBox(pose, buffer, box, hc);
             if (arrival != null) RenderUtils.drawBox(pose, buffer, arrival, 0x6055FFFF);
         });
-        context.poseStack().popPose();
     }
 }

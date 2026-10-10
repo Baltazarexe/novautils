@@ -56,4 +56,9 @@ public final class PlatformCompat {
     public static net.minecraft.client.Camera camera(Minecraft mc) {
         return mc.gameRenderer.mainCamera();
     }
+
+    /** Throws away every built chunk mesh so they get rebuilt (Xray on/off). */
+    public static void reloadChunks(Minecraft mc) {
+        mc.levelExtractor.allChanged();
+    }
 }
