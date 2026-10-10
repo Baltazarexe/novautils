@@ -53,6 +53,13 @@ import dev.novautils.modules.player.FastUse;
 import dev.novautils.modules.render.Breadcrumbs;
 import dev.novautils.modules.render.Esp;
 import dev.novautils.modules.render.Nametags;
+import dev.novautils.modules.render.Search;
+import dev.novautils.modules.render.NewChunks;
+import dev.novautils.modules.render.NoRender;
+import dev.novautils.modules.player.AutoMend;
+import dev.novautils.modules.player.ElytraReplace;
+import dev.novautils.modules.world.AutoFish;
+import dev.novautils.modules.misc.FriendsModule;
 import dev.novautils.modules.render.Fullbright;
 import dev.novautils.modules.render.HoleEsp;
 import dev.novautils.modules.render.ItemHighlight;
@@ -88,6 +95,7 @@ public class ModuleManager {
     private final List<Module> modules = new ArrayList<>();
     private boolean dirty;
     private int autosaveTimer = AUTOSAVE_INTERVAL;
+    private Object lastConnection;
 
     public static ModuleManager get() {
         return INSTANCE;
@@ -104,6 +112,9 @@ public class ModuleManager {
         register(new Zoom());
         register(new Esp());
         register(new Nametags());
+        register(new Search());
+        register(new NewChunks());
+        register(new NoRender());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());
@@ -157,6 +168,8 @@ public class ModuleManager {
         register(new ChestSwap());
         register(new FastUse());
         register(new FastBreak());
+        register(new AutoMend());
+        register(new ElytraReplace());
         register(new AutoClicker());
 
         // World
@@ -165,6 +178,7 @@ public class ModuleManager {
         register(new AutoShearer());
         register(new AutoBreed());
         register(new AutoNametag());
+        register(new AutoFish());
 
         // Misc
         register(new ActiveModules());
@@ -174,6 +188,7 @@ public class ModuleManager {
         register(new KeyStrokes());
         register(new TotemCounter());
         register(new Notifications());
+        register(new FriendsModule());
         register(new DeathPoint());
         register(new PlayerRadar());
         register(new Notifier());
@@ -220,6 +235,10 @@ public class ModuleManager {
 
         dev.novautils.utils.Rotations.tick();
         dev.novautils.utils.MiningGuard.tick();
+        if (mc.getConnection() != lastConnection) {
+            lastConnection = mc.getConnection();
+            dev.novautils.utils.ServerStats.reset();
+        }
 
         for (Module module : modules) {
             if (module.isEnabled()) module.onTick();

@@ -19,7 +19,9 @@
     "DeltaTrackerTimerAccessor",
     "EntityAccessor",
     "MultiPlayerGameModeAccessor",
-    "GameModeMixin"
+    "GameModeMixin",
+    "NoRenderMixin",
+    "HurtCamMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -62,6 +62,7 @@ public class AutoLog extends Module {
         if (playerRange.get() > 0) {
             for (Player other : mc.level.players()) {
                 if (other == mc.player) continue;
+                if (dev.novautils.utils.Friends.isFriend(other)) continue;
                 if (mc.player.distanceTo(other) <= playerRange.get()) {
                     logOut(other.getName().getString() + " came within " + playerRange.get() + " blocks");
                     return;

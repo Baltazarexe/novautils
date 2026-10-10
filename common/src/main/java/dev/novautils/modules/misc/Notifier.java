@@ -98,7 +98,8 @@ public class Notifier extends Module {
                 if (p == mc.player) continue;
                 now.add(p.getUUID());
                 if (primed && !inView.contains(p.getUUID())) {
-                    alert(p.getName().getString() + " entered visual range", 0xFFFF5555);
+                    boolean friend = dev.novautils.utils.Friends.isFriend(p);
+                    alert((friend ? "Friend " : "") + p.getName().getString() + " entered visual range", friend ? 0xFF55FFFF : 0xFFFF5555);
                     if (sound.get()) mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING, 1.6f));
                 }
             }

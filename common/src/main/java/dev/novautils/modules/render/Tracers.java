@@ -44,6 +44,7 @@ public class Tracers extends Module {
             if (e instanceof Player) {
                 if (!players.get()) continue;
                 color = ARGB.colorFromFloat(0.9f, 1f, 0.2f, 0.2f);
+                if (dev.novautils.utils.Friends.isFriend(e)) color = ARGB.colorFromFloat(0.9f, 0.3f, 1f, 1f);
             } else if (e instanceof Monster) {
                 if (!hostiles.get()) continue;
                 color = ARGB.colorFromFloat(0.9f, 1f, 0.55f, 0f);
@@ -53,10 +54,11 @@ public class Tracers extends Module {
             }
 
             Vec3 end = e.getBoundingBox().getCenter();
+            int lineColor = color;
             context.poseStack().pushPose();
             context.poseStack().translate(-cam.x, -cam.y, -cam.z);
             context.submitNodeCollector().submitCustomGeometry(context.poseStack(), dev.novautils.utils.EspRender.filledNoDepth(),
-                (pose, buffer) -> RenderUtils.drawRibbon(pose, buffer, start, end, 0.012, color));
+                (pose, buffer) -> RenderUtils.drawRibbon(pose, buffer, start, end, 0.012, lineColor));
             context.poseStack().popPose();
         }
     }

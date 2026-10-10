@@ -100,7 +100,8 @@ public class Nametags extends Module {
             return c;
         }
 
-        c.append(e.getDisplayName().copy());
+        if (dev.novautils.utils.Friends.isFriend(e)) c.append(Component.literal(e.getName().getString()).withColor(0x55FFFF));
+        else c.append(e.getDisplayName().copy());
         if (e instanceof LivingEntity living && health.get()) {
             float hp = living.getHealth() + living.getAbsorptionAmount();
             c.append(Component.literal(String.format(" %.1f", hp)).withColor(healthColor(hp, living.getMaxHealth())));

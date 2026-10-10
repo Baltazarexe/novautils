@@ -36,6 +36,10 @@ public class HudInfo extends HudModule {
     private final Setting<Boolean> ping = register(Setting.builder(Boolean.class, "ping")
         .description("Show your ping to the server.").defaultValue(false).build());
 
+    private final Setting<Boolean> tps = register(Setting.builder(Boolean.class, "tps")
+        .description("Show the server's ticks per second (20 = no lag) and when it stops responding.")
+        .defaultValue(true).build());
+
     private Vec3 lastPos;
     private double bps;
 
@@ -87,6 +91,12 @@ public class HudInfo extends HudModule {
             PlayerInfo info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
             int latency = info != null ? info.getLatency() : -1;
             lines.add("Ping: " + (latency >= 0 ? latency + "ms" : "n/a"));
+        }
+        if (tps.get() && mc.getConnection() != null) {
+            float t = dev.novautils.utils.ServerStats.tps();
+            float stalled = dev.novautils.utils.ServerStats.secondsSinceLastPacket();
+            if (stalled > 3) lines.add(String.format("TPS: server not responding (%.0fs)", stalled));
+            else if (t >= 0) lines.add(String.format("TPS: %.1f", t));
         }
 
         int w = 0;

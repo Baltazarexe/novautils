@@ -31,6 +31,34 @@ public abstract class ClientPacketListenerMixin {
         if (ModuleManager.get().onReceivePacket(packet)) ci.cancel();
     }
 
+    // Sounds (AutoFish), world time (TPS meter) and block changes (NewChunks): read-only, never cancelled.
+    @Inject(method = "handleSoundEvent", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$sound(net.minecraft.network.protocol.game.ClientboundSoundPacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
+    @Inject(method = "handleSetTime", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$time(net.minecraft.network.protocol.game.ClientboundSetTimePacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
+    @Inject(method = "handleBlockUpdate", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$block(net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
+    @Inject(method = "handleChunkBlocksUpdate", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$blocks(net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
+    @org.spongepowered.asm.mixin.Unique
+    private static void observe(net.minecraft.network.protocol.Packet<?> packet) {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
+        ModuleManager.get().onReceivePacket(packet);
+        dev.novautils.utils.ServerStats.onPacket(packet);
+    }
+
     @Inject(method = "handleExplosion", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
     private void novautils$explosionPre(ClientboundExplodePacket packet, CallbackInfo ci) {
         if (!dev.novautils.NovaUtils.modulesReady) return;

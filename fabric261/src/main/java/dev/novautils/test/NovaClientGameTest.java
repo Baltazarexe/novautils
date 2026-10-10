@@ -411,6 +411,64 @@ public class NovaClientGameTest implements FabricClientGameTest {
         boolean floorKept = ctx.computeOnClient(c -> !c.level.getBlockState(new net.minecraft.core.BlockPos(-2, 199, 5)).isAir());
         check(floorKept, "Nuker cleared the dirt and left the floor alone");
 
+        // TPS meter: singleplayer runs at ~20
+        float tps = ctx.computeOnClient(c -> dev.novautils.utils.ServerStats.tps());
+        check(tps > 15f && tps <= 20.01f, "TPS meter reads " + tps);
+
+        // Search: a spawner and an end portal frame next to the platform
+        cmd(sp, "/setblock -3 200 -5 minecraft:spawner");
+        cmd(sp, "/setblock -3 200 -4 minecraft:end_portal_frame");
+        only(ctx, dev.novautils.modules.render.Search.class);
+        ctx.waitFor(c -> ModuleManager.get().get(dev.novautils.modules.render.Search.class).count() >= 2, 200);
+        check(true, "Search found the spawner and the end portal frame");
+
+        // AutoMend: damaged Mending chestplate + XP bottles in the hotbar
+        cmd(sp, "/clear @a");
+        cmd(sp, "/tp @a -2 200 -2 90 0");
+        cmd(sp, "/item replace entity @a armor.chest with minecraft:iron_chestplate[damage=200,enchantments={\"minecraft:mending\":1}]");
+        cmd(sp, "/give @a minecraft:experience_bottle 64");
+        ctx.waitTicks(5);
+        int damageBefore = ctx.computeOnClient(c -> c.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).getDamageValue());
+        only(ctx, dev.novautils.modules.player.AutoMend.class);
+        ctx.waitTicks(120);
+        int damageAfter = ctx.computeOnClient(c -> c.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).getDamageValue());
+        float pitch = ctx.computeOnClient(c -> c.player.getXRot());
+        check(damageAfter < damageBefore - 20 && Math.abs(pitch) < 1f,
+            "AutoMend repaired the chestplate (damage " + damageBefore + " -> " + damageAfter + ") without moving the camera");
+
+        // ElytraReplace: worn elytra with 4 uses left, a fresh one in the bag
+        cmd(sp, "/clear @a");
+        cmd(sp, "/item replace entity @a armor.chest with minecraft:elytra[damage=428]");
+        cmd(sp, "/give @a minecraft:elytra");
+        ctx.waitTicks(5);
+        only(ctx, dev.novautils.modules.player.ElytraReplace.class);
+        ctx.waitTicks(20);
+        int wornDamage = ctx.computeOnClient(c -> c.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).getDamageValue());
+        check(wornDamage == 0, "ElytraReplace swapped in the fresh elytra (worn damage now " + wornDamage + ")");
+
+        // AutoFish: lure III rod facing the pool; must catch something by itself
+        cmd(sp, "/clear @a");
+        cmd(sp, "/fill -3 196 7 3 198 11 minecraft:water");
+        cmd(sp, "/fill -2 199 8 2 199 10 minecraft:water");
+        cmd(sp, "/give @a minecraft:fishing_rod[enchantments={\"minecraft:lure\":3}]");
+        cmd(sp, "/tp @a 0 200 6 0 35");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 9; i++) if (inv.getItem(i).is(net.minecraft.world.item.Items.FISHING_ROD)) dev.novautils.utils.InvUtils.selectHotbar(i);
+        });
+        only(ctx, dev.novautils.modules.world.AutoFish.class);
+        ctx.waitFor(c -> {
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 36; i++) {
+                var s = inv.getItem(i);
+                if (!s.isEmpty() && !s.is(net.minecraft.world.item.Items.FISHING_ROD)) return true;
+            }
+            return false;
+        }, 1200);
+        check(true, "AutoFish caught something on its own");
+        ctx.runOnClient(c -> allOff());
+
         // Zoom, Nametags and a waypoint label: screenshot only
         cmd(sp, "/tp @a 0 200 0 -90 0");
         cmd(sp, "/summon minecraft:zombie 7 200 1 {NoAI:1b,PersistenceRequired:1b}");
@@ -441,6 +499,8 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        // silent test runs: master volume 0 (only this throwaway test instance, not your game)
+        context.runOnClient(c -> c.options.getSoundSourceOptionInstance(net.minecraft.sounds.SoundSource.MASTER).set(0.0));
         try (TestSingleplayerContext sp = context.worldBuilder().create()) {
             sp.getServer().runCommand("/fill -4 199 -6 14 199 6 minecraft:stone");
             sp.getServer().runCommand("/tp @a 0 200 0 -90 0");
