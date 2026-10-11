@@ -16,7 +16,7 @@ import org.joml.Quaternionf;
  */
 public class ViewModel extends Module {
     private final Setting<Double> scale = register(Setting.builder(Double.class, "scale")
-        .description("Size of the hand and item (1 = vanilla).").defaultValue(1.0).range(0.3, 2.0).build());
+        .description("Size of the held item (1 = vanilla).").defaultValue(1.0).range(0.3, 2.0).build());
     private final Setting<Double> x = register(Setting.builder(Double.class, "x")
         .description("Left / right.").defaultValue(0.0).range(-1.0, 1.0).build());
     private final Setting<Double> y = register(Setting.builder(Double.class, "y")
@@ -24,7 +24,7 @@ public class ViewModel extends Module {
     private final Setting<Double> z = register(Setting.builder(Double.class, "z")
         .description("Closer / further.").defaultValue(0.0).range(-1.0, 1.0).build());
     private final Setting<Integer> rotX = register(Setting.builder(Integer.class, "rotate-x")
-        .description("Tilt forward / back (degrees).").defaultValue(0).range(-180, 180).build());
+        .description("Tilt the item forward / back (degrees).").defaultValue(0).range(-180, 180).build());
     private final Setting<Integer> rotY = register(Setting.builder(Integer.class, "rotate-y")
         .description("Turn left / right (degrees).").defaultValue(0).range(-180, 180).build());
     private final Setting<Integer> rotZ = register(Setting.builder(Integer.class, "rotate-z")
@@ -83,29 +83,54 @@ public class ViewModel extends Module {
 
     // ---- hands: called by ViewModelMixin around vanilla's arm + item drawing
 
+    private static ViewModel active(InteractionHand hand) {
+        if (!dev.novautils.NovaUtils.modulesReady) return null;
+        ViewModel vm = ModuleManager.get().get(ViewModel.class);
+        if (!vm.isEnabled()) return null;
+        if (hand == InteractionHand.OFF_HAND && !vm.applyOffhand.get()) return null;
+        return vm;
+    }
+
+    /** +1 on the right side of the screen, -1 on the left (offhand / left-handed mirror). */
+    private static float side(InteractionHand hand) {
+        boolean leftHanded = mc.options.mainHand().get() == net.minecraft.world.entity.HumanoidArm.LEFT;
+        return (hand == InteractionHand.OFF_HAND) != leftHanded ? -1f : 1f;
+    }
+
+    /** Whole arm + item: move it. */
     public static void before(PoseStack pose, InteractionHand hand) {
         pushed = false;
-        if (!dev.novautils.NovaUtils.modulesReady) return;
-        ViewModel vm = ModuleManager.get().get(ViewModel.class);
-        if (!vm.isEnabled()) return;
-        boolean off = hand == InteractionHand.OFF_HAND;
-        if (off && !vm.applyOffhand.get()) return;
-        // main hand sits on the right for right-handed players; mirror X for the other side
-        boolean leftHanded = mc.options.mainHand().get() == net.minecraft.world.entity.HumanoidArm.LEFT;
-        boolean onLeft = off != leftHanded;
-        float side = onLeft ? -1f : 1f;
+        ViewModel vm = active(hand);
+        if (vm == null) return;
         pose.pushPose();
         pushed = true;
-        pose.translate(vm.x.get() * side, vm.y.get(), -vm.z.get());
-        Quaternionf q = new Quaternionf().rotationXYZ((float) Math.toRadians(vm.rotX.get()),
-            (float) Math.toRadians(vm.rotY.get() * side), (float) Math.toRadians(vm.rotZ.get() * side));
-        pose.rotateAround(q, 0f, 0f, 0f);
-        float s = (float) (double) vm.scale.get() * (off ? (float) (double) vm.offhandScale.get() : 1f);
-        pose.scale(s, s, s);
+        pose.translate(vm.x.get() * side(hand), vm.y.get(), -vm.z.get());
     }
 
     public static void after(PoseStack pose) {
         if (pushed) pose.popPose();
         pushed = false;
+    }
+
+    private static boolean itemPushed;
+
+    /** Just the item, already placed in the hand: size and tilt around its own centre. */
+    public static void beforeItem(PoseStack pose, InteractionHand hand) {
+        itemPushed = false;
+        ViewModel vm = active(hand);
+        if (vm == null) return;
+        float side = side(hand);
+        pose.pushPose();
+        itemPushed = true;
+        Quaternionf q = new Quaternionf().rotationXYZ((float) Math.toRadians(vm.rotX.get()),
+            (float) Math.toRadians(vm.rotY.get() * side), (float) Math.toRadians(vm.rotZ.get() * side));
+        pose.rotateAround(q, 0f, 0f, 0f);
+        float s = (float) (double) vm.scale.get() * (hand == InteractionHand.OFF_HAND ? (float) (double) vm.offhandScale.get() : 1f);
+        pose.scale(s, s, s);
+    }
+
+    public static void afterItem(PoseStack pose) {
+        if (itemPushed) pose.popPose();
+        itemPushed = false;
     }
 }

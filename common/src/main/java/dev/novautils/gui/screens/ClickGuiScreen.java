@@ -34,15 +34,16 @@ import java.util.Set;
 public class ClickGuiScreen extends Screen {
     private static final int SIDEBAR = 96;
     private static final int RADIUS = 7;
-    private static final int MODULE_H = 20;
-    private static final int SET_H = 18;
-    private static final int NUM_H = 24;
+    private static final int MODULE_H = 26;
+    private static final int SET_H = 20;
+    private static final int NUM_H = 26;
     private static final int CHANNEL_H = 15;
 
     private enum Pane { LIST, SETTINGS }
     private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND, COLOR, CHANNEL }
 
-    private record Row(Pane pane, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting, int channel) {}
+    /** {@code pair}: the colour setting shown inline next to a switch (Xray "diamond" + "diamond-color"). */
+    private record Row(Pane pane, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting, int channel, Setting<?> pair) {}
 
     // remembered while the game runs
     private static Category selectedCategory = Category.values()[0];
@@ -140,12 +141,12 @@ public class ClickGuiScreen extends Screen {
     // ------------------------------------------------------------------ geometry
 
     private void computeGeometry() {
-        ww = Math.min(470, this.width - 20);
-        wh = Math.min(270, this.height - 20);
+        ww = Math.min(520, this.width - 16);
+        wh = Math.min(300, this.height - 16);
         wx = (this.width - ww) / 2;
         wy = (this.height - wh) / 2;
         listX = wx + SIDEBAR;
-        listW = (int) ((ww - SIDEBAR) * 0.44f);
+        listW = (int) ((ww - SIDEBAR) * 0.42f);
         setX = listX + listW;
         setW = wx + ww - setX;
         bodyTop = wy + 30;
@@ -201,6 +202,20 @@ public class ClickGuiScreen extends Screen {
         return null;
     }
 
+    /** The "<name>-color" setting that belongs to switch {@code s}, if the module has one. */
+    private static Setting<?> pairedColor(Module m, Setting<?> s) {
+        for (Setting<?> o : m.getSettings()) if (o.color && o.name.equals(s.name + "-color")) return o;
+        return null;
+    }
+
+    /** The switch a "<name>-color" setting belongs to, if there is one. */
+    private static Setting<?> pairedSwitch(Module m, Setting<?> color) {
+        if (!color.name.endsWith("-color")) return null;
+        String base = color.name.substring(0, color.name.length() - 6);
+        for (Setting<?> o : m.getSettings()) if (o.name.equals(base) && o.get() instanceof Boolean) return o;
+        return null;
+    }
+
     private List<FormattedCharSequence> descriptionLines() {
         if (selected == null || selected.description.isEmpty()) return List.of();
         List<FormattedCharSequence> lines = this.font.split(Component.literal(selected.description), setW - 24);
@@ -217,7 +232,7 @@ public class ClickGuiScreen extends Screen {
         listScrollTarget = Math.max(0, Math.min(listScrollTarget, Math.max(0, contentH - viewH)));
         int y = bodyTop - Math.round(listScroll);
         for (Module m : mods) {
-            rows.add(new Row(Pane.LIST, RowType.MODULE, listX + 6, y, listW - 12, MODULE_H, m, null, -1));
+            rows.add(new Row(Pane.LIST, RowType.MODULE, listX + 6, y, listW - 12, MODULE_H, m, null, -1, null));
             y += MODULE_H + 2;
         }
 
@@ -228,21 +243,24 @@ public class ClickGuiScreen extends Screen {
         int sy = setRowsTop - Math.round(setScroll);
         int start = sy;
         for (Setting<?> s : selected.getSettings()) {
-            if (!s.isVisible()) continue;
             RowType type = rowTypeOf(s);
             if (type == null) continue;
+            if (type == RowType.COLOR && pairedSwitch(selected, s) != null) continue; // drawn inline with its switch
+            if (!s.isVisible()) continue;
+            Setting<?> pair = type == RowType.BOOL ? pairedColor(selected, s) : null;
             int h = type == RowType.NUMBER ? NUM_H : SET_H;
-            rows.add(new Row(Pane.SETTINGS, type, sx, sy, sw, h, selected, s, -1));
+            rows.add(new Row(Pane.SETTINGS, type, sx, sy, sw, h, selected, s, -1, pair));
             sy += h + 2;
-            if (type == RowType.COLOR && OPEN_COLORS.contains(s)) {
+            Setting<?> colour = type == RowType.COLOR ? s : pair;
+            if (colour != null && OPEN_COLORS.contains(colour)) {
                 for (int c = 0; c < 4; c++) {
-                    rows.add(new Row(Pane.SETTINGS, RowType.CHANNEL, sx, sy, sw, CHANNEL_H, selected, s, c));
+                    rows.add(new Row(Pane.SETTINGS, RowType.CHANNEL, sx, sy, sw, CHANNEL_H, selected, colour, c, null));
                     sy += CHANNEL_H;
                 }
                 sy += 2;
             }
         }
-        rows.add(new Row(Pane.SETTINGS, RowType.KEYBIND, sx, sy, sw, SET_H, selected, null, -1));
+        rows.add(new Row(Pane.SETTINGS, RowType.KEYBIND, sx, sy, sw, SET_H, selected, null, -1, null));
         sy += SET_H + 2;
         int setContent = sy - start;
         setScrollTarget = Math.max(0, Math.min(setScrollTarget, Math.max(0, setContent - (bodyBottom - setRowsTop))));
@@ -385,25 +403,22 @@ public class ClickGuiScreen extends Screen {
             if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.ACCENT);
 
             int nameColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.5f), Theme.TEXT, sw);
-            String name = m.name;
-            if (!search.isEmpty()) {
-                g.text(this.font, name, r.x() + 8, r.y() + 3, nameColor, false);
-                g.text(this.font, title(m.category), r.x() + 8, r.y() + 12, Theme.TEXT_OFF, false);
-            } else {
-                g.text(this.font, name, r.x() + 8, r.y() + 6, nameColor, false);
-            }
+            // name on top, a one-line description (or the category, when searching) under it
+            g.text(this.font, m.name, r.x() + 8, r.y() + 4, nameColor, false);
+            String sub = search.isEmpty() ? m.description : title(m.category) + "  ·  " + m.description;
+            int subW = r.w() - 40 - (m.getKeyBind() != -1 ? this.font.width(keyName(m.getKeyBind())) + 8 : 0);
+            String shortSub = this.font.plainSubstrByWidth(sub, subW);
+            if (shortSub.length() < sub.length()) shortSub = this.font.plainSubstrByWidth(sub, subW - this.font.width("…")) + "…";
+            g.text(this.font, shortSub, r.x() + 8, r.y() + 14, Theme.alpha(Theme.TEXT_OFF, 0.9f), false);
             if (m.getKeyBind() != -1) {
                 String key = keyName(m.getKeyBind());
                 if (key.length() > 4) key = key.substring(0, 4);
                 int kw = this.font.width(key);
                 int kx = r.x() + r.w() - 26 - kw;
-                Theme.rounded(g, kx - 3, r.y() + 5, kw + 6, 10, 3, 0xFF1C1E25);
-                g.text(this.font, key, kx, r.y() + 6, Theme.TEXT_OFF, false);
+                Theme.rounded(g, kx - 3, r.y() + 3, kw + 6, 10, 3, 0xFF1C1E25);
+                g.text(this.font, key, kx, r.y() + 4, Theme.TEXT_OFF, false);
             }
-            Theme.toggle(g, r.x() + r.w() - 22, r.y() + 5, sw);
-            if (hover && !m.description.isEmpty() && selected != m) {
-                g.setTooltipForNextFrame(Component.literal(m.description + "  ·  right-click for settings"), mx, my);
-            }
+            Theme.toggle(g, r.x() + r.w() - 22, r.y() + 8, sw);
         }
         g.disableScissor();
         drawScrollbar(g, listX + listW - 4, bodyTop, bodyBottom, listScroll, mods.size() * (MODULE_H + 2));
@@ -427,13 +442,11 @@ public class ClickGuiScreen extends Screen {
             return;
         }
 
-        // header: name, state chip, description
+        // header: name and its on/off switch (clickable), then the description
         g.text(this.font, selected.name, setX + 12, wy + 12, Theme.TEXT, false);
-        String state = selected.isEnabled() ? "ON" : "OFF";
-        int cw = this.font.width(state) + 8;
-        int cx = setX + setW - 12 - cw;
-        Theme.rounded(g, cx, wy + 10, cw, 12, 4, selected.isEnabled() ? 0x338B9CFF : 0xFF1E2027);
-        g.text(this.font, state, cx + 4, wy + 12, selected.isEnabled() ? Theme.ACCENT : Theme.TEXT_OFF, false);
+        float on = animate("hdr", selected.isEnabled() ? 1f : 0f, 16f, dt);
+        int[] hs = headerSwitch();
+        Theme.toggle(g, hs[0], hs[1], on);
         int dy = wy + 26;
         for (FormattedCharSequence line : descriptionLines()) {
             g.text(this.font, line, setX + 12, dy, Theme.TEXT_OFF, false);
@@ -482,8 +495,29 @@ public class ClickGuiScreen extends Screen {
         @SuppressWarnings("unchecked")
         Setting<Boolean> s = (Setting<Boolean>) r.setting();
         float t = animate("b" + s.hashCode(), s.get() ? 1f : 0f, 16f, dt);
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, t), false);
-        Theme.toggle(g, r.x() + r.w() - 22, r.y() + 4, t);
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 6, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, t), false);
+        Theme.toggle(g, r.x() + r.w() - 22, r.y() + 5, t);
+        if (r.pair() != null) {
+            // its colour sits right next to the switch; click it for the R/G/B/A sliders
+            int[] sw = swatch(r);
+            int color = (Integer) r.pair().get();
+            boolean open = OPEN_COLORS.contains(r.pair());
+            Theme.rounded(g, sw[0] - 1, sw[1] - 1, sw[2] + 2, sw[3] + 2, 4, open ? Theme.ACCENT : 0xFF2A2D36);
+            Theme.rounded(g, sw[0], sw[1], sw[2], sw[3], 3, 0xFF777777);
+            g.fill(sw[0] + 2, sw[1] + 2, sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, 0xFF555555);
+            g.fill(sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, sw[0] + sw[2] - 2, sw[1] + sw[3] - 2, 0xFF555555);
+            Theme.rounded(g, sw[0], sw[1], sw[2], sw[3], 3, s.get() ? color : Theme.alpha(color, 0.35f));
+        }
+    }
+
+    /** {x, y, w, h} of the inline colour swatch on a switch row. */
+    private static int[] swatch(Row r) {
+        return new int[]{r.x() + r.w() - 44, r.y() + 5, 16, 10};
+    }
+
+    /** {x, y} of the big on/off switch in the settings header. */
+    private int[] headerSwitch() {
+        return new int[]{setX + setW - 30, wy + 11};
     }
 
     private void drawNumber(GuiGraphicsExtractor g, Row r) {
@@ -495,23 +529,65 @@ public class ClickGuiScreen extends Screen {
         g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 4, Theme.TEXT_DIM, false);
         g.text(this.font, shown, r.x() + r.w() - 8 - this.font.width(shown), r.y() + 4, Theme.TEXT, false);
         int[] t = track(r);
-        Theme.rounded(g, t[0], t[1] - 1, t[2], 3, 1, Theme.TRACK);
+        Theme.rounded(g, t[0], t[1] - 2, t[2], 4, 2, Theme.TRACK);
         int fill = Math.round(t[2] * frac);
-        if (fill > 0) Theme.rounded(g, t[0], t[1] - 1, fill, 3, 1, Theme.ACCENT);
+        if (fill > 0) Theme.rounded(g, t[0], t[1] - 2, Math.max(4, fill), 4, 2, Theme.ACCENT);
         int kx = t[0] + fill;
-        Theme.rounded(g, kx - 4, t[1] - 4, 8, 8, 4, 0x40000000);
-        Theme.rounded(g, kx - 3, t[1] - 3, 7, 7, 3, 0xFFFFFFFF);
+        Theme.rounded(g, kx - 5, t[1] - 5, 11, 11, 5, 0x50000000);
+        Theme.rounded(g, kx - 4, t[1] - 4, 9, 9, 4, 0xFFFFFFFF);
+    }
+
+    private static String enumLabel(Object e) {
+        String v = ((Enum<?>) e).name().replace('_', ' ').toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(v.charAt(0)) + v.substring(1);
+    }
+
+    /**
+     * Segments {x, width} for a choice with up to 3 options, laid out right-aligned in the row - or
+     * null when it has more options or they don't fit (then it's a single pill you click through).
+     */
+    private int[][] segments(Row r) {
+        Object[] options = r.setting().type.getEnumConstants();
+        if (options == null || options.length > 3) return null;
+        int[][] segs = new int[options.length][];
+        int total = 0;
+        for (int i = 0; i < options.length; i++) {
+            int w = this.font.width(enumLabel(options[i])) + 10;
+            segs[i] = new int[]{0, w};
+            total += w;
+        }
+        int labelW = this.font.width(pretty(r.setting().name)) + 16;
+        if (total + labelW > r.w() - 8) return null;
+        int x = r.x() + r.w() - 6 - total;
+        for (int[] s : segs) {
+            s[0] = x;
+            x += s[1];
+        }
+        return segs;
     }
 
     private void drawEnum(GuiGraphicsExtractor g, Row r, float hover) {
         Setting<?> s = r.setting();
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
-        String value = ((Enum<?>) s.get()).name().replace('_', ' ').toLowerCase(Locale.ROOT);
-        value = Character.toUpperCase(value.charAt(0)) + value.substring(1);
-        int vw = this.font.width(value) + 16;
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 6, Theme.TEXT_DIM, false);
+        int[][] segs = segments(r);
+        if (segs != null) {
+            Object[] options = s.type.getEnumConstants();
+            int x0 = segs[0][0], x1 = segs[segs.length - 1][0] + segs[segs.length - 1][1];
+            Theme.rounded(g, x0, r.y() + 3, x1 - x0, 14, 5, 0xFF1C1E25);
+            for (int i = 0; i < options.length; i++) {
+                boolean sel = options[i] == s.get();
+                if (sel) Theme.rounded(g, segs[i][0] + 1, r.y() + 4, segs[i][1] - 2, 12, 4, 0xFF2D3242);
+                String label = enumLabel(options[i]);
+                g.text(this.font, label, segs[i][0] + segs[i][1] / 2 - this.font.width(label) / 2, r.y() + 6,
+                    sel ? Theme.ACCENT : Theme.TEXT_OFF, false);
+            }
+            return;
+        }
+        String value = "‹  " + enumLabel(s.get()) + "  ›";
+        int vw = this.font.width(value) + 12;
         int vx = r.x() + r.w() - 8 - vw;
-        Theme.rounded(g, vx, r.y() + 3, vw, 12, 4, Theme.mix(0xFF1E2128, 0xFF272B36, hover));
-        g.text(this.font, value, vx + 8, r.y() + 5, Theme.ACCENT, false);
+        Theme.rounded(g, vx, r.y() + 3, vw, 14, 5, Theme.mix(0xFF1E2128, 0xFF272B36, hover));
+        g.text(this.font, value, vx + 6, r.y() + 6, Theme.ACCENT, false);
     }
 
     private void drawColor(GuiGraphicsExtractor g, Row r) {
@@ -610,6 +686,14 @@ public class ClickGuiScreen extends Screen {
                 return true;
             }
         }
+        if (selected != null) {
+            int[] hs = headerSwitch();
+            if (mx >= hs[0] - 2 && mx < hs[0] + 18 && my >= hs[1] - 2 && my < hs[1] + 11) {
+                selected.toggle();
+                ModuleManager.get().markDirty();
+                return true;
+            }
+        }
         int by = hudButtonY();
         if (mx >= wx + 8 && mx < wx + SIDEBAR - 8 && my >= by && my < by + 15) {
             dev.novautils.utils.PlatformCompat.openScreen(net.minecraft.client.Minecraft.getInstance(), new HudEditorScreen(this));
@@ -638,6 +722,11 @@ public class ClickGuiScreen extends Screen {
             }
             switch (r.type()) {
                 case BOOL -> {
+                    int[] sw = swatch(r);
+                    if (r.pair() != null && mx >= sw[0] - 2 && mx < sw[0] + sw[2] + 2) {
+                        if (!OPEN_COLORS.remove(r.pair())) OPEN_COLORS.add(r.pair());
+                        return true;
+                    }
                     @SuppressWarnings("unchecked")
                     Setting<Boolean> s = (Setting<Boolean>) r.setting();
                     s.set(!s.get());
@@ -648,7 +737,20 @@ public class ClickGuiScreen extends Screen {
                     slidingRow = r;
                     applySlider(mx);
                 }
-                case ENUM -> cycleEnum(r.setting(), button == 1 ? -1 : 1);
+                case ENUM -> {
+                    int[][] segs = segments(r);
+                    Object[] options = r.setting().type.getEnumConstants();
+                    boolean picked = false;
+                    if (segs != null) {
+                        for (int k = 0; k < segs.length; k++) {
+                            if (mx >= segs[k][0] && mx < segs[k][0] + segs[k][1]) {
+                                setEnum(r.setting(), options[k]);
+                                picked = true;
+                            }
+                        }
+                    }
+                    if (!picked) cycleEnum(r.setting(), button == 1 ? -1 : 1);
+                }
                 case KEYBIND -> bindingFor = r.module();
                 case COLOR -> {
                     if (!OPEN_COLORS.remove(r.setting())) OPEN_COLORS.add(r.setting());
@@ -710,6 +812,12 @@ public class ClickGuiScreen extends Screen {
         double value = min + (max - min) * frac;
         if (slidingSetting.get() instanceof Integer) ((Setting<Integer>) slidingSetting).set((int) Math.round(value));
         else ((Setting<Double>) slidingSetting).set(Math.round(value * 100.0) / 100.0);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void setEnum(Setting<?> setting, Object value) {
+        ((Setting) setting).set(value);
+        ModuleManager.get().markDirty();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
