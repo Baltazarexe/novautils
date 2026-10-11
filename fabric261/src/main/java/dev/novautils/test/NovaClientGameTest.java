@@ -724,6 +724,106 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(20);
     }
 
+    private static String screenName(ClientGameTestContext ctx) {
+        return ctx.computeOnClient(c -> c.screen == null ? "none" : c.screen.getClass().getName());
+    }
+
+    /**
+     * Only when JEI is in testmods: with the modules a real player keeps on, open the inventory,
+     * hover an item, press R for its recipes, click around inside the recipe screen, then leave
+     * it with ESC. The recipe screen must open and must close again.
+     */
+    private static void jeiCheck(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        if (!FabricLoader.getInstance().isModLoaded("jei")) return;
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/give @a minecraft:oak_planks 16");
+        ctx.runOnClient(c -> {
+            allOff();
+            for (var t : java.util.List.of(dev.novautils.modules.render.Fullbright.class, Esp.class,
+                dev.novautils.modules.render.Nametags.class, dev.novautils.modules.render.Trajectories.class,
+                dev.novautils.modules.render.ViewModel.class, dev.novautils.modules.movement.NoFall.class,
+                dev.novautils.modules.movement.NoSlow.class, dev.novautils.modules.combat.AutoFight.class,
+                dev.novautils.modules.combat.Criticals.class, ActiveModules.class, Notifications.class)) on(t);
+        });
+        ctx.waitTicks(40);
+        for (int i = 0; i < 5 && screenName(ctx).equals("none"); i++) {
+            ctx.getInput().pressKey(InputConstants.KEY_E);
+            ctx.waitTicks(10);
+        }
+        if (screenName(ctx).equals("none")) {
+            System.out.println("[novautils-test] jei: E did not open the inventory, opening it directly");
+            ctx.runOnClient(c -> c.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(c.player)));
+            ctx.waitTicks(10);
+        }
+        System.out.println("[novautils-test] jei: after E -> " + screenName(ctx));
+        int[] slot = ctx.computeOnClient(c -> {
+            if (!(c.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> s)) return null;
+            int left, top;
+            try {
+                var lf = net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class.getDeclaredField("leftPos");
+                var tf = net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class.getDeclaredField("topPos");
+                lf.setAccessible(true);
+                tf.setAccessible(true);
+                left = lf.getInt(s);
+                top = tf.getInt(s);
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(e);
+            }
+            for (var sl : s.getMenu().slots) {
+                if (sl.getItem().is(net.minecraft.world.item.Items.OAK_PLANKS)) return new int[]{left + sl.x + 8, top + sl.y + 8};
+            }
+            return null;
+        });
+        check(slot != null, "jei: planks visible in the inventory");
+        cursor(ctx, slot[0], slot[1]);
+        ctx.waitTicks(3);
+        ctx.getInput().pressKey(InputConstants.KEY_R);
+        ctx.waitTicks(20);
+        String recipes = screenName(ctx);
+        System.out.println("[novautils-test] jei: after R -> " + recipes);
+        shot(ctx, "22_jei_recipes");
+        check(recipes.contains("jei"), "jei: R opened the recipe screen");
+        // click around the recipe screen like a player browsing
+        int[] mid = ctx.computeOnClient(c -> new int[]{c.getWindow().getGuiScaledWidth() / 2, c.getWindow().getGuiScaledHeight() / 2});
+        for (int[] d : new int[][]{{0, 0}, {-40, -20}, {40, 20}, {0, -60}}) {
+            click(ctx, new int[]{mid[0] + d[0], mid[1] + d[1]}, 0);
+            ctx.waitTicks(5);
+            System.out.println("[novautils-test] jei: after click " + d[0] + "," + d[1] + " -> " + screenName(ctx));
+        }
+        ctx.getInput().pressKey(InputConstants.KEY_BACKSPACE);
+        ctx.waitTicks(5);
+        System.out.println("[novautils-test] jei: after backspace -> " + screenName(ctx));
+        // the modpack's options.txt had JEI's "close recipes" key unbound: reproduce that first
+        ctx.runOnClient(c -> {
+            for (var k : c.options.keyMappings) {
+                if (k.getName().equals("key.jei.closeRecipeGui")) k.setKey(InputConstants.UNKNOWN);
+            }
+            net.minecraft.client.KeyMapping.resetMapping();
+        });
+        ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
+        ctx.waitTicks(10);
+        System.out.println("[novautils-test] jei: close key unbound, after ESC -> " + screenName(ctx));
+        if (!screenName(ctx).contains("jei")) {
+            ctx.getInput().pressKey(InputConstants.KEY_R);
+            ctx.waitTicks(10);
+        }
+        ctx.runOnClient(c -> {
+            for (var k : c.options.keyMappings) {
+                if (k.getName().equals("key.jei.closeRecipeGui")) k.setKey(k.getDefaultKey());
+            }
+            net.minecraft.client.KeyMapping.resetMapping();
+        });
+        for (int i = 0; i < 4 && screenName(ctx).contains("jei"); i++) {
+            ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
+            ctx.waitTicks(10);
+            System.out.println("[novautils-test] jei: after ESC -> " + screenName(ctx));
+        }
+        shot(ctx, "23_jei_closed");
+        check(!screenName(ctx).contains("jei"), "jei: ESC leaves the recipe screen");
+        ctx.runOnClient(c -> { c.setScreen(null); allOff(); });
+        ctx.waitTicks(5);
+    }
+
     @Override
     public void runTest(ClientGameTestContext context) {
         // silent test runs: master volume 0 (only this throwaway test instance, not your game)
@@ -744,6 +844,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             sp.getClientLevel().waitForChunksRender();
             context.runOnClient(client -> allOff());
             context.waitTicks(20);
+            jeiCheck(context, sp);
 
             // --- Xray: defaults (copper and coal are off by default -> 6 of the 8 ores) ---
             context.runOnClient(client -> on(Xray.class));
