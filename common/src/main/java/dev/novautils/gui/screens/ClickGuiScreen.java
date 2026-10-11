@@ -621,7 +621,7 @@ public class ClickGuiScreen extends Screen {
     private void drawKeybind(GuiGraphicsExtractor g, Row r) {
         g.text(this.font, "Keybind", r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
         boolean binding = bindingFor == r.module();
-        String key = binding ? "Press a key…" : keyName(r.module().getKeyBind());
+        String key = binding ? "Press a key or mouse button…" : keyName(r.module().getKeyBind());
         int kw = this.font.width(key) + 12;
         int kx = r.x() + r.w() - 8 - kw;
         int bg = binding ? Theme.alpha(Theme.ACCENT, 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
@@ -665,8 +665,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private String keyName(int keyCode) {
-        if (keyCode == -1) return "None";
-        return dev.novautils.utils.PlatformCompat.keyDisplayName(keyCode);
+        return dev.novautils.utils.Keybinds.name(keyCode);
     }
 
     // ------------------------------------------------------------------ input
@@ -675,6 +674,18 @@ public class ClickGuiScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         int mx = (int) event.x(), my = (int) event.y();
         int button = event.button();
+
+        // waiting for a keybind: middle / side / extra mouse buttons bind; left / right click cancel
+        // (binding those would toggle the module on every normal click)
+        if (bindingFor != null) {
+            if (button >= 2) {
+                bindingFor.setKeyBind(dev.novautils.utils.Keybinds.mouse(button));
+                bindingFor = null;
+                ModuleManager.get().markDirty();
+                return true;
+            }
+            bindingFor = null;
+        }
 
         // sidebar
         for (Category c : Category.values()) {

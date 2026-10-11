@@ -35,7 +35,8 @@
     "XrayLightMixin",
     "SodiumXrayLightMixin",
     "XrayLightCacheMixin",
-    "ViewModelMixin"
+    "ViewModelMixin",
+    "MinecraftUseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

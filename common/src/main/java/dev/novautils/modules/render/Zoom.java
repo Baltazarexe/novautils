@@ -55,7 +55,7 @@ public class Zoom extends Module {
     @Override
     public void onTick() {
         if (hold.get() && getKeyBind() != -1 && PlatformCompat.currentScreen(mc) == null
-            && !PlatformCompat.isKeyDown(mc, getKeyBind())) {
+            && !dev.novautils.utils.Keybinds.isDown(mc, getKeyBind())) {
             setEnabled(false);
         }
     }

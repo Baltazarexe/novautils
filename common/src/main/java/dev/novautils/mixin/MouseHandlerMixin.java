@@ -13,6 +13,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** While zoomed, the scroll wheel changes the zoom instead of the hotbar slot. */
 @Mixin(MouseHandler.class)
 public abstract class MouseHandlerMixin {
+    /** Mouse buttons can be module keybinds too (side buttons, middle...). */
+    @Inject(method = "onButton", at = @At("HEAD"))
+    private void novautils$mouseBind(long window, net.minecraft.client.input.MouseButtonInfo info, int action, CallbackInfo ci) {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
+        dev.novautils.utils.Keybinds.mouseChanged(info.button(), action != com.mojang.blaze3d.platform.InputConstants.RELEASE);
+        if (action == com.mojang.blaze3d.platform.InputConstants.PRESS) ModuleManager.get().onKeyPressed(dev.novautils.utils.Keybinds.mouse(info.button()));
+    }
+
     @Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
     private void novautils$zoomScroll(long window, double xOffset, double yOffset, CallbackInfo ci) {
         if (!dev.novautils.NovaUtils.modulesReady) return;

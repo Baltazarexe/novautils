@@ -65,6 +65,7 @@ import dev.novautils.modules.misc.BetterChat;
 import dev.novautils.modules.player.AutoMend;
 import dev.novautils.modules.player.ElytraReplace;
 import dev.novautils.modules.world.AutoFish;
+import dev.novautils.modules.world.AirPlace;
 import dev.novautils.modules.misc.FriendsModule;
 import dev.novautils.modules.render.Fullbright;
 import dev.novautils.modules.render.HoleEsp;
@@ -189,6 +190,7 @@ public class ModuleManager {
         register(new AutoBreed());
         register(new AutoNametag());
         register(new AutoFish());
+        register(new AirPlace());
 
         // Misc
         register(new ActiveModules());

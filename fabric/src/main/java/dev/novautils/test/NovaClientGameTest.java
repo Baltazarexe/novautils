@@ -200,6 +200,25 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         click(ctx, reveal(ctx, MOVEMENT, AutoSprint.class, "bind"), 2);
         check(ctx.computeOnClient(c -> mod(AutoSprint.class).getKeyBind()) == -1, "middle-click clears the keybind");
+
+        // mouse button binds: side button (mouse 4) through the bind row, then use it in game
+        click(ctx, reveal(ctx, MOVEMENT, AutoSprint.class, "bind"), 0);
+        ctx.getInput().pressMouse(3);
+        ctx.waitTicks(3);
+        check(ctx.computeOnClient(c -> mod(AutoSprint.class).getKeyBind()) == dev.novautils.utils.Keybinds.mouse(3),
+            "bind row takes a mouse side button (" + ctx.computeOnClient(c -> dev.novautils.utils.Keybinds.name(mod(AutoSprint.class).getKeyBind())) + ")");
+        ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
+        ctx.waitTicks(5);
+        ctx.getInput().pressMouse(3);
+        ctx.waitTicks(5);
+        check(ctx.computeOnClient(c -> mod(AutoSprint.class).isEnabled()), "mouse 4 toggles AutoSprint on in game");
+        ctx.getInput().pressMouse(3);
+        ctx.waitTicks(5);
+        check(ctx.computeOnClient(c -> !mod(AutoSprint.class).isEnabled()), "mouse 4 toggles it off again");
+        ctx.runOnClient(c -> mod(AutoSprint.class).setKeyBind(-1));
+        ctx.getInput().pressKey(InputConstants.KEY_RSHIFT);
+        ctx.waitForScreen(ClickGuiScreen.class);
+        ctx.waitTicks(3);
         click(ctx, reveal(ctx, MOVEMENT, AutoSprint.class, null), 1);
 
         // Edit HUD button -> editor; drag HudInfo; ESC back to the menu
@@ -614,6 +633,25 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         int kept = ctx.computeOnClient(c -> dev.novautils.modules.misc.BetterChat.history().size());
         check(kept > 150, "BetterChat keeps more than vanilla's 100 messages (" + kept + ")");
+
+        // AirPlace: look up into empty air with stone in hand, right-click -> block appears there
+        cmd(sp, "/clear @a");
+        cmd(sp, "/give @a minecraft:stone 16");
+        cmd(sp, "/tp @a -2 200 -5 0 -40");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 9; i++) if (inv.getItem(i).is(net.minecraft.world.item.Items.STONE)) dev.novautils.utils.InvUtils.selectHotbar(i);
+        });
+        only(ctx, dev.novautils.modules.world.AirPlace.class);
+        ctx.waitTicks(3);
+        var airTarget = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.world.AirPlace.class).target());
+        check(airTarget != null, "AirPlace finds a spot in the air (" + airTarget + ")");
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(10);
+        boolean placed = ctx.computeOnClient(c -> c.level.getBlockState(airTarget).is(net.minecraft.world.level.block.Blocks.STONE));
+        check(placed, "right-click placed stone in mid-air at " + airTarget.toShortString());
+        ctx.runOnClient(c -> allOff());
 
         // ViewModel: bigger hand, moved right and tilted
         ctx.runOnClient(c -> {
