@@ -101,12 +101,18 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
     private static final int[] RENDER = {60, 80}, MOVEMENT = {185, 80};
 
+    private static void clickCategory(ClientGameTestContext ctx, dev.novautils.modules.Category cat) {
+        click(ctx, ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).categoryCenter(cat)), 0);
+    }
+
     /** Scrolls the panel under {@code panelAt} with the mouse wheel until the row is fully shown. */
     private static int[] reveal(ClientGameTestContext ctx, int[] panelAt, Class<? extends Module> type, String setting) {
         for (int i = 0; i < 60; i++) {
             int[] r = row(ctx, type, setting);
             if (r != null) return r;
-            cursor(ctx, panelAt[0], panelAt[1]);
+            int[] at = ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen s
+                ? (setting == null ? s.listCenter() : s.settingsCenter()) : new int[]{0, 0});
+            cursor(ctx, at[0], at[1]);
             ctx.waitTick();
             ctx.getInput().scroll(i < 20 ? -1 : 1);
             ctx.waitTicks(2);
@@ -136,13 +142,8 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitForScreen(ClickGuiScreen.class);
         ctx.waitTicks(3);
         check(true, "Right Shift opens the menu");
-        check(row(ctx, Fullbright.class, null) == null, "RENDER panel remembers its scroll (Fullbright scrolled off)");
-        // mouse wheel up over the RENDER panel brings it back
-        cursor(ctx, 60, 80);
-        ctx.waitTicks(2);
-        for (int i = 0; i < 10; i++) ctx.getInput().scroll(1);
-        ctx.waitTicks(3);
-        check(row(ctx, Fullbright.class, null) != null, "mouse wheel scrolls the RENDER panel back up");
+        clickCategory(ctx, dev.novautils.modules.Category.RENDER);
+        check(reveal(ctx, RENDER, Fullbright.class, null) != null, "clicking Render in the sidebar lists its modules");
         shot(ctx, "08a_menu_opened");
 
         // left-click toggles a module on and off
@@ -163,7 +164,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         // slider: click the far left of the radius track -> minimum; middle-click -> default
         int[] radius = reveal(ctx, RENDER, Xray.class, "radius");
         check(radius != null, "radius slider visible");
-        click(ctx, new int[]{radius[0] - 50, radius[1]}, 0);
+        click(ctx, ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).sliderPoint(mod(Xray.class), "radius", 0f)), 0);
         ctx.getInput().releaseMouse(0);
         int min = ctx.computeOnClient(c -> ((Setting<Integer>) setting(Xray.class, "radius")).get());
         int def = ctx.computeOnClient(c -> (Integer) setting(Xray.class, "radius").defaultValue);
@@ -186,6 +187,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             "first ESC clears search, menu stays open");
 
         // bind AutoSprint to K through the bind row
+        clickCategory(ctx, dev.novautils.modules.Category.MOVEMENT);
         click(ctx, row(ctx, AutoSprint.class, null), 1);
         click(ctx, reveal(ctx, MOVEMENT, AutoSprint.class, "bind"), 0);
         ctx.getInput().pressKey(InputConstants.KEY_K);
@@ -217,7 +219,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         // Edit HUD button -> editor; drag HudInfo; ESC back to the menu
         ctx.runOnClient(client -> { on(HudInfo.class); mod(HudInfo.class).resetPosition(); });
         ctx.waitTicks(3);
-        click(ctx, new int[]{164 + 28, 15}, 0);
+        click(ctx, ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).hudButtonCenter()), 0);
         ctx.waitForScreen(HudEditorScreen.class);
         ctx.waitTicks(3);
         check(true, "Edit HUD button opens the editor");
@@ -633,6 +635,18 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         int kept = ctx.computeOnClient(c -> dev.novautils.modules.misc.BetterChat.history().size());
         check(kept > 150, "BetterChat keeps more than vanilla's 100 messages (" + kept + ")");
+
+        // ViewModel: bigger hand, moved right and tilted
+        ctx.runOnClient(c -> {
+            allOff();
+            ((Setting<Double>) setting(dev.novautils.modules.render.ViewModel.class, "scale")).set(1.6);
+            ((Setting<Double>) setting(dev.novautils.modules.render.ViewModel.class, "x")).set(0.3);
+            ((Setting<Integer>) setting(dev.novautils.modules.render.ViewModel.class, "rotate-z")).set(25);
+            on(dev.novautils.modules.render.ViewModel.class);
+        });
+        ctx.waitTicks(5);
+        shot(ctx, "21_viewmodel");
+        ctx.runOnClient(c -> allOff());
 
         // InventoryHUD: screenshot
         cmd(sp, "/give @a minecraft:diamond 23");

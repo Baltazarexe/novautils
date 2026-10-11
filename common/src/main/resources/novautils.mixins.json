@@ -34,7 +34,8 @@
     "SodiumXrayAoMixin",
     "XrayLightMixin",
     "SodiumXrayLightMixin",
-    "XrayLightCacheMixin"
+    "XrayLightCacheMixin",
+    "ViewModelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

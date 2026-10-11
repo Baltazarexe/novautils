@@ -58,6 +58,7 @@ import dev.novautils.modules.render.NewChunks;
 import dev.novautils.modules.render.NoRender;
 import dev.novautils.modules.render.Trajectories;
 import dev.novautils.modules.render.Freecam;
+import dev.novautils.modules.render.ViewModel;
 import dev.novautils.modules.movement.InventoryMove;
 import dev.novautils.modules.misc.InventoryHud;
 import dev.novautils.modules.misc.BetterChat;
@@ -122,6 +123,7 @@ public class ModuleManager {
         register(new NoRender());
         register(new Trajectories());
         register(new Freecam());
+        register(new ViewModel());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());

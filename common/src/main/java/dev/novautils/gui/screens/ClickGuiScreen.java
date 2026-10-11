@@ -1,7 +1,6 @@
 package dev.novautils.gui.screens;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import dev.novautils.gui.GuiState;
 import dev.novautils.gui.Theme;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
@@ -13,9 +12,9 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,64 +23,62 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The in-game config menu. Everything is drawn by hand instead of with vanilla widgets: draggable
- * panels per category, inline settings with sliders and toggles, hover animation and a search box.
- * Panel positions are remembered between sessions.
+ * The in-game menu: one centred window with soft rounded corners. Categories down the left, that
+ * category's modules in the middle (switch on the right of each), and the selected module's
+ * settings on the right. Everything eases: hover highlights fade, switches slide, scrolling glides,
+ * and the window settles in when it opens.
+ *
+ * <p>Mouse: left-click a module to switch it on/off, right-click it to open its settings,
+ * middle-click a setting to reset it. Typing anywhere searches all modules.
  */
 public class ClickGuiScreen extends Screen {
-    private static final int PANEL_W = 116;
-    private static final int HEADER_H = 15;
-    private static final int ROW_H = 13;
-    private static final int SETTING_H = 12;
+    private static final int SIDEBAR = 96;
+    private static final int RADIUS = 7;
+    private static final int MODULE_H = 20;
+    private static final int SET_H = 18;
+    private static final int NUM_H = 24;
+    private static final int CHANNEL_H = 15;
 
+    private enum Pane { LIST, SETTINGS }
     private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND, COLOR, CHANNEL }
 
-    private record Row(Panel panel, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting, int channel) {
-        Row(Panel panel, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting) {
-            this(panel, type, x, y, w, h, module, setting, -1);
-        }
-    }
+    private record Row(Pane pane, RowType type, int x, int y, int w, int h, Module module, Setting<?> setting, int channel) {}
 
-    private static final class Panel {
-        final Category category;
-        int x, y;
-        boolean open = true;
-        float scroll;
-        int maxBody = Integer.MAX_VALUE;
-        int contentH;
-        int viewH;
-
-        Panel(Category category, int x, int y) {
-            this.category = category;
-            this.x = x;
-            this.y = y;
-        }
-
-        boolean scrollable() {
-            return contentH > viewH;
-        }
-    }
-
-    /** Expanded modules, hover animation and panel placement survive closing the screen. */
-    private static final Set<Module> EXPANDED = new HashSet<>();
-    private static final Map<Module, Float> HOVER = new HashMap<>();
+    // remembered while the game runs
+    private static Category selectedCategory = Category.values()[0];
+    private static Module selected;
     private static final Set<Setting<?>> OPEN_COLORS = new HashSet<>();
-    private static final Map<Category, Panel> PANELS = new EnumMap<>(Category.class);
+    private static float listScroll, listScrollTarget, setScroll, setScrollTarget;
 
+    private final Map<Object, Float> anim = new HashMap<>();
     private final List<Row> rows = new ArrayList<>();
 
     private String search = "";
-    private Panel dragging;
-    private int dragOffX, dragOffY;
     private Setting<?> slidingSetting;
     private Row slidingRow;
     private Module bindingFor;
     private Setting<?> hoveredSetting;
+    private final long openedAt = System.nanoTime();
+    private long lastFrame = System.nanoTime();
 
-    /** Opens or closes a module's settings section (also used by the in-game test). */
+    // window geometry, recomputed every frame
+    private int wx, wy, ww, wh, listX, listW, setX, setW, bodyTop, bodyBottom, setRowsTop;
+
+    public ClickGuiScreen() {
+        super(Component.literal("NovaUtils"));
+    }
+
+    // ------------------------------------------------------------------ test hooks / API
+
+    /** Opens (selects) or closes a module's settings (also used by the in-game test). */
     public static void setExpanded(Module module, boolean expanded) {
-        if (expanded) EXPANDED.add(module);
-        else EXPANDED.remove(module);
+        if (expanded) {
+            selected = module;
+            selectedCategory = module.category;
+            setScroll = setScrollTarget = 0;
+        } else if (selected == module) {
+            selected = null;
+        }
     }
 
     /** Opens or closes a colour setting's R/G/B/A sliders (also used by the in-game test). */
@@ -91,486 +88,469 @@ public class ClickGuiScreen extends Screen {
     }
 
     /**
-     * Centre of a row as laid out in the last frame: the module row ({@code setting == null}), one of
-     * its settings, or its keybind row ({@code "bind"}). Null unless the whole row is shown. Used by
-     * the in-game test to click things like a player would.
+     * Centre of a row from the last frame: the module's row in the list ({@code setting == null}),
+     * one of its settings, or its keybind row ({@code "bind"}). Null unless fully on screen.
      */
     public int[] rowCenter(Module module, String setting) {
-        for (Row row : rows) {
-            if (row.module() != module) continue;
-            Panel panel = row.panel();
-            if (!panel.open || row.y() < panel.y + HEADER_H || row.y() + row.h() > panel.y + panelHeight(panel)) continue;
-            boolean match = setting == null ? row.type() == RowType.MODULE
-                : setting.equals("bind") ? row.type() == RowType.KEYBIND
-                : row.setting() != null && row.type() != RowType.CHANNEL && row.setting().name.equals(setting);
-            if (match) return new int[]{row.x() + row.w() / 2, row.y() + row.h() / 2};
-        }
-        return null;
+        Row r = findRow(module, setting);
+        return r == null ? null : new int[]{r.x() + r.w() / 2, r.y() + r.h() / 2};
     }
 
-    /** Current search text (test hook). */
+    /** A point on a number setting's slider track, {@code frac} 0 = left end, 1 = right end. */
+    public int[] sliderPoint(Module module, String setting, float frac) {
+        Row r = findRow(module, setting);
+        if (r == null || r.type() != RowType.NUMBER) return null;
+        int[] t = track(r);
+        return new int[]{t[0] + Math.round(t[2] * frac), t[1]};
+    }
+
+    public int[] categoryCenter(Category c) {
+        int i = c.ordinal();
+        return new int[]{wx + SIDEBAR / 2, categoryY(i) + 8};
+    }
+
+    public int[] hudButtonCenter() {
+        return new int[]{wx + SIDEBAR / 2, hudButtonY() + 7};
+    }
+
+    /** Somewhere inside the module list / settings pane (for scrolling in tests). */
+    public int[] listCenter() {
+        return new int[]{listX + listW / 2, (bodyTop + bodyBottom) / 2};
+    }
+
+    public int[] settingsCenter() {
+        return new int[]{setX + setW / 2, (setRowsTop + bodyBottom) / 2};
+    }
+
     public String searchText() {
         return search;
     }
 
-    public ClickGuiScreen() {
-        super(Component.literal("NovaUtils"));
+    private Row findRow(Module module, String setting) {
+        for (Row row : rows) {
+            if (row.module() != module) continue;
+            boolean match = setting == null ? row.type() == RowType.MODULE
+                : setting.equals("bind") ? row.type() == RowType.KEYBIND
+                : row.setting() != null && row.type() != RowType.CHANNEL && row.setting().name.equals(setting);
+            if (match && fullyVisible(row)) return row;
+        }
+        return null;
     }
 
-    @Override
-    protected void init() {
-        if (PANELS.isEmpty()) {
-            GuiState.get().load();
-            int columns = Math.max(1, (this.width - 8) / (PANEL_W + 6));
-            int index = 0;
-            for (Category category : Category.values()) {
-                int[] saved = GuiState.get().position(category);
-                Panel panel;
-                if (saved != null) {
-                    panel = new Panel(category, saved[0], saved[1]);
-                    panel.open = saved[2] != 0;
-                } else {
-                    int col = index % columns, rowIndex = index / columns;
-                    int gridRows = (int) Math.ceil(Category.values().length / (double) columns);
-                    int spacing = Math.max(70, (this.height - 32) / gridRows);
-                    panel = new Panel(category, 8 + col * (PANEL_W + 6), 28 + rowIndex * spacing);
-                    panel.maxBody = spacing - HEADER_H - 8;
-                }
-                PANELS.put(category, panel);
-                index++;
-            }
-        }
-        clampPanels();
+    // ------------------------------------------------------------------ geometry
+
+    private void computeGeometry() {
+        ww = Math.min(470, this.width - 20);
+        wh = Math.min(270, this.height - 20);
+        wx = (this.width - ww) / 2;
+        wy = (this.height - wh) / 2;
+        listX = wx + SIDEBAR;
+        listW = (int) ((ww - SIDEBAR) * 0.44f);
+        setX = listX + listW;
+        setW = wx + ww - setX;
+        bodyTop = wy + 30;
+        bodyBottom = wy + wh - 8;
     }
 
-    /** Keeps panels on screen after a resize or a config from a bigger window. */
-    private void clampPanels() {
-        for (Panel panel : PANELS.values()) {
-            panel.x = Math.max(0, Math.min(panel.x, this.width - PANEL_W));
-            panel.y = Math.max(0, Math.min(panel.y, this.height - HEADER_H));
-        }
+    private int categoryY(int i) {
+        return wy + 58 + i * 19;
     }
 
-    @Override
-    public void onClose() {
-        for (Panel panel : PANELS.values()) {
-            GuiState.get().store(panel.category, panel.x, panel.y, panel.open);
-        }
-        GuiState.get().save();
-        ModuleManager.get().saveConfig();
-        super.onClose();
+    private int hudButtonY() {
+        return wy + wh - 44;
+    }
+
+    private boolean fullyVisible(Row r) {
+        int top = r.pane() == Pane.LIST ? bodyTop : setRowsTop;
+        return r.y() >= top && r.y() + r.h() <= bodyBottom;
+    }
+
+    private boolean over(Row r, int mx, int my) {
+        int top = r.pane() == Pane.LIST ? bodyTop : setRowsTop;
+        return mx >= r.x() && mx < r.x() + r.w() && my >= Math.max(r.y(), top) && my < Math.min(r.y() + r.h(), bodyBottom);
+    }
+
+    /** {x, y, width} of a slider track inside its row. */
+    private static int[] track(Row r) {
+        if (r.type() == RowType.CHANNEL) return new int[]{r.x() + 30, r.y() + r.h() / 2, r.w() - 42};
+        return new int[]{r.x() + 10, r.y() + r.h() - 6, r.w() - 20};
     }
 
     // ------------------------------------------------------------------ layout
 
-    private boolean matchesSearch(Module module) {
+    private boolean matchesSearch(Module m) {
         if (search.isEmpty()) return true;
         String q = search.toLowerCase(Locale.ROOT);
-        return module.name.toLowerCase(Locale.ROOT).contains(q)
-            || module.description.toLowerCase(Locale.ROOT).contains(q);
+        return m.name.toLowerCase(Locale.ROOT).contains(q) || m.description.toLowerCase(Locale.ROOT).contains(q);
     }
 
-    private RowType rowTypeOf(Setting<?> setting) {
-        Object value = setting.get();
-        if (setting.color) return RowType.COLOR;
-        if (value instanceof Boolean) return RowType.BOOL;
-        if (value instanceof Number) return RowType.NUMBER;
-        if (value instanceof Enum<?>) return RowType.ENUM;
+    private List<Module> listedModules() {
+        List<Module> out = new ArrayList<>();
+        for (Module m : ModuleManager.get().getModules()) {
+            if (search.isEmpty() ? m.category == selectedCategory : matchesSearch(m)) out.add(m);
+        }
+        return out;
+    }
+
+    private RowType rowTypeOf(Setting<?> s) {
+        Object v = s.get();
+        if (s.color) return RowType.COLOR;
+        if (v instanceof Boolean) return RowType.BOOL;
+        if (v instanceof Number) return RowType.NUMBER;
+        if (v instanceof Enum<?>) return RowType.ENUM;
         return null;
+    }
+
+    private List<FormattedCharSequence> descriptionLines() {
+        if (selected == null || selected.description.isEmpty()) return List.of();
+        List<FormattedCharSequence> lines = this.font.split(Component.literal(selected.description), setW - 24);
+        return lines.size() > 2 ? lines.subList(0, 2) : lines;
     }
 
     private void layout() {
         rows.clear();
-        for (Panel panel : PANELS.values()) {
-            panel.viewH = Math.max(ROW_H * 3, Math.min(panel.maxBody, this.height - panel.y - HEADER_H - 6));
-            if (!panel.open) {
-                panel.contentH = 0;
-                continue;
-            }
 
-            int contentH = 0;
-            for (Module module : ModuleManager.get().getModules()) {
-                if (module.category != panel.category || !matchesSearch(module)) continue;
-                contentH += ROW_H;
-                if (!EXPANDED.contains(module)) continue;
-                for (Setting<?> setting : module.getSettings()) {
-                    if (!setting.isVisible()) continue;
-                    RowType type = rowTypeOf(setting);
-                    if (type == null) continue;
-                    contentH += SETTING_H;
-                    if (type == RowType.COLOR && OPEN_COLORS.contains(setting)) contentH += SETTING_H * 4;
+        // module list
+        List<Module> mods = listedModules();
+        int contentH = mods.size() * (MODULE_H + 2);
+        int viewH = bodyBottom - bodyTop;
+        listScrollTarget = Math.max(0, Math.min(listScrollTarget, Math.max(0, contentH - viewH)));
+        int y = bodyTop - Math.round(listScroll);
+        for (Module m : mods) {
+            rows.add(new Row(Pane.LIST, RowType.MODULE, listX + 6, y, listW - 12, MODULE_H, m, null, -1));
+            y += MODULE_H + 2;
+        }
+
+        // settings of the selected module
+        setRowsTop = wy + 34 + descriptionLines().size() * 10 + 6;
+        if (selected == null) return;
+        int sx = setX + 6, sw = setW - 12;
+        int sy = setRowsTop - Math.round(setScroll);
+        int start = sy;
+        for (Setting<?> s : selected.getSettings()) {
+            if (!s.isVisible()) continue;
+            RowType type = rowTypeOf(s);
+            if (type == null) continue;
+            int h = type == RowType.NUMBER ? NUM_H : SET_H;
+            rows.add(new Row(Pane.SETTINGS, type, sx, sy, sw, h, selected, s, -1));
+            sy += h + 2;
+            if (type == RowType.COLOR && OPEN_COLORS.contains(s)) {
+                for (int c = 0; c < 4; c++) {
+                    rows.add(new Row(Pane.SETTINGS, RowType.CHANNEL, sx, sy, sw, CHANNEL_H, selected, s, c));
+                    sy += CHANNEL_H;
                 }
-                contentH += SETTING_H;
-            }
-            panel.contentH = contentH;
-            panel.scroll = Math.max(0, Math.min(panel.scroll, Math.max(0, contentH - panel.viewH)));
-
-            int y = panel.y + HEADER_H - (int) panel.scroll;
-            for (Module module : ModuleManager.get().getModules()) {
-                if (module.category != panel.category || !matchesSearch(module)) continue;
-
-                rows.add(new Row(panel, RowType.MODULE, panel.x, y, PANEL_W, ROW_H, module, null));
-                y += ROW_H;
-
-                if (!EXPANDED.contains(module)) continue;
-
-                for (Setting<?> setting : module.getSettings()) {
-                    if (!setting.isVisible()) continue;
-                    RowType type = rowTypeOf(setting);
-                    if (type == null) continue;
-                    rows.add(new Row(panel, type, panel.x, y, PANEL_W, SETTING_H, module, setting));
-                    y += SETTING_H;
-
-                    if (type == RowType.COLOR && OPEN_COLORS.contains(setting)) {
-                        for (int channel = 0; channel < 4; channel++) {
-                            rows.add(new Row(panel, RowType.CHANNEL, panel.x, y, PANEL_W, SETTING_H, module, setting, channel));
-                            y += SETTING_H;
-                        }
-                    }
-                }
-                rows.add(new Row(panel, RowType.KEYBIND, panel.x, y, PANEL_W, SETTING_H, module, null));
-                y += SETTING_H;
+                sy += 2;
             }
         }
-    }
-
-    private int panelHeight(Panel panel) {
-        return HEADER_H + Math.min(panel.contentH, panel.viewH);
-    }
-
-    /** A row is only interactive where the panel actually shows it. */
-    private boolean visible(Row row) {
-        Panel panel = row.panel();
-        int top = panel.y + HEADER_H, bottom = panel.y + panelHeight(panel);
-        return row.y() + row.h() > top && row.y() < bottom;
-    }
-
-    private boolean hovered(Row row, int mouseX, int mouseY) {
-        return visible(row)
-            && mouseX >= row.x() && mouseX < row.x() + row.w()
-            && mouseY >= row.y() && mouseY < row.y() + row.h();
+        rows.add(new Row(Pane.SETTINGS, RowType.KEYBIND, sx, sy, sw, SET_H, selected, null, -1));
+        sy += SET_H + 2;
+        int setContent = sy - start;
+        setScrollTarget = Math.max(0, Math.min(setScrollTarget, Math.max(0, setContent - (bodyBottom - setRowsTop))));
     }
 
     // ------------------------------------------------------------------ drawing
 
+    private float animate(Object key, float target, float speed, float dt) {
+        float v = anim.getOrDefault(key, target);
+        v += (target - v) * Math.min(1f, dt * speed);
+        if (Math.abs(target - v) < 0.002f) v = target;
+        anim.put(key, v);
+        return v;
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        long now = System.nanoTime();
+        float dt = Math.min(0.1f, (now - lastFrame) / 1e9f);
+        lastFrame = now;
+        listScroll += (listScrollTarget - listScroll) * Math.min(1f, dt * 16f);
+        setScroll += (setScrollTarget - setScroll) * Math.min(1f, dt * 16f);
+
+        computeGeometry();
         layout();
-        float t = openProgress();
 
-        drawBackground(g);
+        float t = Math.min(1f, (now - openedAt) / 220_000_000f);
+        float ease = 1f - (1f - t) * (1f - t) * (1f - t);
 
-        // slide up a few pixels while opening
+        // dim the world softly
+        g.fill(0, 0, this.width, this.height, Theme.alpha(0x99000000, ease));
+
         g.pose().pushMatrix();
-        g.pose().translate(0, (1f - t) * 8f);
+        float scale = 0.96f + 0.04f * ease;
+        g.pose().translate(this.width / 2f, this.height / 2f + (1f - ease) * 6f);
+        g.pose().scale(scale, scale);
+        g.pose().translate(-this.width / 2f, -this.height / 2f);
 
-        drawSearch(g);
-        drawHudButton(g, mouseX, mouseY);
-        drawLogo(g);
-        for (Panel panel : PANELS.values()) drawPanel(g, panel, mouseX, mouseY, delta);
-
-        String hint = bindingFor != null
-            ? "Press a key to bind " + bindingFor.name + "   (ESC clears it)"
-            : "L-click toggle  ·  R-click settings  ·  M-click reset  ·  type to search";
-        int hw = this.font.width(hint);
-        int hy = this.height - 10;
-        Theme.roundRect(g, this.width / 2 - hw / 2 - 6, hy - 2, hw + 12, 11, 0xA0070A12);
-        g.text(this.font, hint, this.width / 2 - hw / 2, hy,
-            bindingFor != null ? Theme.alpha(Theme.ACCENT, 0.6f + 0.4f * Theme.pulse(6f)) : Theme.TEXT_OFF);
+        drawWindow(g);
+        drawSidebar(g, mouseX, mouseY, dt);
+        drawList(g, mouseX, mouseY, dt);
+        drawSettings(g, mouseX, mouseY, dt);
 
         g.pose().popMatrix();
 
-        // fade in: a dark veil that clears as the menu opens
-        if (t < 1f) g.fill(0, 0, this.width, this.height, Theme.alpha(0xFF05070D, 1f - t));
-
-        // Setting tooltips are set here, after the panels, so they draw on top of everything.
-        if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
-            g.setTooltipForNextFrame(Component.literal(hoveredSetting.description + "  (middle-click: reset)"), mouseX, mouseY);
-        }
+        if (ease < 1f) g.fill(0, 0, this.width, this.height, Theme.alpha(0xFF0B0C10, (1f - ease) * 0.9f));
         hoveredSetting = null;
     }
 
-    private final long openedAt = System.nanoTime();
-
-    /** 0 -> 1 over the first ~250 ms, eased. */
-    private float openProgress() {
-        float raw = Math.min(1f, (System.nanoTime() - openedAt) / 250_000_000f);
-        return 1f - (1f - raw) * (1f - raw) * (1f - raw);
+    private void drawWindow(GuiGraphicsExtractor g) {
+        Theme.softShadow(g, wx, wy, ww, wh, RADIUS, 1.4f);
+        Theme.rounded(g, wx - 1, wy - 1, ww + 2, wh + 2, RADIUS + 1, 0xFF22252D);
+        Theme.rounded(g, wx, wy, ww, wh, RADIUS, 0xFF15171C);
+        // sidebar: a slightly darker strip with the same rounded left corners
+        Theme.rounded(g, wx, wy, SIDEBAR + RADIUS, wh, RADIUS, 0xFF111216);
+        g.fill(wx + SIDEBAR, wy, wx + SIDEBAR + RADIUS, wy + wh, 0xFF15171C);
+        g.fill(wx + SIDEBAR, wy + 10, wx + SIDEBAR + 1, wy + wh - 10, 0x10FFFFFF);
+        g.fill(setX, wy + 10, setX + 1, wy + wh - 10, 0x10FFFFFF);
     }
 
-    /** Deep blue-black glass, a slowly drifting grid and a scan line - the "HUD" backdrop. */
-    private void drawBackground(GuiGraphicsExtractor g) {
-        g.fillGradient(0, 0, this.width, this.height, 0xB8040710, 0xD0090516);
-        float time = Theme.time();
-        int step = 22;
-        int off = (int) (time * 4f) % step;
-        for (int x = -step + off; x < this.width; x += step) g.fill(x, 0, x + 1, this.height, 0x0A22D3EE);
-        for (int y = -step + off; y < this.height; y += step) g.fill(0, y, this.width, y + 1, 0x0A8B5CF6);
-        int scan = (int) (time * 45f) % (this.height + 40) - 20;
-        g.fillGradient(0, scan - 14, this.width, scan, 0x0022D3EE, 0x1222D3EE);
-        g.fill(0, scan, this.width, scan + 1, 0x2222D3EE);
-        // vignette
-        g.fillGradient(0, 0, this.width, 40, 0x60000000, 0x00000000);
-        g.fillGradient(0, this.height - 40, this.width, this.height, 0x00000000, 0x70000000);
-    }
+    private void drawSidebar(GuiGraphicsExtractor g, int mx, int my, float dt) {
+        // logo
+        int lx = wx + 12, ly = wy + 12;
+        Theme.rounded(g, lx, ly - 1, 10, 10, 3, Theme.ACCENT);
+        g.text(this.font, "N", lx + 2, ly, 0xFF15171C, false);
+        g.text(this.font, "Nova", lx + 15, ly, Theme.TEXT, false);
+        g.text(this.font, "Utils", lx + 15 + this.font.width("Nova") + 2, ly, Theme.TEXT_OFF, false);
 
-    private void drawLogo(GuiGraphicsExtractor g) {
-        String nova = "NOVA", utils = "UTILS";
-        int total = 0, on = 0;
-        for (Module m : ModuleManager.get().getModules()) {
-            total++;
-            if (m.isEnabled()) on++;
-        }
-        String sub = on + " / " + total + " active";
-        int w = this.font.width(nova) + 3 + this.font.width(utils);
-        int x = this.width - 10 - w, y = 9;
-        if (x < HUD_BTN_X + HUD_BTN_W + 10) return;
-        float shift = Theme.time() * 0.35f;
-        int cx = x;
-        for (int i = 0; i < nova.length(); i++) {
-            String ch = String.valueOf(nova.charAt(i));
-            float p = (float) ((Math.sin(shift * 3 + i * 0.7) + 1) / 2);
-            g.text(this.font, ch, cx, y, Theme.accentAt(p));
-            cx += this.font.width(ch);
-        }
-        g.text(this.font, utils, cx + 3, y, Theme.TEXT);
-        Theme.accentLine(g, x, y + 11, x + w, 0.8f);
-        int sx = x - 10 - this.font.width(sub);
-        if (sx > HUD_BTN_X + HUD_BTN_W + 8) g.text(this.font, sub, sx, y, on > 0 ? Theme.ACCENT_DIM : Theme.TEXT_OFF);
-    }
-
-    private static final int HUD_BTN_X = 164, HUD_BTN_Y = 8, HUD_BTN_W = 56, HUD_BTN_H = 14;
-
-    private boolean overHudButton(int mx, int my) {
-        return mx >= HUD_BTN_X && mx < HUD_BTN_X + HUD_BTN_W && my >= HUD_BTN_Y && my < HUD_BTN_Y + HUD_BTN_H;
-    }
-
-    private void drawHudButton(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        boolean hover = overHudButton(mouseX, mouseY);
-        int x = HUD_BTN_X, y = HUD_BTN_Y, w = HUD_BTN_W, h = HUD_BTN_H;
-        if (hover) Theme.glow(g, x, y, w, h, Theme.ACCENT, 1f);
-        Theme.roundRect(g, x, y, w, h, hover ? 0xE0102233 : 0xD00A0F1A);
-        Theme.hGradient(g, x + 1, y + h - 1, x + w - 1, y + h, Theme.ACCENT, Theme.ACCENT2);
-        Theme.corners(g, x, y, w, h, 3, hover ? Theme.ACCENT : Theme.alpha(Theme.ACCENT, 0.5f));
-        String label = "◇ Edit HUD";
-        g.text(this.font, label, x + w / 2 - this.font.width(label) / 2, y + 3, hover ? 0xFFFFFFFF : Theme.TEXT);
-    }
-
-    private void drawSearch(GuiGraphicsExtractor g) {
-        int w = 150, h = 14, x = 8, y = 8;
+        // search box
+        int sx = wx + 8, sy = wy + 30, sw = SIDEBAR - 16;
         boolean typing = !search.isEmpty();
-        if (typing) Theme.glow(g, x, y, w, h, Theme.ACCENT, 0.8f);
-        Theme.roundRect(g, x, y, w, h, 0xD00A0F1A);
-        Theme.border(g, x, y, w, h, typing ? Theme.alpha(Theme.ACCENT, 0.7f) : Theme.PANEL_BORDER);
-        Theme.accentLine(g, x + 1, y + h - 2, x + w - 1, typing ? 1f : 0.35f);
-        g.text(this.font, "⌕", x + 5, y + 3, typing ? Theme.ACCENT : Theme.TEXT_OFF);
-        boolean caret = (Theme.time() % 1f) < 0.5f;
-        String shown = typing ? search + (caret ? "_" : "") : "Search modules...";
-        g.text(this.font, shown, x + 16, y + 3, typing ? Theme.TEXT : Theme.TEXT_OFF);
-    }
+        Theme.rounded(g, sx, sy, sw, 16, 5, typing ? 0xFF1E2129 : 0xFF181A20);
+        if (typing) {
+            Theme.rounded(g, sx, sy + 15, sw, 1, 0, Theme.alpha(Theme.ACCENT, 0.7f));
+        }
+        g.text(this.font, "⌕", sx + 5, sy + 4, typing ? Theme.ACCENT : Theme.TEXT_OFF, false);
+        String shown = typing ? search : "Search";
+        if (typing && (Theme.time() % 1f) < 0.5f) shown += "|";
+        String clipped = this.font.plainSubstrByWidth(shown, sw - 20);
+        g.text(this.font, clipped, sx + 15, sy + 4, typing ? Theme.TEXT : Theme.TEXT_OFF, false);
 
-    private static String icon(Category c) {
-        return switch (c.name()) {
-            case "RENDER" -> "◉";
-            case "MOVEMENT" -> "➤";
-            case "COMBAT" -> "⚔";
-            case "PLAYER" -> "☻";
-            case "WORLD" -> "⛏";
-            default -> "✦";
-        };
-    }
+        // categories
+        for (Category c : Category.values()) {
+            int y = categoryY(c.ordinal());
+            boolean sel = search.isEmpty() && c == selectedCategory;
+            boolean hover = mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16;
+            float h = animate("cat" + c.ordinal(), hover ? 1f : 0f, 14f, dt);
+            float s = animate("catsel" + c.ordinal(), sel ? 1f : 0f, 12f, dt);
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
+            else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
+            g.text(this.font, icon(c), wx + 14, y + 4, Theme.mix(Theme.TEXT_OFF, Theme.ACCENT, Math.max(s, h * 0.5f)), false);
+            g.text(this.font, title(c), wx + 27, y + 4, textColor, false);
+            int on = 0;
+            for (Module m : ModuleManager.get().getModules()) if (m.category == c && m.isEnabled()) on++;
+            if (on > 0) {
+                String n = String.valueOf(on);
+                g.text(this.font, n, wx + SIDEBAR - 12 - this.font.width(n), y + 4, Theme.alpha(Theme.ACCENT, 0.8f), false);
+            }
+        }
 
-    private static String title(Category c) {
-        String n = c.name();
-        return n.charAt(0) + n.substring(1).toLowerCase(Locale.ROOT);
-    }
-
-    private void drawPanel(GuiGraphicsExtractor g, Panel panel, int mouseX, int mouseY, float delta) {
-        int x = panel.x, y = panel.y, h = panelHeight(panel);
-        float accentT = panel.category.ordinal() / (float) Math.max(1, Category.values().length - 1);
-        int accent = Theme.accentAt(accentT);
-
-        // body: dark halo, glass, hairline border, glowing corner brackets
-        Theme.glow(g, x, y, PANEL_W, h, 0xFF000000, 1.2f);
-        Theme.roundRect(g, x, y, PANEL_W, h, Theme.PANEL_BG);
-        g.fillGradient(x + 1, y + 1, x + PANEL_W - 1, y + HEADER_H, Theme.HEADER_TOP, Theme.HEADER_BOTTOM);
-        Theme.border(g, x, y, PANEL_W, h, Theme.PANEL_BORDER);
-        Theme.accentLine(g, x + 1, y + HEADER_H - 1, x + PANEL_W - 1, 1f);
-        Theme.corners(g, x, y, PANEL_W, h, 4, Theme.alpha(accent, 0.55f + 0.35f * Theme.pulse(2f + accentT)));
-
-        // header: icon, title, on/total pill, open/closed chevron
-        g.text(this.font, icon(panel.category), x + 5, y + 4, accent);
-        g.text(this.font, title(panel.category), x + 16, y + 4, Theme.TEXT);
+        // Edit HUD + footer
+        int by = hudButtonY();
+        boolean hover = mx >= wx + 8 && mx < wx + SIDEBAR - 8 && my >= by && my < by + 15;
+        float hb = animate("hudbtn", hover ? 1f : 0f, 14f, dt);
+        Theme.rounded(g, wx + 8, by, SIDEBAR - 16, 15, 5, Theme.mix(0xFF1C1F26, 0xFF262A36, hb));
+        String label = "Edit HUD";
+        g.text(this.font, label, wx + SIDEBAR / 2 - this.font.width(label) / 2, by + 4, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, hb), false);
 
         int total = 0, on = 0;
         for (Module m : ModuleManager.get().getModules()) {
-            if (m.category != panel.category) continue;
             total++;
             if (m.isEnabled()) on++;
         }
-        String count = on + "/" + total;
-        int cw = this.font.width(count) + 6;
-        int px = x + PANEL_W - 15 - cw;
-        Theme.roundRect(g, px, y + 3, cw, 9, on > 0 ? Theme.alpha(accent, 0.22f) : 0x40000000);
-        g.text(this.font, count, px + 3, y + 4, on > 0 ? accent : Theme.TEXT_OFF);
-        g.text(this.font, panel.open ? "⌄" : "›", x + PANEL_W - 10, y + (panel.open ? 2 : 4), Theme.TEXT_DIM);
+        String footer = on + " of " + total + " on";
+        g.text(this.font, footer, wx + SIDEBAR / 2 - this.font.width(footer) / 2, wy + wh - 20, Theme.TEXT_OFF, false);
+    }
 
-        if (!panel.open) return;
+    private void drawList(GuiGraphicsExtractor g, int mx, int my, float dt) {
+        String header = search.isEmpty() ? title(selectedCategory) : "Results";
+        g.text(this.font, header, listX + 10, wy + 12, Theme.TEXT, false);
+        List<Module> mods = listedModules();
+        int on = 0;
+        for (Module m : mods) if (m.isEnabled()) on++;
+        String count = on + "/" + mods.size();
+        g.text(this.font, count, listX + listW - 10 - this.font.width(count), wy + 12, Theme.TEXT_OFF, false);
 
-        g.enableScissor(x, y + HEADER_H, x + PANEL_W, y + h);
-        for (Row row : rows) {
-            if (row.panel() != panel || !visible(row)) continue;
-            switch (row.type()) {
-                case MODULE -> drawModuleRow(g, row, mouseX, mouseY, delta);
-                case BOOL -> drawBoolRow(g, row, mouseX, mouseY);
-                case NUMBER -> drawNumberRow(g, row, mouseX, mouseY);
-                case ENUM -> drawEnumRow(g, row, mouseX, mouseY);
-                case KEYBIND -> drawKeybindRow(g, row, mouseX, mouseY);
-                case COLOR -> drawColorRow(g, row, mouseX, mouseY);
-                case CHANNEL -> drawChannelRow(g, row);
+        g.enableScissor(listX, bodyTop, listX + listW, bodyBottom);
+        for (Row r : rows) {
+            if (r.pane() != Pane.LIST) continue;
+            if (r.y() + r.h() < bodyTop || r.y() > bodyBottom) continue;
+            Module m = r.module();
+            boolean hover = over(r, mx, my);
+            float h = animate(m, hover ? 1f : 0f, 14f, dt);
+            float sw = animate("sw" + m.name, m.isEnabled() ? 1f : 0f, 16f, dt);
+            boolean isSel = m == selected;
+            int bg = isSel ? 0xFF22252E : Theme.alpha(0x10FFFFFF, h);
+            if (isSel || h > 0.01f) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, bg);
+            if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.ACCENT);
+
+            int nameColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.5f), Theme.TEXT, sw);
+            String name = m.name;
+            if (!search.isEmpty()) {
+                g.text(this.font, name, r.x() + 8, r.y() + 3, nameColor, false);
+                g.text(this.font, title(m.category), r.x() + 8, r.y() + 12, Theme.TEXT_OFF, false);
+            } else {
+                g.text(this.font, name, r.x() + 8, r.y() + 6, nameColor, false);
             }
-            if (row.setting() != null && row.type() != RowType.CHANNEL && hovered(row, mouseX, mouseY)) {
-                hoveredSetting = row.setting();
+            if (m.getKeyBind() != -1) {
+                String key = keyName(m.getKeyBind());
+                if (key.length() > 4) key = key.substring(0, 4);
+                int kw = this.font.width(key);
+                int kx = r.x() + r.w() - 26 - kw;
+                Theme.rounded(g, kx - 3, r.y() + 5, kw + 6, 10, 3, 0xFF1C1E25);
+                g.text(this.font, key, kx, r.y() + 6, Theme.TEXT_OFF, false);
+            }
+            Theme.toggle(g, r.x() + r.w() - 22, r.y() + 5, sw);
+            if (hover && !m.description.isEmpty() && selected != m) {
+                g.setTooltipForNextFrame(Component.literal(m.description + "  ·  right-click for settings"), mx, my);
             }
         }
         g.disableScissor();
+        drawScrollbar(g, listX + listW - 4, bodyTop, bodyBottom, listScroll, mods.size() * (MODULE_H + 2));
+    }
 
-        if (panel.scrollable()) {
-            int trackTop = y + HEADER_H + 2, trackH = h - HEADER_H - 4;
-            int thumbH = Math.max(12, (int) (trackH * (panel.viewH / (float) panel.contentH)));
-            int thumbY = trackTop + (int) ((trackH - thumbH) * (panel.scroll / (float) (panel.contentH - panel.viewH)));
-            g.fill(x + PANEL_W - 3, trackTop, x + PANEL_W - 2, trackTop + trackH, 0x18FFFFFF);
-            g.fillGradient(x + PANEL_W - 3, thumbY, x + PANEL_W - 1, thumbY + thumbH, Theme.ACCENT, Theme.ACCENT2);
+    private void drawScrollbar(GuiGraphicsExtractor g, int x, int top, int bottom, float scroll, int content) {
+        int view = bottom - top;
+        if (content <= view) return;
+        int thumb = Math.max(16, view * view / content);
+        int ty = top + (int) ((view - thumb) * (scroll / (content - view)));
+        Theme.rounded(g, x, ty, 2, thumb, 1, 0x40FFFFFF);
+    }
+
+    private void drawSettings(GuiGraphicsExtractor g, int mx, int my, float dt) {
+        if (selected == null) {
+            String a = "No module selected", b = "Right-click a module", c = "to see its settings";
+            int cy = (wy + wy + wh) / 2;
+            g.text(this.font, a, setX + setW / 2 - this.font.width(a) / 2, cy - 14, Theme.TEXT_DIM, false);
+            g.text(this.font, b, setX + setW / 2 - this.font.width(b) / 2, cy, Theme.TEXT_OFF, false);
+            g.text(this.font, c, setX + setW / 2 - this.font.width(c) / 2, cy + 10, Theme.TEXT_OFF, false);
+            return;
+        }
+
+        // header: name, state chip, description
+        g.text(this.font, selected.name, setX + 12, wy + 12, Theme.TEXT, false);
+        String state = selected.isEnabled() ? "ON" : "OFF";
+        int cw = this.font.width(state) + 8;
+        int cx = setX + setW - 12 - cw;
+        Theme.rounded(g, cx, wy + 10, cw, 12, 4, selected.isEnabled() ? 0x338B9CFF : 0xFF1E2027);
+        g.text(this.font, state, cx + 4, wy + 12, selected.isEnabled() ? Theme.ACCENT : Theme.TEXT_OFF, false);
+        int dy = wy + 26;
+        for (FormattedCharSequence line : descriptionLines()) {
+            g.text(this.font, line, setX + 12, dy, Theme.TEXT_OFF, false);
+            dy += 10;
+        }
+        g.fill(setX + 10, setRowsTop - 4, setX + setW - 10, setRowsTop - 3, 0x0CFFFFFF);
+
+        g.enableScissor(setX, setRowsTop, setX + setW, bodyBottom);
+        int content = 0;
+        for (Row r : rows) {
+            if (r.pane() != Pane.SETTINGS) continue;
+            content = Math.max(content, r.y() + r.h() + Math.round(setScroll) - setRowsTop);
+            if (r.y() + r.h() < setRowsTop || r.y() > bodyBottom) continue;
+            boolean hover = over(r, mx, my);
+            Object key = r.setting() != null ? (r.channel() >= 0 ? r.setting().name + "#" + r.channel() : r.setting()) : "bind";
+            float h = animate(key, hover ? 1f : 0f, 14f, dt);
+            if (h > 0.01f && r.type() != RowType.CHANNEL) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, Theme.alpha(0x0EFFFFFF, h));
+            if (hover && r.setting() != null && r.type() != RowType.CHANNEL) hoveredSetting = r.setting();
+            switch (r.type()) {
+                case BOOL -> drawBool(g, r, dt);
+                case NUMBER -> drawNumber(g, r);
+                case ENUM -> drawEnum(g, r, h);
+                case COLOR -> drawColor(g, r);
+                case CHANNEL -> drawChannel(g, r);
+                case KEYBIND -> drawKeybind(g, r);
+                default -> { }
+            }
+        }
+        g.disableScissor();
+        drawScrollbar(g, setX + setW - 5, setRowsTop, bodyBottom, setScroll, content);
+
+        // hovered setting's description along the bottom edge
+        if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
+            String d = this.font.plainSubstrByWidth(hoveredSetting.description, setW - 20);
+            Theme.rounded(g, setX + 6, bodyBottom - 14, setW - 12, 13, 4, 0xF01B1D24);
+            g.text(this.font, d, setX + 10, bodyBottom - 11, Theme.TEXT_DIM, false);
         }
     }
 
-    /** Thin vertical guide on the left of settings, so it's clear which module they belong to. */
-    private void settingGuide(GuiGraphicsExtractor g, Row row) {
-        g.fill(row.x() + 1, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x26000000);
-        g.fill(row.x() + 5, row.y(), row.x() + 6, row.y() + row.h(), Theme.alpha(Theme.ACCENT, 0.28f));
+    private static String pretty(String settingName) {
+        String s = settingName.replace('-', ' ');
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    private void hoverFill(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
-        if (hovered(row, mouseX, mouseY)) {
-            Theme.hGradient(g, row.x() + 6, row.y(), row.x() + row.w() - 1, row.y() + row.h(), 0x1A22D3EE, 0x058B5CF6);
-        }
-    }
-
-    private void drawModuleRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY, float delta) {
-        Module module = row.module();
-        boolean hover = hovered(row, mouseX, mouseY);
-        float anim = Theme.approach(HOVER.getOrDefault(module, 0f), hover ? 1f : 0f, delta + 0.6f);
-        HOVER.put(module, anim);
-        int x = row.x(), y = row.y(), w = row.w(), h = row.h();
-
-        if (module.isEnabled()) {
-            Theme.hGradient(g, x + 1, y, x + w - 1, y + h, 0x3822D3EE, 0x068B5CF6);
-            g.fillGradient(x + 1, y, x + 3, y + h, Theme.ACCENT, Theme.ACCENT2);
-            g.fill(x + 3, y, x + 4, y + h, 0x3022D3EE);
-        }
-        if (anim > 0.01f) g.fill(x + 1, y, x + w - 1, y + h, Theme.alpha(Theme.ROW_HOVER, anim));
-        g.fill(x + 6, y + h - 1, x + w - 6, y + h, 0x0CFFFFFF);
-
-        int textColor = module.isEnabled() ? Theme.TEXT : Theme.mix(Theme.TEXT_OFF, Theme.TEXT_DIM, anim);
-        g.text(this.font, module.name, x + 7 + (int) (anim * 2), y + 3, textColor);
-        if (module.getKeyBind() != -1) {
-            String key = keyName(module.getKeyBind());
-            if (key.length() > 5) key = key.substring(0, 5);
-            int kw = this.font.width(key);
-            int kx = x + w - 16 - kw;
-            Theme.roundRect(g, kx - 2, y + 2, kw + 4, 9, 0x50000000);
-            g.text(this.font, key, kx, y + 3, Theme.TEXT_OFF);
-        }
-        boolean open = EXPANDED.contains(module);
-        g.text(this.font, open ? "⌄" : "›", x + w - 9, y + (open ? 1 : 3), open ? Theme.ACCENT : Theme.TEXT_OFF);
-
-        if (hover && !module.description.isEmpty()) {
-            g.setTooltipForNextFrame(Component.literal(module.description), mouseX, mouseY);
-        }
-    }
-
-    private void drawBoolRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
+    private void drawBool(GuiGraphicsExtractor g, Row r, float dt) {
         @SuppressWarnings("unchecked")
-        Setting<Boolean> setting = (Setting<Boolean>) row.setting();
-        boolean on = setting.get();
-        settingGuide(g, row);
-        hoverFill(g, row, mouseX, mouseY);
-
-        g.text(this.font, setting.name, row.x() + 12, row.y() + 2, on ? Theme.TEXT : Theme.TEXT_DIM);
-
-        // neon pill switch
-        int bx = row.x() + row.w() - 21, by = row.y() + 2, bw = 15, bh = 8;
-        if (on) {
-            Theme.glow(g, bx, by, bw, bh, Theme.ACCENT, 0.6f);
-            Theme.hGradient(g, bx + 1, by, bx + bw - 1, by + bh, Theme.ACCENT, Theme.ACCENT2);
-            g.fill(bx, by + 1, bx + 1, by + bh - 1, Theme.ACCENT);
-            g.fill(bx + bw - 1, by + 1, bx + bw, by + bh - 1, Theme.ACCENT2);
-        } else {
-            Theme.roundRect(g, bx, by, bw, bh, Theme.TRACK);
-            Theme.border(g, bx, by, bw, bh, 0xFF2A3446);
-        }
-        int kx = on ? bx + bw - 7 : bx + 1;
-        Theme.roundRect(g, kx, by + 1, 6, 6, on ? 0xFFFFFFFF : 0xFF6B778C);
+        Setting<Boolean> s = (Setting<Boolean>) r.setting();
+        float t = animate("b" + s.hashCode(), s.get() ? 1f : 0f, 16f, dt);
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, t), false);
+        Theme.toggle(g, r.x() + r.w() - 22, r.y() + 4, t);
     }
 
-    private void drawNumberRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
-        Setting<?> setting = row.setting();
-        settingGuide(g, row);
-        hoverFill(g, row, mouseX, mouseY);
-        double value = ((Number) setting.get()).doubleValue();
-        double min = Double.isFinite(setting.min) ? setting.min : 0;
-        double max = Double.isFinite(setting.max) ? setting.max : 1;
+    private void drawNumber(GuiGraphicsExtractor g, Row r) {
+        Setting<?> s = r.setting();
+        double value = ((Number) s.get()).doubleValue();
+        double min = Double.isFinite(s.min) ? s.min : 0, max = Double.isFinite(s.max) ? s.max : 1;
         float frac = max > min ? (float) ((value - min) / (max - min)) : 0f;
-
-        boolean isInt = setting.get() instanceof Integer;
-        String shown = isInt ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value);
-        g.text(this.font, setting.name, row.x() + 12, row.y() + 1, Theme.TEXT_DIM);
-        g.text(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 1, Theme.ACCENT);
-
-        // track + gradient fill + glowing knob (same geometry the slider input uses)
-        int tx = row.x() + 12, ty = row.y() + row.h() - 3, tw = row.w() - 24;
-        int fill = (int) (tw * frac);
-        g.fill(tx, ty, tx + tw, ty + 2, Theme.TRACK);
-        if (fill > 0) Theme.hGradient(g, tx, ty, tx + fill, ty + 2, Theme.ACCENT, Theme.accentAt(frac));
-        int knob = tx + fill;
-        g.fill(knob - 2, ty - 2, knob + 3, ty + 4, Theme.alpha(Theme.accentAt(frac), 0.35f));
-        g.fill(knob - 1, ty - 1, knob + 2, ty + 3, 0xFFFFFFFF);
+        String shown = s.get() instanceof Integer ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value);
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 4, Theme.TEXT_DIM, false);
+        g.text(this.font, shown, r.x() + r.w() - 8 - this.font.width(shown), r.y() + 4, Theme.TEXT, false);
+        int[] t = track(r);
+        Theme.rounded(g, t[0], t[1] - 1, t[2], 3, 1, Theme.TRACK);
+        int fill = Math.round(t[2] * frac);
+        if (fill > 0) Theme.rounded(g, t[0], t[1] - 1, fill, 3, 1, Theme.ACCENT);
+        int kx = t[0] + fill;
+        Theme.rounded(g, kx - 4, t[1] - 4, 8, 8, 4, 0x40000000);
+        Theme.rounded(g, kx - 3, t[1] - 3, 7, 7, 3, 0xFFFFFFFF);
     }
 
-    private void drawColorRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
-        Setting<?> setting = row.setting();
-        settingGuide(g, row);
-        hoverFill(g, row, mouseX, mouseY);
-
-        boolean open = OPEN_COLORS.contains(setting);
-        g.text(this.font, (open ? "⌄ " : "› ") + setting.name, row.x() + 9, row.y() + (open ? 1 : 2), Theme.TEXT_DIM);
-
-        int color = (Integer) setting.get();
-        int sx = row.x() + row.w() - 22, sy = row.y() + 2;
-        if (hovered(row, mouseX, mouseY)) Theme.glow(g, sx, sy, 14, 8, color | 0xFF000000, 0.8f);
-        g.fill(sx - 1, sy - 1, sx + 15, sy + 9, 0xFF000000);
-        // checkerboard so alpha is readable
-        g.fill(sx, sy, sx + 14, sy + 8, 0xFF777777);
-        g.fill(sx, sy, sx + 7, sy + 4, 0xFF444444);
-        g.fill(sx + 7, sy + 4, sx + 14, sy + 8, 0xFF444444);
-        g.fill(sx, sy, sx + 14, sy + 8, color);
+    private void drawEnum(GuiGraphicsExtractor g, Row r, float hover) {
+        Setting<?> s = r.setting();
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
+        String value = ((Enum<?>) s.get()).name().replace('_', ' ').toLowerCase(Locale.ROOT);
+        value = Character.toUpperCase(value.charAt(0)) + value.substring(1);
+        int vw = this.font.width(value) + 16;
+        int vx = r.x() + r.w() - 8 - vw;
+        Theme.rounded(g, vx, r.y() + 3, vw, 12, 4, Theme.mix(0xFF1E2128, 0xFF272B36, hover));
+        g.text(this.font, value, vx + 8, r.y() + 5, Theme.ACCENT, false);
     }
 
-    private void drawChannelRow(GuiGraphicsExtractor g, Row row) {
-        settingGuide(g, row);
-        int color = (Integer) row.setting().get();
-        int channel = row.channel();
-        int value = channelValue(color, channel);
-        String name = switch (channel) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
+    private void drawColor(GuiGraphicsExtractor g, Row r) {
+        Setting<?> s = r.setting();
+        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
+        int color = (Integer) s.get();
+        int sx = r.x() + r.w() - 26, sy = r.y() + 3;
+        Theme.rounded(g, sx - 1, sy - 1, 20, 14, 4, 0xFF2A2D36);
+        Theme.rounded(g, sx, sy, 18, 12, 3, 0xFF777777);
+        g.fill(sx + 2, sy + 2, sx + 9, sy + 6, 0xFF555555);
+        g.fill(sx + 9, sy + 6, sx + 16, sy + 10, 0xFF555555);
+        Theme.rounded(g, sx, sy, 18, 12, 3, color);
+    }
 
-        g.text(this.font, name + " " + value, row.x() + 14, row.y() + 1, Theme.TEXT_DIM);
+    private void drawChannel(GuiGraphicsExtractor g, Row r) {
+        int color = (Integer) r.setting().get();
+        int ch = r.channel();
+        int value = channelValue(color, ch);
+        String name = switch (ch) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
+        int bar = switch (ch) { case 0 -> 0xFFFF6B81; case 1 -> 0xFF6BE09A; case 2 -> 0xFF6BA6FF; default -> 0xFFC8CCD6; };
+        g.text(this.font, name, r.x() + 16, r.y() + 4, Theme.TEXT_OFF, false);
+        int[] t = track(r);
+        Theme.rounded(g, t[0], t[1] - 1, t[2], 3, 1, Theme.TRACK);
+        int fill = Math.round(t[2] * value / 255f);
+        if (fill > 0) Theme.rounded(g, t[0], t[1] - 1, fill, 3, 1, bar);
+        Theme.rounded(g, t[0] + fill - 3, t[1] - 3, 6, 6, 3, 0xFFFFFFFF);
+        String v = String.valueOf(value);
+        g.text(this.font, v, r.x() + r.w() - 6 - this.font.width(v), r.y() + 4, Theme.TEXT_OFF, false);
+    }
 
-        int tx = row.x() + 34, ty = row.y() + 5, tw = row.w() - 44;
-        int bar = switch (channel) { case 0 -> 0xFFFF4D6D; case 1 -> 0xFF34D399; case 2 -> 0xFF60A5FA; default -> 0xFFCBD5E1; };
-        int fill = (int) (tw * (value / 255f));
-        g.fill(tx, ty, tx + tw, ty + 2, Theme.TRACK);
-        Theme.hGradient(g, tx, ty, tx + fill, ty + 2, Theme.alpha(bar, 0.4f), bar);
-        g.fill(tx + fill - 1, ty - 1, tx + fill + 2, ty + 3, 0xFFFFFFFF);
+    private void drawKeybind(GuiGraphicsExtractor g, Row r) {
+        g.text(this.font, "Keybind", r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
+        boolean binding = bindingFor == r.module();
+        String key = binding ? "Press a key…" : keyName(r.module().getKeyBind());
+        int kw = this.font.width(key) + 12;
+        int kx = r.x() + r.w() - 8 - kw;
+        int bg = binding ? Theme.alpha(Theme.ACCENT, 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
+        Theme.rounded(g, kx, r.y() + 3, kw, 12, 4, bg);
+        g.text(this.font, key, kx + 6, r.y() + 5, binding ? Theme.ACCENT : Theme.TEXT_DIM, false);
     }
 
     private static int channelValue(int color, int channel) {
@@ -592,32 +572,24 @@ public class ClickGuiScreen extends Screen {
         };
     }
 
-    private void drawEnumRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
-        Setting<?> setting = row.setting();
-        settingGuide(g, row);
-        hoverFill(g, row, mouseX, mouseY);
-        g.text(this.font, setting.name, row.x() + 12, row.y() + 2, Theme.TEXT_DIM);
-        String value = ((Enum<?>) setting.get()).name().replace('_', ' ');
-        String shown = "‹ " + value + " ›";
-        g.text(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 2, Theme.ACCENT);
+    private static String icon(Category c) {
+        return switch (c.name()) {
+            case "RENDER" -> "◉";
+            case "MOVEMENT" -> "➤";
+            case "COMBAT" -> "⚔";
+            case "PLAYER" -> "☺";
+            case "WORLD" -> "⛏";
+            default -> "✦";
+        };
     }
 
-    private void drawKeybindRow(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
-        Module module = row.module();
-        settingGuide(g, row);
-        hoverFill(g, row, mouseX, mouseY);
-        g.text(this.font, "bind", row.x() + 12, row.y() + 2, Theme.TEXT_DIM);
-        boolean binding = bindingFor == module;
-        String key = binding ? "press a key..." : keyName(module.getKeyBind());
-        int kw = this.font.width(key);
-        int kx = row.x() + row.w() - 8 - kw;
-        Theme.roundRect(g, kx - 3, row.y() + 1, kw + 6, 10,
-            binding ? Theme.alpha(Theme.ACCENT, 0.15f + 0.2f * Theme.pulse(8f)) : 0x50000000);
-        g.text(this.font, key, kx, row.y() + 2, binding ? Theme.ACCENT : Theme.TEXT_OFF);
+    private static String title(Category c) {
+        String n = c.name();
+        return n.charAt(0) + n.substring(1).toLowerCase(Locale.ROOT);
     }
 
     private String keyName(int keyCode) {
-        if (keyCode == -1) return "none";
+        if (keyCode == -1) return "None";
         return dev.novautils.utils.PlatformCompat.keyDisplayName(keyCode);
     }
 
@@ -626,74 +598,62 @@ public class ClickGuiScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         int mx = (int) event.x(), my = (int) event.y();
+        int button = event.button();
 
-        if (overHudButton(mx, my)) {
+        // sidebar
+        for (Category c : Category.values()) {
+            int y = categoryY(c.ordinal());
+            if (mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16) {
+                selectedCategory = c;
+                search = "";
+                listScroll = listScrollTarget = 0;
+                return true;
+            }
+        }
+        int by = hudButtonY();
+        if (mx >= wx + 8 && mx < wx + SIDEBAR - 8 && my >= by && my < by + 15) {
             dev.novautils.utils.PlatformCompat.openScreen(net.minecraft.client.Minecraft.getInstance(), new HudEditorScreen(this));
             return true;
         }
 
-        // Middle click: reset whatever setting is under the mouse (or clear a keybind).
-        if (event.button() == 2) {
-            for (int i = rows.size() - 1; i >= 0; i--) {
-                Row row = rows.get(i);
-                if (!hovered(row, mx, my)) continue;
-                if (row.type() == RowType.KEYBIND) {
-                    row.module().setKeyBind(-1);
-                } else if (row.setting() != null) {
-                    row.setting().reset();
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            Row r = rows.get(i);
+            if (!over(r, mx, my)) continue;
+
+            if (r.pane() == Pane.LIST) {
+                if (button == 1) {
+                    setExpanded(r.module(), selected != r.module());
+                } else if (button == 0) {
+                    r.module().toggle();
+                    ModuleManager.get().markDirty();
                 }
+                return true;
+            }
+
+            if (button == 2) {
+                if (r.type() == RowType.KEYBIND) r.module().setKeyBind(-1);
+                else if (r.setting() != null) r.setting().reset();
                 ModuleManager.get().markDirty();
                 return true;
             }
-        }
-
-        for (Panel panel : PANELS.values()) {
-            if (mx >= panel.x && mx < panel.x + PANEL_W && my >= panel.y && my < panel.y + HEADER_H) {
-                if (event.button() == 1) {
-                    panel.open = !panel.open;
-                } else {
-                    dragging = panel;
-                    dragOffX = mx - panel.x;
-                    dragOffY = my - panel.y;
-                }
-                return true;
-            }
-        }
-
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            Row row = rows.get(i);
-            if (!hovered(row, mx, my)) continue;
-
-            switch (row.type()) {
-                case MODULE -> {
-                    if (event.button() == 1) {
-                        if (!EXPANDED.remove(row.module())) EXPANDED.add(row.module());
-                    } else {
-                        row.module().toggle();
-                        ModuleManager.get().markDirty();
-                    }
-                }
+            switch (r.type()) {
                 case BOOL -> {
                     @SuppressWarnings("unchecked")
-                    Setting<Boolean> setting = (Setting<Boolean>) row.setting();
-                    setting.set(!setting.get());
+                    Setting<Boolean> s = (Setting<Boolean>) r.setting();
+                    s.set(!s.get());
                     ModuleManager.get().markDirty();
                 }
-                case NUMBER -> {
-                    slidingSetting = row.setting();
-                    slidingRow = row;
+                case NUMBER, CHANNEL -> {
+                    slidingSetting = r.setting();
+                    slidingRow = r;
                     applySlider(mx);
                 }
-                case ENUM -> cycleEnum(row.setting(), event.button() == 1 ? -1 : 1);
-                case KEYBIND -> bindingFor = row.module();
+                case ENUM -> cycleEnum(r.setting(), button == 1 ? -1 : 1);
+                case KEYBIND -> bindingFor = r.module();
                 case COLOR -> {
-                    if (!OPEN_COLORS.remove(row.setting())) OPEN_COLORS.add(row.setting());
+                    if (!OPEN_COLORS.remove(r.setting())) OPEN_COLORS.add(r.setting());
                 }
-                case CHANNEL -> {
-                    slidingSetting = row.setting();
-                    slidingRow = row;
-                    applySlider(mx);
-                }
+                default -> { }
             }
             return true;
         }
@@ -704,11 +664,6 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (dragging != null) {
-            dragging.x = (int) event.x() - dragOffX;
-            dragging.y = (int) event.y() - dragOffY;
-            return true;
-        }
         if (slidingSetting != null) {
             applySlider((int) event.x());
             return true;
@@ -718,13 +673,14 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        for (Panel panel : PANELS.values()) {
-            int h = panelHeight(panel);
-            if (mouseX >= panel.x && mouseX < panel.x + PANEL_W && mouseY >= panel.y && mouseY < panel.y + h) {
-                if (panel.scrollable()) {
-                    panel.scroll = (float) Math.max(0, Math.min(panel.contentH - panel.viewH, panel.scroll - scrollY * 18));
-                    return true;
-                }
+        if (mouseY >= bodyTop && mouseY < bodyBottom) {
+            if (mouseX >= listX && mouseX < listX + listW) {
+                listScrollTarget = Math.max(0, listScrollTarget - (float) scrollY * 22);
+                return true;
+            }
+            if (mouseX >= setX && mouseX < setX + setW) {
+                setScrollTarget = Math.max(0, setScrollTarget - (float) scrollY * 22);
+                return true;
             }
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -733,7 +689,6 @@ public class ClickGuiScreen extends Screen {
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         if (slidingSetting != null) ModuleManager.get().markDirty();
-        dragging = null;
         slidingSetting = null;
         slidingRow = null;
         return super.mouseReleased(event);
@@ -742,26 +697,19 @@ public class ClickGuiScreen extends Screen {
     @SuppressWarnings("unchecked")
     private void applySlider(int mouseX) {
         if (slidingSetting == null || slidingRow == null) return;
+        int[] t = track(slidingRow);
+        double frac = Math.max(0, Math.min(1, (mouseX - t[0]) / (double) t[2]));
 
         if (slidingRow.type() == RowType.CHANNEL) {
-            int tx = slidingRow.x() + 34, tw = slidingRow.w() - 44;
-            double frac = Math.max(0, Math.min(1, (mouseX - tx) / (double) tw));
             Setting<Integer> color = (Setting<Integer>) slidingSetting;
             color.set(withChannel(color.get(), slidingRow.channel(), (int) Math.round(frac * 255)));
             return;
         }
-
-        int tx = slidingRow.x() + 12, tw = slidingRow.w() - 24;
-        double frac = Math.max(0, Math.min(1, (mouseX - tx) / (double) tw));
         double min = Double.isFinite(slidingSetting.min) ? slidingSetting.min : 0;
         double max = Double.isFinite(slidingSetting.max) ? slidingSetting.max : 1;
         double value = min + (max - min) * frac;
-
-        if (slidingSetting.get() instanceof Integer) {
-            ((Setting<Integer>) slidingSetting).set((int) Math.round(value));
-        } else {
-            ((Setting<Double>) slidingSetting).set(Math.round(value * 100.0) / 100.0);
-        }
+        if (slidingSetting.get() instanceof Integer) ((Setting<Integer>) slidingSetting).set((int) Math.round(value));
+        else ((Setting<Double>) slidingSetting).set(Math.round(value * 100.0) / 100.0);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -784,11 +732,13 @@ public class ClickGuiScreen extends Screen {
         }
         if (event.key() == InputConstants.KEY_BACKSPACE && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
+            listScroll = listScrollTarget = 0;
             return true;
         }
         // First ESC clears the search, the second one closes the menu.
         if (event.key() == InputConstants.KEY_ESCAPE && !search.isEmpty()) {
             search = "";
+            listScroll = listScrollTarget = 0;
             return true;
         }
         return super.keyPressed(event);
@@ -798,9 +748,16 @@ public class ClickGuiScreen extends Screen {
     public boolean charTyped(CharacterEvent event) {
         if (bindingFor == null && event.isAllowedChatCharacter()) {
             search += event.codepointAsString();
+            listScroll = listScrollTarget = 0;
             return true;
         }
         return super.charTyped(event);
+    }
+
+    @Override
+    public void onClose() {
+        ModuleManager.get().saveConfig();
+        super.onClose();
     }
 
     @Override

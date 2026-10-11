@@ -11,23 +11,23 @@ import net.minecraft.util.ARGB;
  */
 public final class Theme {
     /** Main accent (neon cyan) and the second end of every gradient (violet). */
-    public static final int ACCENT = 0xFF22D3EE;
-    public static final int ACCENT2 = 0xFF8B5CF6;
-    public static final int ACCENT_DIM = 0xFF1A8FA8;
+    public static final int ACCENT = 0xFF8B9CFF;
+    public static final int ACCENT2 = 0xFFC49BFF;
+    public static final int ACCENT_DIM = 0xFF5D6BCC;
 
-    public static final int PANEL_BG = 0xE00A0D16;
-    public static final int PANEL_BORDER = 0xFF1C2433;
-    public static final int HEADER_TOP = 0xFF111827;
-    public static final int HEADER_BOTTOM = 0xFF0B1020;
+    public static final int PANEL_BG = 0xF2121419;
+    public static final int PANEL_BORDER = 0xFF262A33;
+    public static final int HEADER_TOP = 0xFF171A21;
+    public static final int HEADER_BOTTOM = 0xFF131519;
 
     public static final int ROW_HOVER = 0x1AFFFFFF;
-    public static final int ROW_ACTIVE = 0x2622D3EE;
+    public static final int ROW_ACTIVE = 0x228B9CFF;
 
-    public static final int TEXT = 0xFFEAF6FF;
-    public static final int TEXT_DIM = 0xFF8A97AD;
-    public static final int TEXT_OFF = 0xFF5D6880;
+    public static final int TEXT = 0xFFE8EAF0;
+    public static final int TEXT_DIM = 0xFF9196A4;
+    public static final int TEXT_OFF = 0xFF60657A;
 
-    public static final int TRACK = 0xFF1A2232;
+    public static final int TRACK = 0xFF2B2F3A;
 
     private Theme() {}
 
@@ -51,6 +51,34 @@ public final class Theme {
         g.fill(x + 1, y + h - 1, x + w - 1, y + h, color);
         g.fill(x, y + 1, x + 1, y + h - 1, color);
         g.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
+    }
+
+    /** Rectangle with properly rounded corners of radius {@code r} (a quarter circle per corner). */
+    public static void rounded(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int color) {
+        if (w <= 0 || h <= 0) return;
+        r = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+        for (int i = 0; i < r; i++) {
+            double dy = r - i - 0.5;
+            int inset = (int) Math.round(r - Math.sqrt(r * r - dy * dy));
+            g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - 1 - i, x + w - inset, y + h - i, color);
+        }
+        g.fill(x, y + r, x + w, y + h - r, color);
+    }
+
+    /** Soft drop shadow under a rounded box: wide, faint and slightly lower than the box. */
+    public static void softShadow(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, float strength) {
+        for (int i = 8; i >= 1; i--) {
+            int a = (int) (14 * strength * (9 - i) / 8f);
+            if (a > 0) rounded(g, x - i, y - i + 3, w + i * 2, h + i * 2, r + i, ARGB.color(a, 0));
+        }
+    }
+
+    /** iOS-style switch, {@code t} = 0 (off) .. 1 (on) so it can slide. 16x9. */
+    public static void toggle(GuiGraphicsExtractor g, int x, int y, float t) {
+        rounded(g, x, y, 16, 9, 4, mix(0xFF343844, ACCENT, t));
+        int kx = x + 1 + Math.round(t * 7);
+        rounded(g, kx, y + 1, 7, 7, 3, mix(0xFFB8BCC8, 0xFFFFFFFF, t));
     }
 
     /** Soft glow around a box: a few widening rings that fade out. */
