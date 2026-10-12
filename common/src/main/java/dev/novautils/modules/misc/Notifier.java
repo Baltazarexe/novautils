@@ -49,13 +49,23 @@ public class Notifier extends Module {
         .description("Also write alerts in chat (otherwise only an on-screen toast).")
         .defaultValue(true).build());
 
+    private final Setting<Boolean> inventoryFull = register(Setting.builder(Boolean.class, "inventory-full")
+        .description("Alert when your inventory fills up.")
+        .defaultValue(true).build());
+
+    private final Setting<Boolean> lowFood = register(Setting.builder(Boolean.class, "low-food")
+        .description("Alert when your hunger drops to 3 drumsticks.")
+        .defaultValue(true).build());
+
+    private boolean wasFull, wasHungry;
+
     private final Set<String> known = new HashSet<>();
     private final Set<UUID> inView = new HashSet<>();
     private final Map<UUID, Integer> pops = new HashMap<>();
     private boolean primed;
 
     public Notifier() {
-        super("Notifier", "Alerts for players in view, totem pops, joins/leaves.", Category.MISC);
+        super("Notifier", "Alerts: players in view, totem pops, joins, full inventory, low food.", Category.MISC);
     }
 
     @Override
@@ -124,6 +134,16 @@ public class Notifier extends Module {
             }
             known.clear();
             known.addAll(now);
+        }
+        if (inventoryFull.get()) {
+            boolean full = mc.player.getInventory().getFreeSlot() == -1;
+            if (full && !wasFull && primed) alert("Inventory full", 0xFFFFAA00);
+            wasFull = full;
+        }
+        if (lowFood.get()) {
+            boolean hungry = mc.player.getFoodData().getFoodLevel() <= 6;
+            if (hungry && !wasHungry && primed) alert("Low food - eat something", 0xFFFFAA00);
+            wasHungry = hungry;
         }
         primed = true;
     }

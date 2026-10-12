@@ -34,6 +34,10 @@ public class AutoTool extends Module {
         .description("Go back to the previous slot when you stop mining.")
         .defaultValue(true).build());
 
+    private final Setting<Boolean> fromInventory = register(Setting.builder(Boolean.class, "from-inventory")
+        .description("If the right tool is only in your main inventory, swap it into your hand.")
+        .defaultValue(true).build());
+
     private int previousSlot = -1;
 
     public AutoTool() {
@@ -61,6 +65,9 @@ public class AutoTool extends Module {
         float speed = stack.getDestroySpeed(state);
         if (speed <= 1f) return 0;
         double s = speed;
+        // Efficiency adds level^2 + 1 to any tool that is already faster than a hand
+        int eff = level(stack, Enchantments.EFFICIENCY);
+        if (eff > 0) s += eff * eff + 1;
         if (stack.isCorrectToolForDrops(state)) s += 1000;
         if (prefer.get() == Prefer.SILK_TOUCH) s += level(stack, Enchantments.SILK_TOUCH) * 50;
         if (prefer.get() == Prefer.FORTUNE) s += level(stack, Enchantments.FORTUNE) * 50;
@@ -87,6 +94,21 @@ public class AutoTool extends Module {
             if (s > bestScore) {
                 bestScore = s;
                 best = i;
+            }
+        }
+        if (fromInventory.get() && dev.novautils.utils.InvUtils.canClick()) {
+            int bestInv = -1;
+            for (int i = 9; i < 36; i++) {
+                double s = score(inv.getItem(i), state);
+                if (s > bestScore + 0.5) {
+                    bestScore = s;
+                    bestInv = i;
+                }
+            }
+            if (bestInv != -1) {
+                // swap it with whatever is in your hand (that goes where the tool was)
+                InvUtils.swap(InvUtils.menuSlot(bestInv), current);
+                return;
             }
         }
         if (best != current) {

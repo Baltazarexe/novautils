@@ -461,7 +461,8 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> allOff());
 
         // Criticals: one full-charge sword hit without, one with - the second must do ~1.5x
-        cmd(sp, "/give @a minecraft:iron_sword");
+        cmd(sp, "/kill @e[type=minecraft:item]");
+        cmd(sp, "/item replace entity @a weapon.mainhand with minecraft:iron_sword");
         cmd(sp, "/tp @a 0 200 5 -90 0");
         cmd(sp, "/summon minecraft:husk 2 200 5 {NoAI:1b,PersistenceRequired:1b,Tags:[\"crit\"]}");
         ctx.waitTicks(10);
@@ -724,6 +725,148 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(20);
     }
 
+    private static String blockAt(ClientGameTestContext ctx, int x, int y, int z) {
+        return ctx.computeOnClient(c -> c.level.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).toString());
+    }
+
+    /** ShulkerPeek, Minimap, HitsToKill, BreakIndicator, AutoFarm, AutoSmelt, PacketMine, BoatFly. */
+    private static void newFeatureChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/fill -6 199 -6 14 199 6 minecraft:stone");
+        cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/tp @a 0 200 0 -90 30");
+        ctx.runOnClient(c -> allOff());
+        ctx.waitTicks(10);
+
+        // ShulkerPeek: contents read from the item, then the grid drawn over the inventory
+        cmd(sp, "/give @a minecraft:purple_shulker_box[container=[{slot:0,item:{id:\"minecraft:diamond\",count:5}},{slot:13,item:{id:\"minecraft:golden_apple\",count:3}}]]");
+        ctx.waitTicks(5);
+        int diamonds = ctx.computeOnClient(c -> {
+            for (var s : dev.novautils.modules.render.ShulkerPeek.contents(c.player.getInventory().getItem(0))) {
+                if (s.is(net.minecraft.world.item.Items.DIAMOND)) return s.getCount();
+            }
+            return 0;
+        });
+        check(diamonds == 5, "ShulkerPeek reads the box contents");
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.render.ShulkerPeek.class);
+            c.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(c.player));
+        });
+        ctx.waitTicks(5);
+        int[] slot0 = ctx.computeOnClient(c -> {
+            var s = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) c.screen;
+            try {
+                var lf = net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class.getDeclaredField("leftPos");
+                var tf = net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class.getDeclaredField("topPos");
+                lf.setAccessible(true);
+                tf.setAccessible(true);
+                var sl = s.getMenu().getSlot(36);
+                return new int[]{lf.getInt(s) + sl.x + 8, tf.getInt(s) + sl.y + 8};
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(e);
+            }
+        });
+        cursor(ctx, slot0[0], slot0[1]);
+        ctx.waitTicks(5);
+        shot(ctx, "24_shulker_peek");
+        ctx.runOnClient(c -> c.setScreen(null));
+        cmd(sp, "/clear @a");
+
+        // AutoFarm: two ripe wheat on farmland get harvested and replanted from the hotbar
+        cmd(sp, "/fill -3 199 2 -2 199 2 minecraft:farmland");
+        cmd(sp, "/fill -3 200 2 -2 200 2 minecraft:wheat[age=7]");
+        cmd(sp, "/give @a minecraft:wheat_seeds 8");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> on(dev.novautils.modules.world.AutoFarm.class));
+        ctx.waitTicks(30);
+        String farmed = blockAt(ctx, -3, 200, 2);
+        System.out.println("[novautils-test] AutoFarm: -3 200 2 is now " + farmed);
+        check(farmed.contains("wheat") && farmed.contains("age=0"), "AutoFarm harvested and replanted wheat");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/clear @a");
+
+        // PacketMine: one click on stone, look away, it still breaks
+        cmd(sp, "/setblock 2 200 -2 minecraft:stone");
+        cmd(sp, "/give @a minecraft:diamond_pickaxe");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.player.PacketMine.class);
+            c.gameMode.startDestroyBlock(new net.minecraft.core.BlockPos(2, 200, -2), net.minecraft.core.Direction.UP);
+            c.player.setXRot(-60);
+        });
+        ctx.waitTicks(4);
+        shot(ctx, "25_packet_mine");
+        ctx.waitTicks(40);
+        check(blockAt(ctx, 2, 200, -2).contains("air"), "PacketMine broke the block while looking away");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/clear @a");
+
+        // AutoSmelt: opening a furnace fills it with raw iron and coal
+        cmd(sp, "/setblock 1 200 1 minecraft:furnace");
+        cmd(sp, "/give @a minecraft:raw_iron 8");
+        cmd(sp, "/give @a minecraft:coal 4");
+        cmd(sp, "/give @a minecraft:oak_log 16");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.world.AutoSmelt.class);
+            var fp = new net.minecraft.core.BlockPos(1, 200, 1);
+            c.gameMode.useItemOn(c.player, net.minecraft.world.InteractionHand.MAIN_HAND,
+                new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(fp), net.minecraft.core.Direction.UP, fp, false));
+        });
+        ctx.waitTicks(30);
+        String[] furnace = ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.AbstractFurnaceMenu m
+            ? new String[]{m.getSlot(0).getItem().toString(), m.getSlot(1).getItem().toString()} : new String[]{"no furnace", ""});
+        System.out.println("[novautils-test] AutoSmelt: input=" + furnace[0] + " fuel=" + furnace[1]);
+        check(furnace[0].contains("raw_iron") && furnace[1].contains("coal"), "AutoSmelt filled input and fuel (logs left alone)");
+        ctx.runOnClient(c -> { c.player.closeContainer(); allOff(); });
+        cmd(sp, "/clear @a");
+        cmd(sp, "/setblock 1 200 1 minecraft:air");
+
+        // BoatFly: in a boat, hold jump -> it climbs
+        cmd(sp, "/summon minecraft:oak_boat 0 200 -3");
+        ctx.waitTicks(5);
+        cmd(sp, "/ride @p mount @e[type=minecraft:oak_boat,limit=1,sort=nearest]");
+        ctx.waitTicks(10);
+        double boatY0 = ctx.computeOnClient(c -> c.player.getVehicle() == null ? -1 : c.player.getVehicle().getY());
+        check(boatY0 > 0, "riding the test boat");
+        ctx.runOnClient(c -> on(dev.novautils.modules.movement.BoatFly.class));
+        ctx.getInput().holdKey(o -> o.keyJump);
+        ctx.waitTicks(20);
+        ctx.getInput().releaseKey(o -> o.keyJump);
+        double boatY1 = ctx.computeOnClient(c -> c.player.getVehicle() == null ? -1 : c.player.getVehicle().getY());
+        System.out.println("[novautils-test] BoatFly: boat y " + boatY0 + " -> " + boatY1);
+        check(boatY1 > boatY0 + 2, "BoatFly lifts the boat");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/ride @p dismount");
+        cmd(sp, "/kill @e[type=minecraft:oak_boat]");
+        cmd(sp, "/tp @a 0 200 0 -90 10");
+
+        // Minimap + HitsToKill: a husk in front, screenshot
+        cmd(sp, "/summon minecraft:husk 3 200 0 {NoAI:1b,PersistenceRequired:1b}");
+        cmd(sp, "/kill @e[type=minecraft:item]");
+        cmd(sp, "/item replace entity @a weapon.mainhand with minecraft:iron_sword");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.render.Minimap.class);
+            on(dev.novautils.modules.render.HitsToKill.class);
+            on(dev.novautils.modules.render.BreakIndicator.class);
+            c.player.setYRot(-90);
+            c.player.setXRot(5);
+        });
+        ctx.waitTicks(40);
+        shot(ctx, "26_minimap_hits");
+        double swordDmg = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.HitsToKill.class).damage());
+        System.out.println("[novautils-test] HitsToKill: iron sword damage " + swordDmg);
+        check(Math.abs(swordDmg - 6.0) < 0.01, "HitsToKill counts the sword damage (6)");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/kill @e[type=minecraft:husk]");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/gamemode creative @a");
+        ctx.waitTicks(10);
+    }
+
     private static String screenName(ClientGameTestContext ctx) {
         return ctx.computeOnClient(c -> c.screen == null ? "none" : c.screen.getClass().getName());
     }
@@ -925,6 +1068,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
             menuInteraction(context);
             featureChecks(context, sp);
+            newFeatureChecks(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

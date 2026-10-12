@@ -97,6 +97,16 @@ public class Waypoints extends Module {
         return null;
     }
 
+    /** {x, y, z} of every waypoint that shows in this dimension (Minimap). */
+    public List<double[]> positionsHere() {
+        List<double[]> out = new ArrayList<>();
+        for (Waypoint w : waypoints) {
+            Vec3 p = positionHere(w);
+            if (p != null) out.add(new double[]{p.x, p.y, p.z});
+        }
+        return out;
+    }
+
     @Override
     public void onRenderWorld(RenderContext context) {
         if (waypoints.isEmpty() || mc.player == null) return;

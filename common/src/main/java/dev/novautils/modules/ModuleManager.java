@@ -125,6 +125,10 @@ public class ModuleManager {
         register(new Trajectories());
         register(new Freecam());
         register(new ViewModel());
+        register(new dev.novautils.modules.render.ShulkerPeek());
+        register(new dev.novautils.modules.render.Minimap());
+        register(new dev.novautils.modules.render.BreakIndicator());
+        register(new dev.novautils.modules.render.HitsToKill());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());
@@ -154,6 +158,7 @@ public class ModuleManager {
         register(new Spider());
         register(new FastClimb());
         register(new ElytraFly());
+        register(new dev.novautils.modules.movement.BoatFly());
         register(new Scaffold());
         register(new Sneak());
         register(new SafeWalk());
@@ -182,6 +187,7 @@ public class ModuleManager {
         register(new AutoMend());
         register(new ElytraReplace());
         register(new AutoClicker());
+        register(new dev.novautils.modules.player.PacketMine());
 
         // World
         register(new Timer());
@@ -191,6 +197,8 @@ public class ModuleManager {
         register(new AutoNametag());
         register(new AutoFish());
         register(new AirPlace());
+        register(new dev.novautils.modules.world.AutoFarm());
+        register(new dev.novautils.modules.world.AutoSmelt());
 
         // Misc
         register(new ActiveModules());
@@ -206,6 +214,7 @@ public class ModuleManager {
         register(new DeathPoint());
         register(new PlayerRadar());
         register(new Notifier());
+        register(new dev.novautils.modules.misc.DurabilityAlert());
         register(new AntiAfk());
         register(new AutoRespawn());
         register(new AutoReconnect());

@@ -57,6 +57,11 @@ public abstract class ClientPacketListenerMixin {
         observe(packet);
     }
 
+    @Inject(method = "handleBlockDestruction", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$destruction(net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
     @org.spongepowered.asm.mixin.Unique
     private static void observe(net.minecraft.network.protocol.Packet<?> packet) {
         if (!dev.novautils.NovaUtils.modulesReady) return;

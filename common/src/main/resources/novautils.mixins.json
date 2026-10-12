@@ -36,7 +36,10 @@
     "SodiumXrayLightMixin",
     "XrayLightCacheMixin",
     "ViewModelMixin",
-    "MinecraftUseMixin"
+    "MinecraftUseMixin",
+    "ContainerScreenMixin",
+    "FurnaceMenuInvoker",
+    "BoatMixin"
   ],
   "injectors": {
     "defaultRequire": 1
