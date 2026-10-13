@@ -45,7 +45,7 @@ public class NovaUtilsClient implements ClientModInitializer {
                 client.gui.setScreen(new ClickGuiScreen());
             }
             while (openMenu.consumeClick()) {
-                if (client.gui.screen() == null) client.gui.setScreen(new ClickGuiScreen());
+                if (client.gui.screen() == null) client.gui.setScreen(dev.novautils.gui.GuiState.get().newMenu());
             }
         });
 

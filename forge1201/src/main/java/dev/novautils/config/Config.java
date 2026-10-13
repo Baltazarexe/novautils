@@ -92,6 +92,7 @@ public class Config {
                 if (keybindsUsable && obj.has("keyBind")) {
                     module.setKeyBind(obj.get("keyBind").getAsInt());
                 }
+                module.setFavorite(obj.has("favorite") && obj.get("favorite").getAsBoolean());
 
                 if (obj.has("settings")) {
                     JsonObject settingsObj = obj.getAsJsonObject("settings");
@@ -144,6 +145,7 @@ public class Config {
             JsonObject obj = new JsonObject();
             obj.addProperty("enabled", module.isEnabled());
             obj.addProperty("keyBind", module.getKeyBind());
+            if (module.isFavorite()) obj.addProperty("favorite", true);
 
             JsonObject settingsObj = new JsonObject();
             for (Setting<?> setting : module.getSettings()) {

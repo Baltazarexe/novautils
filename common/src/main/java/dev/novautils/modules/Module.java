@@ -27,6 +27,9 @@ public abstract class Module {
     /** Key code bound to this module, -1 = unbound. Toggled from the key press event (KeyboardHandlerMixin). */
     private int keyBind = -1;
 
+    /** Shown in the menu's Favorites tab (middle-click a module to toggle). */
+    private boolean favorite;
+
     protected Module(String name, String description, Category category) {
         this.name = name;
         this.description = description;
@@ -68,6 +71,14 @@ public abstract class Module {
 
     public void setKeyBind(int keyCode) {
         this.keyBind = keyCode;
+    }
+
+    public boolean isFavorite() {
+        return favorite;
+    }
+
+    public void setFavorite(boolean value) {
+        favorite = value;
     }
 
     public void onEnable() {}

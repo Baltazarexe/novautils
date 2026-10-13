@@ -708,6 +708,252 @@ public class NovaClientGameTest implements FabricClientGameTest {
         return ctx.computeOnClient(c -> c.level.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).toString());
     }
 
+    private static int count(ClientGameTestContext ctx, net.minecraft.world.item.Item item) {
+        return ctx.computeOnClient(c -> {
+            int n = 0;
+            var inv = c.player.getInventory();
+            for (int i = 0; i < 36; i++) if (inv.getItem(i).is(item)) n += inv.getItem(i).getCount();
+            return n;
+        });
+    }
+
+    private static void useBlock(ClientGameTestContext ctx, int x, int y, int z) {
+        ctx.runOnClient(c -> {
+            var p = new net.minecraft.core.BlockPos(x, y, z);
+            c.gameMode.useItemOn(c.player, net.minecraft.world.InteractionHand.MAIN_HAND,
+                new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(p), net.minecraft.core.Direction.UP, p, false));
+        });
+    }
+
+    /**
+     * Commands, profiles, favourites, InventorySort, AutoDrop, AutoCompact, ChestTracker,
+     * AutoTunnel, AutoBuild, FallPredict, ChunkBorders.
+     */
+    private static void toolChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/fill -6 199 -6 14 199 6 minecraft:stone");
+        cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        ctx.runOnClient(c -> allOff());
+        ctx.waitTicks(10);
+
+        // --- chat commands and profiles
+        ctx.runOnClient(c -> {
+            dev.novautils.commands.Commands.handle(".t Fullbright");
+            dev.novautils.commands.Commands.handle(".set Zoom zoom 8");
+            dev.novautils.commands.Commands.handle(".bind AutoSprint n");
+            dev.novautils.commands.Commands.handle(".wp add testhome");
+        });
+        boolean cmdsOk = ctx.computeOnClient(c -> mod(Fullbright.class).isEnabled()
+            && ((Setting<Double>) setting(dev.novautils.modules.render.Zoom.class, "zoom")).get() == 8.0
+            && mod(AutoSprint.class).getKeyBind() == InputConstants.KEY_N
+            && ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).list().toString().contains("testhome"));
+        check(cmdsOk, "chat commands toggle, set, bind and add waypoints");
+        ctx.runOnClient(c -> {
+            dev.novautils.commands.Commands.handle(".profile save nova_test");
+            allOff();
+            mod(AutoSprint.class).setKeyBind(-1);
+            dev.novautils.commands.Commands.handle(".profile load nova_test");
+        });
+        check(ctx.computeOnClient(c -> mod(Fullbright.class).isEnabled() && mod(AutoSprint.class).getKeyBind() == InputConstants.KEY_N),
+            "profile save/load restores modules and binds");
+        ctx.runOnClient(c -> {
+            dev.novautils.commands.Commands.handle(".config export");
+            dev.novautils.commands.Commands.handle(".profile del nova_test");
+            dev.novautils.commands.Commands.handle(".wp del testhome");
+        });
+        check(ctx.computeOnClient(c -> c.keyboardHandler.getClipboard().contains("_configVersion")), "config export copies the config");
+        boolean sentToServer = ctx.computeOnClient(c -> {
+            // the mixin must swallow the command: it never reaches chat as a message
+            c.player.connection.sendChat(".t Fullbright");
+            return !mod(Fullbright.class).isEnabled();
+        });
+        check(sentToServer, "typing a . command in chat runs it");
+        ctx.runOnClient(c -> {
+            allOff();
+            mod(AutoSprint.class).setKeyBind(-1);
+            ((Setting<Double>) setting(dev.novautils.modules.render.Zoom.class, "zoom")).reset();
+        });
+
+        // --- favourites survive a config round trip
+        ctx.runOnClient(c -> {
+            mod(Xray.class).setFavorite(true);
+            ModuleManager.get().saveConfig();
+            mod(Xray.class).setFavorite(false);
+            Config.get().load(ModuleManager.get().getModules());
+        });
+        check(ctx.computeOnClient(c -> mod(Xray.class).isFavorite()), "favourite modules are saved");
+        ctx.runOnClient(c -> {
+            mod(Xray.class).setFavorite(false);
+            allOff();
+        });
+
+        // --- InventorySort: scrambled main inventory comes out grouped and ordered
+        cmd(sp, "/item replace entity @a container.9 with minecraft:stone 5");
+        cmd(sp, "/item replace entity @a container.10 with minecraft:apple 3");
+        cmd(sp, "/item replace entity @a container.11 with minecraft:stone 7");
+        cmd(sp, "/item replace entity @a container.14 with minecraft:bone 2");
+        cmd(sp, "/item replace entity @a container.20 with minecraft:apple 1");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> on(dev.novautils.modules.player.InventorySort.class));
+        ctx.waitTicks(10);
+        String sorted = ctx.computeOnClient(c -> {
+            StringBuilder b = new StringBuilder();
+            for (int i = 9; i < 15; i++) b.append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(c.player.getInventory().getItem(i).getItem()).getPath()).append(',');
+            return b.toString();
+        });
+        System.out.println("[novautils-test] InventorySort: " + sorted);
+        check(sorted.startsWith("apple,apple,bone,stone,stone,air"), "InventorySort groups and orders the inventory");
+        cmd(sp, "/clear @a");
+
+        // --- AutoDrop throws dirt out of the main inventory
+        cmd(sp, "/item replace entity @a container.12 with minecraft:dirt 16");
+        ctx.runOnClient(c -> on(dev.novautils.modules.player.AutoDrop.class));
+        ctx.waitTicks(10);
+        check(count(ctx, net.minecraft.world.item.Items.DIRT) == 0, "AutoDrop throws junk away");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/kill @e[type=minecraft:item]");
+        cmd(sp, "/clear @a");
+
+        // --- AutoCompact: 18 iron ingots at a crafting table become 2 blocks
+        cmd(sp, "/setblock 1 200 2 minecraft:crafting_table");
+        cmd(sp, "/give @a minecraft:iron_ingot 18");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> on(dev.novautils.modules.world.AutoCompact.class));
+        useBlock(ctx, 1, 200, 2);
+        ctx.waitTicks(30);
+        int blocks = count(ctx, net.minecraft.world.item.Items.IRON_BLOCK);
+        System.out.println("[novautils-test] AutoCompact: " + blocks + " iron blocks, " + count(ctx, net.minecraft.world.item.Items.IRON_INGOT) + " ingots left");
+        check(blocks == 2, "AutoCompact crafts ingots into blocks");
+        ctx.runOnClient(c -> {
+            c.player.closeContainer();
+            allOff();
+        });
+        cmd(sp, "/clear @a");
+        cmd(sp, "/setblock 1 200 2 minecraft:air");
+
+        // --- ChestTracker remembers a chest's contents, .find points at it
+        cmd(sp, "/setblock -2 200 2 minecraft:chest{Items:[{Slot:0b,id:\"minecraft:diamond\",count:7}]}");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> on(dev.novautils.modules.misc.ChestTracker.class));
+        useBlock(ctx, -2, 200, 2);
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> c.player.closeContainer());
+        ctx.waitTicks(3);
+        String found = ctx.computeOnClient(c -> mod(dev.novautils.modules.misc.ChestTracker.class).find("diamond").toString());
+        System.out.println("[novautils-test] ChestTracker: " + found);
+        check(found.contains("7x at -2 200 2"), "ChestTracker finds the diamonds in the chest");
+        cmd(sp, "/setblock -2 200 2 minecraft:air");
+
+        // --- AutoTunnel digs a 1x2 tunnel east
+        cmd(sp, "/fill 2 200 -1 9 201 1 minecraft:stone");
+        cmd(sp, "/give @a minecraft:diamond_pickaxe");
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            ((Setting<Integer>) setting(dev.novautils.modules.world.AutoTunnel.class, "max-length")).set(6);
+            ((Setting<Boolean>) setting(dev.novautils.modules.world.AutoTunnel.class, "torches")).set(false);
+            on(dev.novautils.modules.world.AutoTunnel.class);
+        });
+        ctx.waitTicks(200);
+        String tunnel = ctx.computeOnClient(c -> {
+            StringBuilder b = new StringBuilder();
+            for (int x = 2; x <= 5; x++) for (int y = 200; y <= 201; y++) b.append(c.level.getBlockState(new net.minecraft.core.BlockPos(x, y, 0)).isAir() ? 'o' : '#');
+            return b + " x=" + String.format("%.1f", c.player.getX());
+        });
+        System.out.println("[novautils-test] AutoTunnel: " + tunnel);
+        check(tunnel.startsWith("oooooooo") && ctx.computeOnClient(c -> c.player.getX() > 3), "AutoTunnel digs and walks");
+        ctx.takeScreenshot("27_autotunnel");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/kill @e[type=minecraft:item]");
+
+        // --- AutoBuild: a 3 wide, 2 tall wall two blocks ahead
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        cmd(sp, "/give @a minecraft:cobblestone 32");
+        ctx.waitTicks(10);
+        ctx.runOnClient(c -> {
+            ((Setting<dev.novautils.modules.world.AutoBuild.Shape>) setting(dev.novautils.modules.world.AutoBuild.class, "shape")).set(dev.novautils.modules.world.AutoBuild.Shape.WALL);
+            ((Setting<Integer>) setting(dev.novautils.modules.world.AutoBuild.class, "size")).set(3);
+            ((Setting<Integer>) setting(dev.novautils.modules.world.AutoBuild.class, "height")).set(2);
+            on(dev.novautils.modules.world.AutoBuild.class);
+        });
+        ctx.waitTicks(40);
+        int wall = ctx.computeOnClient(c -> {
+            int n = 0;
+            for (int z = -1; z <= 1; z++) for (int y = 200; y <= 201; y++) if (c.level.getBlockState(new net.minecraft.core.BlockPos(2, y, z)).is(net.minecraft.world.level.block.Blocks.COBBLESTONE)) n++;
+            return n;
+        });
+        System.out.println("[novautils-test] AutoBuild: " + wall + "/6 wall blocks");
+        check(wall == 6, "AutoBuild builds the wall");
+        ctx.takeScreenshot("28_autobuild");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
+        cmd(sp, "/clear @a");
+
+        // --- menu: the little switch toggles; switching to the classic (Meteor-style) menu and back
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        ctx.runOnClient(c -> {
+            allOff();
+            dev.novautils.utils.PlatformCompat.openScreen(c, new ClickGuiScreen());
+        });
+        ctx.waitTicks(5);
+        clickCategory(ctx, dev.novautils.modules.Category.RENDER);
+        int[] sw = null;
+        for (int i = 0; i < 40 && sw == null; i++) {
+            sw = ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen s ? s.switchCenter(mod(Fullbright.class)) : null);
+            if (sw == null) reveal(ctx, null, Fullbright.class, null);
+        }
+        click(ctx, sw, 0);
+        check(ctx.computeOnClient(c -> mod(Fullbright.class).isEnabled()), "clicking a module's switch turns it on");
+        click(ctx, ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).styleButtonCenter()), 0);
+        ctx.waitTicks(5);
+        check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof dev.novautils.gui.screens.ClassicGuiScreen
+            && dev.novautils.gui.GuiState.get().isClassic()), "Classic menu button opens the Meteor-style menu");
+        int[] classicRow = ctx.computeOnClient(c -> ((dev.novautils.gui.screens.ClassicGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).rowCenter(mod(dev.novautils.modules.render.Zoom.class), null));
+        click(ctx, classicRow, 0);
+        check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.Zoom.class).isEnabled()), "left-click in the classic menu toggles a module");
+        ctx.takeScreenshot("30_classic_menu");
+        click(ctx, new int[]{252, 15}, 0);
+        ctx.waitTicks(5);
+        check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen
+            && !dev.novautils.gui.GuiState.get().isClassic()), "Nova menu button goes back");
+        ctx.runOnClient(c -> {
+            dev.novautils.utils.PlatformCompat.openScreen(c, null);
+            allOff();
+        });
+
+        // --- HealthBars over a mob (screenshot)
+        cmd(sp, "/summon minecraft:zombie 4 200 0 {NoAI:1b,PersistenceRequired:1b,Health:12f}");
+        cmd(sp, "/summon minecraft:pig 4 200 3 {NoAI:1b,PersistenceRequired:1b}");
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.HealthBars.class));
+        ctx.waitTicks(20);
+        ctx.takeScreenshot("31_health_bars");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+
+        // --- FallPredict sees the landing spot; ChunkBorders knows the singleplayer seed
+        cmd(sp, "/tp @a 0 215 0 -90 60");
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.render.FallPredict.class);
+            on(dev.novautils.modules.render.ChunkBorders.class);
+        });
+        ctx.waitTicks(3);
+        var landing = ctx.computeOnClient(c -> mod(dev.novautils.modules.render.FallPredict.class).landing());
+        System.out.println("[novautils-test] FallPredict: " + landing);
+        check(landing != null && Math.abs(landing.y - 200) < 0.6, "FallPredict finds the floor below");
+        check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.ChunkBorders.class).seed() != null), "ChunkBorders knows the seed");
+        ctx.takeScreenshot("29_fall_predict");
+        ctx.waitTicks(40);
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/gamemode creative @a");
+        cmd(sp, "/tp @a 0 200 0 -90 0");
+        ctx.waitTicks(10);
+    }
+
     /** ShulkerPeek, Minimap, HitsToKill, BreakIndicator, AutoFarm, AutoSmelt, PacketMine, BoatFly. */
     private static void newFeatureChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
         cmd(sp, "/gamemode survival @a");
@@ -947,6 +1193,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             menuInteraction(context);
             featureChecks(context, sp);
             newFeatureChecks(context, sp);
+            toolChecks(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

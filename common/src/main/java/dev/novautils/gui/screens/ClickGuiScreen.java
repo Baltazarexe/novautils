@@ -47,6 +47,9 @@ public class ClickGuiScreen extends Screen {
 
     // remembered while the game runs
     private static Category selectedCategory = Category.values()[0];
+    /** The Favorites tab (below the categories) is open instead of a category. */
+    private static boolean favoritesTab;
+    private static final int FAVORITES_INDEX = Category.values().length;
     private static Module selected;
     private static final Set<Setting<?>> OPEN_COLORS = new HashSet<>();
     private static float listScroll, listScrollTarget, setScroll, setScrollTarget;
@@ -154,11 +157,34 @@ public class ClickGuiScreen extends Screen {
     }
 
     private int categoryY(int i) {
-        return wy + 58 + i * 19;
+        // squeeze the spacing on small windows so the last tab never runs into Edit HUD
+        int step = Math.min(19, (styleButtonY() - wy - 62) / (FAVORITES_INDEX + 1));
+        return wy + 58 + i * step;
+    }
+
+    public int[] favoritesCenter() {
+        return new int[]{wx + SIDEBAR / 2, categoryY(FAVORITES_INDEX) + 8};
     }
 
     private int hudButtonY() {
         return wy + wh - 44;
+    }
+
+    /** "Classic menu" switches to the Meteor-style panels (remembered). */
+    private int styleButtonY() {
+        return hudButtonY() - 19;
+    }
+
+    public int[] styleButtonCenter() {
+        return new int[]{wx + SIDEBAR / 2, styleButtonY() + 7};
+    }
+
+    /** Centre of a module's on/off switch in the list (test hook), or null if not shown. */
+    public int[] switchCenter(Module module) {
+        for (Row r : rows) {
+            if (r.pane() == Pane.LIST && r.module() == module && fullyVisible(r)) return new int[]{r.x() + r.w() - 14, r.y() + 12};
+        }
+        return null;
     }
 
     private boolean fullyVisible(Row r) {
@@ -188,7 +214,8 @@ public class ClickGuiScreen extends Screen {
     private List<Module> listedModules() {
         List<Module> out = new ArrayList<>();
         for (Module m : ModuleManager.get().getModules()) {
-            if (search.isEmpty() ? m.category == selectedCategory : matchesSearch(m)) out.add(m);
+            boolean inTab = favoritesTab ? m.isFavorite() : m.category == selectedCategory;
+            if (search.isEmpty() ? inTab : matchesSearch(m)) out.add(m);
         }
         return out;
     }
@@ -345,7 +372,7 @@ public class ClickGuiScreen extends Screen {
         // categories
         for (Category c : Category.values()) {
             int y = categoryY(c.ordinal());
-            boolean sel = search.isEmpty() && c == selectedCategory;
+            boolean sel = search.isEmpty() && !favoritesTab && c == selectedCategory;
             boolean hover = mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16;
             float h = animate("cat" + c.ordinal(), hover ? 1f : 0f, 14f, dt);
             float s = animate("catsel" + c.ordinal(), sel ? 1f : 0f, 12f, dt);
@@ -361,6 +388,29 @@ public class ClickGuiScreen extends Screen {
                 String n = String.valueOf(on);
                 g.text(this.font, n, wx + SIDEBAR - 12 - this.font.width(n), y + 4, Theme.alpha(Theme.ACCENT, 0.8f), false);
             }
+        }
+
+        {
+            int y = categoryY(FAVORITES_INDEX);
+            boolean sel = search.isEmpty() && favoritesTab;
+            boolean hover = mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16;
+            float h = animate("catfav", hover ? 1f : 0f, 14f, dt);
+            float s = animate("catselfav", sel ? 1f : 0f, 12f, dt);
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
+            else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
+            g.text(this.font, "\u2605", wx + 14, y + 4, Theme.mix(0xFFB89A4A, 0xFFFFD84A, Math.max(s, h * 0.5f)), false);
+            g.text(this.font, "Favorites", wx + 27, y + 4, textColor, false);
+        }
+
+        {
+            int styY = styleButtonY();
+            boolean sh = mx >= wx + 8 && mx < wx + SIDEBAR - 8 && my >= styY && my < styY + 15;
+            float a = animate("stylebtn", sh ? 1f : 0f, 14f, dt);
+            Theme.rounded(g, wx + 8, styY, SIDEBAR - 16, 15, 5, Theme.mix(0xFF181B21, 0xFF262A36, a));
+            String sl = "Classic menu";
+            g.text(this.font, sl, wx + SIDEBAR / 2 - this.font.width(sl) / 2, styY + 4, Theme.mix(Theme.TEXT_OFF, Theme.TEXT, a), false);
         }
 
         // Edit HUD + footer
@@ -381,7 +431,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private void drawList(GuiGraphicsExtractor g, int mx, int my, float dt) {
-        String header = search.isEmpty() ? title(selectedCategory) : "Results";
+        String header = !search.isEmpty() ? "Results" : favoritesTab ? "Favorites" : title(selectedCategory);
         g.text(this.font, header, listX + 10, wy + 12, Theme.TEXT, false);
         List<Module> mods = listedModules();
         int on = 0;
@@ -389,6 +439,11 @@ public class ClickGuiScreen extends Screen {
         String count = on + "/" + mods.size();
         g.text(this.font, count, listX + listW - 10 - this.font.width(count), wy + 12, Theme.TEXT_OFF, false);
 
+        if (mods.isEmpty() && favoritesTab && search.isEmpty()) {
+            String hint1 = "Middle-click a module", hint2 = "to add it here";
+            g.text(this.font, hint1, listX + listW / 2 - this.font.width(hint1) / 2, bodyTop + 40, Theme.TEXT_OFF, false);
+            g.text(this.font, hint2, listX + listW / 2 - this.font.width(hint2) / 2, bodyTop + 52, Theme.TEXT_OFF, false);
+        }
         g.enableScissor(listX, bodyTop, listX + listW, bodyBottom);
         for (Row r : rows) {
             if (r.pane() != Pane.LIST) continue;
@@ -405,6 +460,7 @@ public class ClickGuiScreen extends Screen {
             int nameColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.5f), Theme.TEXT, sw);
             // name on top, a one-line description (or the category, when searching) under it
             g.text(this.font, m.name, r.x() + 8, r.y() + 4, nameColor, false);
+            if (m.isFavorite()) g.text(this.font, "\u2605", r.x() + 11 + this.font.width(m.name), r.y() + 4, 0xFFFFD84A, false);
             String sub = search.isEmpty() ? m.description : title(m.category) + "  ·  " + m.description;
             int subW = r.w() - 40 - (m.getKeyBind() != -1 ? this.font.width(keyName(m.getKeyBind())) + 8 : 0);
             String shortSub = this.font.plainSubstrByWidth(sub, subW);
@@ -687,11 +743,30 @@ public class ClickGuiScreen extends Screen {
             bindingFor = null;
         }
 
+        {
+            int sy = styleButtonY();
+            if (mx >= wx + 8 && mx < wx + SIDEBAR - 8 && my >= sy && my < sy + 15) {
+                dev.novautils.gui.GuiState.get().setClassic(true);
+                dev.novautils.utils.PlatformCompat.openScreen(net.minecraft.client.Minecraft.getInstance(), new ClassicGuiScreen());
+                return true;
+            }
+        }
+
         // sidebar
         for (Category c : Category.values()) {
             int y = categoryY(c.ordinal());
             if (mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16) {
                 selectedCategory = c;
+                favoritesTab = false;
+                search = "";
+                listScroll = listScrollTarget = 0;
+                return true;
+            }
+        }
+        {
+            int y = categoryY(FAVORITES_INDEX);
+            if (mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16) {
+                favoritesTab = true;
                 search = "";
                 listScroll = listScrollTarget = 0;
                 return true;
@@ -720,6 +795,9 @@ public class ClickGuiScreen extends Screen {
                     setExpanded(r.module(), selected != r.module());
                 } else if (button == 0) {
                     r.module().toggle();
+                    ModuleManager.get().markDirty();
+                } else if (button == 2) {
+                    r.module().setFavorite(!r.module().isFavorite());
                     ModuleManager.get().markDirty();
                 }
                 return true;

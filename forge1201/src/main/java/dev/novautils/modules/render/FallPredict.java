@@ -64,6 +64,11 @@ public class FallPredict extends Module {
         }
     }
 
+    /** Where the current fall ends, or null when not falling (tests). */
+    public Vec3 landing() {
+        return landing;
+    }
+
     @Override
     public void onRenderWorld(RenderContext context) {
         if (landing == null || mc.player == null || damage < minDamage.get()) return;

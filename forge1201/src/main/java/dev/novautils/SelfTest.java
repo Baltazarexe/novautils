@@ -382,6 +382,177 @@ public final class SelfTest {
         });
         step(20, () -> shot("05_hits_minimap"));
 
+        // --- chat commands, profiles, favourites ------------------------------------------
+        step(5, () -> {
+            allOff();
+            cmd("/kill @e[type=!minecraft:player]");
+            cmd("/clear @a");
+            dev.novautils.commands.Commands.handle(".t Fullbright");
+            dev.novautils.commands.Commands.handle(".set Zoom zoom 8");
+            dev.novautils.commands.Commands.handle(".bind AutoSprint n");
+            check(mod(dev.novautils.modules.render.Fullbright.class).isEnabled()
+                && mod(dev.novautils.modules.movement.AutoSprint.class).getKeyBind() == InputConstants.KEY_N, "chat commands toggle and bind");
+            dev.novautils.commands.Commands.handle(".profile save nova_test");
+            allOff();
+            mod(dev.novautils.modules.movement.AutoSprint.class).setKeyBind(-1);
+            dev.novautils.commands.Commands.handle(".profile load nova_test");
+            check(mod(dev.novautils.modules.render.Fullbright.class).isEnabled()
+                && mod(dev.novautils.modules.movement.AutoSprint.class).getKeyBind() == InputConstants.KEY_N, "profile save/load");
+            dev.novautils.commands.Commands.handle(".profile del nova_test");
+            mc.player.connection.sendChat(".t Fullbright");
+            check(!mod(dev.novautils.modules.render.Fullbright.class).isEnabled(), "typing a . command in chat runs it");
+            mod(dev.novautils.modules.movement.AutoSprint.class).setKeyBind(-1);
+            mod(dev.novautils.modules.render.Xray.class).setFavorite(true);
+            ModuleManager.get().saveConfig();
+            mod(dev.novautils.modules.render.Xray.class).setFavorite(false);
+            dev.novautils.config.Config.get().load(ModuleManager.get().getModules());
+            check(mod(dev.novautils.modules.render.Xray.class).isFavorite(), "favourites are saved");
+            mod(dev.novautils.modules.render.Xray.class).setFavorite(false);
+            allOff();
+        });
+
+        // --- menu: switch click, classic menu ----------------------------------------------
+        step(5, () -> mc.setScreen(new ClickGuiScreen()));
+        step(5, () -> {
+            var s = (ClickGuiScreen) mc.screen;
+            int[] c = s.categoryCenter(dev.novautils.modules.Category.RENDER);
+            s.mouseClicked(c[0], c[1], 0);
+        });
+        step(3, () -> {
+            var s = (ClickGuiScreen) mc.screen;
+            int[] sw = s.switchCenter(mod(dev.novautils.modules.render.Fullbright.class));
+            if (sw != null) s.mouseClicked(sw[0], sw[1], 0);
+            check(mod(dev.novautils.modules.render.Fullbright.class).isEnabled(), "clicking a module's switch turns it on");
+            int[] st = s.styleButtonCenter();
+            s.mouseClicked(st[0], st[1], 0);
+        });
+        step(5, () -> {
+            check(mc.screen instanceof dev.novautils.gui.screens.ClassicGuiScreen, "classic menu opens");
+            var s = (dev.novautils.gui.screens.ClassicGuiScreen) mc.screen;
+            int[] row = s.rowCenter(mod(dev.novautils.modules.render.Zoom.class), null);
+            if (row != null) s.mouseClicked(row[0], row[1], 0);
+            check(mod(dev.novautils.modules.render.Zoom.class).isEnabled(), "left-click in the classic menu toggles a module");
+        });
+        step(5, () -> shot("06_classic_menu"));
+        step(2, () -> {
+            mc.screen.mouseClicked(252, 15, 0);
+            check(mc.screen instanceof ClickGuiScreen && !dev.novautils.gui.GuiState.get().isClassic(), "Nova menu button goes back");
+            mc.setScreen(null);
+            allOff();
+        });
+
+        // --- inventory tools -----------------------------------------------------------------
+        step(5, () -> {
+            cmd("/gamemode survival @a");
+            cmd("/item replace entity @a container.9 with minecraft:stone 5");
+            cmd("/item replace entity @a container.10 with minecraft:apple 3");
+            cmd("/item replace entity @a container.11 with minecraft:stone 7");
+            cmd("/item replace entity @a container.14 with minecraft:bone 2");
+            cmd("/item replace entity @a container.20 with minecraft:apple 1");
+        });
+        step(5, () -> on(dev.novautils.modules.player.InventorySort.class));
+        step(10, () -> {
+            StringBuilder b = new StringBuilder();
+            for (int i = 9; i < 15; i++) b.append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(mc.player.getInventory().getItem(i).getItem()).getPath()).append(',');
+            check(b.toString().startsWith("apple,apple,bone,stone,stone,air"), "InventorySort sorts (" + b + ")");
+            cmd("/clear @a");
+            cmd("/item replace entity @a container.12 with minecraft:dirt 16");
+        });
+        step(5, () -> on(dev.novautils.modules.player.AutoDrop.class));
+        step(10, () -> {
+            int dirt = 0;
+            for (int i = 0; i < 36; i++) if (mc.player.getInventory().getItem(i).is(Items.DIRT)) dirt++;
+            check(dirt == 0, "AutoDrop throws junk away");
+            allOff();
+            cmd("/kill @e[type=minecraft:item]");
+            cmd("/clear @a");
+            cmd("/setblock 1 100 2 minecraft:crafting_table");
+            cmd("/give @a minecraft:iron_ingot 18");
+        });
+        step(10, () -> {
+            on(dev.novautils.modules.world.AutoCompact.class);
+            use(new BlockPos(1, 100, 2));
+        });
+        step(30, () -> {
+            int blocks = 0;
+            for (int i = 0; i < 36; i++) if (mc.player.getInventory().getItem(i).is(Items.IRON_BLOCK)) blocks += mc.player.getInventory().getItem(i).getCount();
+            check(blocks == 2, "AutoCompact crafts blocks (" + blocks + ")");
+            mc.player.closeContainer();
+            allOff();
+            cmd("/clear @a");
+            cmd("/setblock 1 100 2 minecraft:air");
+            cmd("/setblock -2 100 2 minecraft:chest{Items:[{Slot:0b,id:\"minecraft:diamond\",Count:7b}]}");
+        });
+        step(10, () -> {
+            on(dev.novautils.modules.misc.ChestTracker.class);
+            use(new BlockPos(-2, 100, 2));
+        });
+        step(10, () -> mc.player.closeContainer());
+        step(3, () -> {
+            String found = mod(dev.novautils.modules.misc.ChestTracker.class).find("diamond").toString();
+            check(found.contains("7x at -2 100 2"), "ChestTracker finds the chest (" + found + ")");
+            cmd("/setblock -2 100 2 minecraft:air");
+        });
+
+        // --- AutoTunnel / AutoBuild ---------------------------------------------------------
+        step(5, () -> {
+            cmd("/fill 2 100 -1 9 101 1 minecraft:stone");
+            cmd("/give @a minecraft:diamond_pickaxe");
+            cmd("/tp @a 0 100 0 -90 0");
+        });
+        step(10, () -> {
+            set(dev.novautils.modules.world.AutoTunnel.class, "max-length", 6);
+            set(dev.novautils.modules.world.AutoTunnel.class, "torches", false);
+            on(dev.novautils.modules.world.AutoTunnel.class);
+        });
+        step(200, () -> {
+            StringBuilder b = new StringBuilder();
+            for (int x = 2; x <= 5; x++) for (int y = 100; y <= 101; y++) b.append(mc.level.getBlockState(new BlockPos(x, y, 0)).isAir() ? 'o' : '#');
+            check(b.toString().equals("oooooooo") && mc.player.getX() > 3, "AutoTunnel digs and walks (" + b + ")");
+            allOff();
+            cmd("/fill -6 100 -6 14 106 6 minecraft:air");
+            cmd("/clear @a");
+            cmd("/kill @e[type=minecraft:item]");
+            cmd("/tp @a 0 100 0 -90 0");
+            cmd("/give @a minecraft:cobblestone 32");
+        });
+        step(10, () -> {
+            set(dev.novautils.modules.world.AutoBuild.class, "shape", dev.novautils.modules.world.AutoBuild.Shape.WALL);
+            set(dev.novautils.modules.world.AutoBuild.class, "size", 3);
+            set(dev.novautils.modules.world.AutoBuild.class, "height", 2);
+            on(dev.novautils.modules.world.AutoBuild.class);
+        });
+        step(40, () -> {
+            int n = 0;
+            for (int z = -1; z <= 1; z++) for (int y = 100; y <= 101; y++) if (mc.level.getBlockState(new BlockPos(2, y, z)).is(net.minecraft.world.level.block.Blocks.COBBLESTONE)) n++;
+            check(n == 6, "AutoBuild builds the wall (" + n + "/6)");
+            allOff();
+            cmd("/fill -6 100 -6 14 106 6 minecraft:air");
+            cmd("/clear @a");
+            cmd("/tp @a 0 115 0 -90 60");
+        });
+        step(3, () -> {
+            on(dev.novautils.modules.render.FallPredict.class);
+            on(dev.novautils.modules.render.ChunkBorders.class);
+        });
+        step(3, () -> {
+            var landing = mod(dev.novautils.modules.render.FallPredict.class).landing();
+            check(landing != null && Math.abs(landing.y - 100) < 0.6, "FallPredict finds the floor (" + landing + ")");
+            check(mod(dev.novautils.modules.render.ChunkBorders.class).seed() != null, "ChunkBorders knows the seed");
+        });
+        step(40, () -> {
+            allOff();
+            cmd("/gamemode creative @a");
+            cmd("/tp @a 0 100 0 -90 0");
+            cmd("/summon minecraft:zombie 4 100 0 {NoAI:1b,PersistenceRequired:1b,Health:12f}");
+            cmd("/summon minecraft:pig 4 100 3 {NoAI:1b,PersistenceRequired:1b}");
+            on(dev.novautils.modules.render.HealthBars.class);
+        });
+        step(20, () -> {
+            shot("07_health_bars");
+            allOff();
+        });
+
         // --- config ------------------------------------------------------------------------
         step(5, () -> {
             allOff();

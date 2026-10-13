@@ -83,9 +83,39 @@ public final class RenderUtils {
      * A floating text label at a world position that always faces the camera and keeps about the
      * same size on screen however far away it is. Drawn through walls when {@code seeThrough}.
      */
+    // Glyphs the font has never drawn get uploaded to the font texture the first time they are
+    // measured, and on 26.3 that upload throws if it happens inside the world render pass. So a
+    // label with a never-seen character is skipped for a frame and its glyphs are baked on the
+    // next client tick (warmGlyphs), outside rendering.
+    private static final java.util.Set<Integer> warmGlyphs = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final java.util.Queue<String> toWarm = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private static boolean glyphsReady(String s) {
+        for (int i = 0; i < s.length(); ) {
+            int cp = s.codePointAt(i);
+            if (!warmGlyphs.contains(cp)) {
+                if (toWarm.size() < 256) toWarm.add(s);
+                return false;
+            }
+            i += Character.charCount(cp);
+        }
+        return true;
+    }
+
+    /** ModuleManager.tick: bake the glyphs labels asked for, outside any render pass. */
+    public static void warmGlyphs() {
+        var font = net.minecraft.client.Minecraft.getInstance().font;
+        String s;
+        while ((s = toWarm.poll()) != null) {
+            font.width(s);
+            s.codePoints().forEach(warmGlyphs::add);
+        }
+    }
+
     public static void label(dev.novautils.render.RenderContext context, Vec3 pos,
                              net.minecraft.network.chat.Component text, float scale, boolean seeThrough) {
         var mc = net.minecraft.client.Minecraft.getInstance();
+        if (!glyphsReady(text.getString())) return;
         Vec3 cam = context.cameraPos();
         double dist = Math.max(4.0, cam.distanceTo(pos));
         float s = (float) (0.004 * dist * scale);

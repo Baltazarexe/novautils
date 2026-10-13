@@ -9,6 +9,7 @@
     "CameraMixin",
     "ChatComponentAccessor",
     "ChatComponentMixin",
+    "ChatSendMixin",
     "ClientPacketListenerMixin",
     "ContainerScreenMixin",
     "EmbeddiumXrayLightMixin",

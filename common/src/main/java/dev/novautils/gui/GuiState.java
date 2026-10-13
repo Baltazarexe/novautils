@@ -22,6 +22,25 @@ public class GuiState {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Map<Category, int[]> positions = new EnumMap<>(Category.class);
+    /** Menu style: the classic Meteor-like panels instead of the single Nova window. */
+    private boolean classic;
+    private boolean loaded;
+
+    public boolean isClassic() {
+        if (!loaded) load();
+        return classic;
+    }
+
+    public void setClassic(boolean value) {
+        if (!loaded) load();
+        classic = value;
+        save();
+    }
+
+    /** The menu screen in the chosen style (the open-menu key). */
+    public net.minecraft.client.gui.screens.Screen newMenu() {
+        return isClassic() ? new dev.novautils.gui.screens.ClassicGuiScreen() : new dev.novautils.gui.screens.ClickGuiScreen();
+    }
 
     public static GuiState get() {
         return INSTANCE;
@@ -40,12 +59,14 @@ public class GuiState {
     }
 
     public void load() {
+        loaded = true;
         Path path = file();
         if (!Files.exists(path)) return;
 
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
             if (root == null) return;
+            if (root.has("_classic")) classic = root.get("_classic").getAsBoolean();
             for (Category category : Category.values()) {
                 if (!root.has(category.name())) continue;
                 JsonObject obj = root.getAsJsonObject(category.name());
@@ -59,6 +80,7 @@ public class GuiState {
 
     public void save() {
         JsonObject root = new JsonObject();
+        root.addProperty("_classic", classic);
         positions.forEach((category, pos) -> {
             JsonObject obj = new JsonObject();
             obj.addProperty("x", pos[0]);

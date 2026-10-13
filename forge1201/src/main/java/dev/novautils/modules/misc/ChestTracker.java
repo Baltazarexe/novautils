@@ -60,6 +60,9 @@ public class ChestTracker extends Module {
     private AbstractContainerMenu openMenu;
     private boolean dirty;
 
+    /** GameModeMixin: the block the last right-click went to. */
+    public static volatile BlockPos lastUsed;
+
     private final List<BlockPos> highlights = new ArrayList<>();
     private long highlightUntil;
 
@@ -148,11 +151,13 @@ public class ChestTracker extends Module {
         if (menu != openMenu) {
             openMenu = menu;
             openKey = null;
-            // the container was opened by the click on the block we're looking at
-            if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
-                BlockState state = mc.level.getBlockState(hit.getBlockPos());
+            // the container was opened by the last right-click on a block
+            BlockPos pos = lastUsed;
+            if (pos == null && mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) pos = hit.getBlockPos();
+            if (pos != null) {
+                BlockState state = mc.level.getBlockState(pos);
                 if (state.is(Blocks.ENDER_CHEST)) openKey = "echest";
-                else if (state.getBlock() instanceof BaseEntityBlock) openKey = posKey(hit.getBlockPos());
+                else if (state.getBlock() instanceof BaseEntityBlock) openKey = posKey(pos);
             }
         }
         if (openKey == null) return;

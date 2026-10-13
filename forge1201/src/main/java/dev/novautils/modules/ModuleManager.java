@@ -128,6 +128,9 @@ public class ModuleManager {
         register(new dev.novautils.modules.render.Minimap());
         register(new dev.novautils.modules.render.BreakIndicator());
         register(new dev.novautils.modules.render.HitsToKill());
+        register(new dev.novautils.modules.render.HealthBars());
+        register(new dev.novautils.modules.render.FallPredict());
+        register(new dev.novautils.modules.render.ChunkBorders());
         register(new StorageEsp());
         register(new Waypoints());
         register(new Xray());
@@ -187,6 +190,9 @@ public class ModuleManager {
         register(new ElytraReplace());
         register(new AutoClicker());
         register(new dev.novautils.modules.player.PacketMine());
+        register(new dev.novautils.modules.player.InventorySort());
+        register(new dev.novautils.modules.player.AutoDrop());
+        register(new dev.novautils.modules.player.AntiHunger());
 
         // World
         register(new Timer());
@@ -198,6 +204,9 @@ public class ModuleManager {
         register(new AirPlace());
         register(new dev.novautils.modules.world.AutoFarm());
         register(new dev.novautils.modules.world.AutoSmelt());
+        register(new dev.novautils.modules.world.AutoCompact());
+        register(new dev.novautils.modules.world.AutoTunnel());
+        register(new dev.novautils.modules.world.AutoBuild());
 
         // Misc
         register(new ActiveModules());
@@ -214,6 +223,7 @@ public class ModuleManager {
         register(new PlayerRadar());
         register(new Notifier());
         register(new dev.novautils.modules.misc.DurabilityAlert());
+        register(new dev.novautils.modules.misc.ChestTracker());
         register(new AntiAfk());
         register(new AutoRespawn());
         register(new AutoReconnect());
@@ -293,7 +303,17 @@ public class ModuleManager {
     /** Called from the keyboard handler on every key press; toggles modules bound to that key. */
     public void onKeyPressed(int key) {
         Minecraft mc = Minecraft.getInstance();
-        if (key == -1 || mc.player == null || PlatformCompat.currentScreen(mc) != null) return;
+        if (key == -1 || mc.player == null) return;
+        var screen = PlatformCompat.currentScreen(mc);
+        if (screen != null) {
+            // InventorySort's key also works inside chests and the inventory (not while typing in a search box)
+            if (screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>
+                && !(screen.getFocused() instanceof net.minecraft.client.gui.components.EditBox)) {
+                var sort = get(dev.novautils.modules.player.InventorySort.class);
+                if (sort.getKeyBind() == key) sort.setEnabled(true);
+            }
+            return;
+        }
         for (Module module : modules) {
             if (module.getKeyBind() != key) continue;
             module.toggle();
@@ -314,7 +334,10 @@ public class ModuleManager {
     public void renderHud(GuiGraphics graphics, float deltaTracker) {
         // boxes/lines the world pass handed over because a shaderpack is on
         dev.novautils.utils.ScreenSpace.draw(graphics);
+        // HUD blocks stay out of the way of inventories, chests and recipe viewers next to them
+        boolean container = PlatformCompat.currentScreen(Minecraft.getInstance()) instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>;
         for (Module module : modules) {
+            if (container && module instanceof HudModule) continue;
             if (module.isEnabled()) module.onRenderHud(graphics, deltaTracker);
         }
     }

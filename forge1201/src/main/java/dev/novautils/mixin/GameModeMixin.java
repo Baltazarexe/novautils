@@ -22,6 +22,13 @@ public abstract class GameModeMixin {
         }
     }
 
+    /** ChestTracker: remember which block a right-click went to (the container that opens next). */
+    @Inject(method = "useItemOn", at = @At("HEAD"))
+    private void novautils$lastUsed(net.minecraft.client.player.LocalPlayer player, net.minecraft.world.InteractionHand hand,
+                                     net.minecraft.world.phys.BlockHitResult hit, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<?> cir) {
+        dev.novautils.modules.misc.ChestTracker.lastUsed = hit.getBlockPos().immutable();
+    }
+
     @Inject(method = "stopDestroyBlock", at = @At("HEAD"), cancellable = true)
     private void novautils$keepMining(CallbackInfo ci) {
         if (MiningGuard.active() && !Minecraft.getInstance().options.keyAttack.isDown()) ci.cancel();

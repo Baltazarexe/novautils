@@ -37,6 +37,7 @@
     "XrayLightCacheMixin",
     "ViewModelMixin",
     "MinecraftUseMixin",
+    "ChatSendMixin",
     "ContainerScreenMixin",
     "FurnaceMenuInvoker",
     "BoatMixin"

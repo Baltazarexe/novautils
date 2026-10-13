@@ -25,10 +25,36 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 ## Using it
 
 - **Right Shift** opens the menu. **Delete** turns every module off (panic key).
-- Left-click a module to toggle it, right-click it to open its settings.
+- Click a module (or its switch) to toggle it, right-click it to open its settings,
+  middle-click it to add it to the **Favorites** tab.
+- Two menu styles: the single **Nova** window, or **Classic**, Meteor-like draggable panels per
+  category. The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
 - Any module can be bound to a key or a mouse button (side buttons too) from its settings.
 - **Edit HUD** in the menu lets you drag the HUD elements (coords, armour, minimap, ...) anywhere.
 - Settings are saved to `config/novautils.json`.
+
+| Classic menu | Health bars |
+|---|---|
+| ![Classic menu](docs/img/classic-menu.png) | ![Health bars](docs/img/health-bars.png) |
+
+### Chat commands
+
+Type them in chat; they never reach the server. `.help` lists them.
+
+| Command | |
+|---|---|
+| `.t <module>` | toggle a module |
+| `.bind <module> <key>` | bind a key (`n`, `rshift`, `mouse4`, `none`...) |
+| `.set <module> <setting> <value>` | change a setting |
+| `.profile save/load/del/list <name>` | save and switch whole setups ("2b2t", "mining"...) |
+| `.config export` / `.config import` | copy your config to the clipboard / load it from there |
+| `.wp add/del/list <name>` | waypoints |
+| `.friend add/del/list <name>` | friends |
+| `.find <item>` | which chest you left it in (ChestTracker) |
+| `.echest` | what's in your ender chest |
+| `.sort` | sort the open chest or your inventory |
+| `.drop add/del/list <item>` | extra items for AutoDrop |
+| `.coords`, `.seed <seed>`, `.panic` | copy coordinates, slime-chunk seed, everything off |
 
 ## Compatibility
 
@@ -59,6 +85,9 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 | ShulkerPeek | Hover a shulker box to see what's inside. |
 | BreakIndicator | Shows the progress of blocks being broken, yours and other players'. |
 | HitsToKill | A mob's health and how many hits it still needs. |
+| HealthBars | Health bars over mobs and/or players (filter: mobs, players or both; hostile only). |
+| FallPredict | Where you'll land and how much fall damage it will do. |
+| ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |
 | NewChunks | New vs already-loaded chunks (find trails). |
 | LightOverlay | Where mobs can spawn, and the best spots for torches. |
@@ -92,6 +121,9 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 | Module | What it does |
 |---|---|
 | PacketMine | Click a block to mine it in the background; queue several. |
+| InventorySort | Sorts the open chest or your inventory (its key works inside chests). |
+| AutoDrop | Throws away junk blocks and items. |
+| AntiHunger | Sprint without the server charging sprint hunger. |
 | AutoTool | Picks the fastest tool, counting Efficiency, even from your inventory. |
 | AutoEat, AutoReplenish, AutoMend, ElytraReplace, ChestSwap | Inventory upkeep. |
 | FastUse, FastBreak, AutoClicker | Faster using and mining. |
@@ -101,6 +133,9 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 |---|---|
 | AutoFarm | Harvests ripe crops and replants them. |
 | AutoSmelt | Fills furnaces with ores/food and fuel, takes the output. |
+| AutoCompact | Crafts ingots, gems etc. into blocks at a crafting table. |
+| AutoTunnel | Digs a straight 1x2 or 3x3 tunnel, stops at lava and drops, places torches. |
+| AutoBuild | Builds a platform, wall, bridge or shelter from your hotbar blocks. |
 | AirPlace | Place blocks in the air where you look. |
 | Nuker | Mines the blocks around you (flatten, ores only, ...). |
 | AutoFish, AutoBreed, AutoShearer, AutoNametag | Farm chores. |
@@ -115,6 +150,7 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 | PlayerRadar | Nearby players and their distance. |
 | BetterChat | Timestamps, anti-spam stacking, longer history. |
 | DeathPoint | Marks where you died. |
+| ChestTracker | Remembers what you saw in every chest; `.find` tells you where something is. |
 | Friends | Middle-click a player to add them as a friend. |
 | AutoRespawn, AutoReconnect, AntiAfk | Quality of life. |
 

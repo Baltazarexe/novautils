@@ -34,6 +34,8 @@ public class AutoCompact extends Module {
         .description("Ticks between crafts.").defaultValue(3).range(1, 20).build());
 
     private int wait;
+    /** Ticks left to wait for the server to show the crafting result after a fill. */
+    private int pending;
 
     public AutoCompact() {
         super("AutoCompact", "Crafts ingots, gems etc. into blocks at a crafting table.", Category.WORLD);
@@ -56,11 +58,21 @@ public class AutoCompact extends Module {
     public void onTick() {
         if (mc.player == null || mc.gameMode == null) return;
         if (!(mc.player.containerMenu instanceof CraftingMenu m)) return;
-        if (wait-- > 0) return;
+        if (wait-- > 0 && pending == 0) return;
         wait = delay.get();
         if (!m.getCarried().isEmpty()) return;
 
-        // anything left on the grid from last time goes back first
+        // the server works out the result: wait for it, then shift-click it to craft them all
+        if (pending > 0) {
+            if (m.getSlot(0).hasItem()) {
+                click(m, 0, 0, ClickType.QUICK_MOVE);
+                pending = 0;
+                return;
+            }
+            if (--pending > 0) return;
+        }
+
+        // anything left on the grid (leftovers, or no recipe for it) goes back first
         for (int g = 1; g <= 9; g++) {
             if (m.getSlot(g).hasItem()) {
                 click(m, g, 0, ClickType.QUICK_MOVE);
@@ -78,7 +90,7 @@ public class AutoCompact extends Module {
             for (int g = 1; g <= 9; g++) click(m, g, 1, ClickType.QUICK_CRAFT);
             click(m, -999, 2, ClickType.QUICK_CRAFT);           // end
             if (!m.getCarried().isEmpty()) click(m, i, 0, ClickType.PICKUP);
-            if (m.getSlot(0).hasItem()) click(m, 0, 0, ClickType.QUICK_MOVE);
+            pending = 20;
             return;
         }
     }

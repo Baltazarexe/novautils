@@ -78,6 +78,18 @@ public final class ScreenSpace {
 
     private static final double NEAR = 0.05;
 
+    /** Sets up the projection for this frame (HUD draws). False if there is no camera yet. */
+    public static boolean begin() {
+        return setup();
+    }
+
+    /** Screen position (gui pixels) of a world point after begin(), or null when it is behind you. */
+    public static double[] project(Vec3 world) {
+        Vec3 c = toCamera(world);
+        if (c.z < NEAR) return null;
+        return toScreen(c);
+    }
+
     /** ModuleManager.renderHud, first thing: draw what the world pass queued this frame. */
     public static void draw(GuiGraphicsExtractor g) {
         if (boxes.isEmpty() && lines.isEmpty()) return;

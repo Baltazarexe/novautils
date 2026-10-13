@@ -91,7 +91,7 @@ public class NovaUtilsNeoForge {
             client.gui.setScreen(new ClickGuiScreen());
         }
         while (openMenu.consumeClick()) {
-            if (client.gui.screen() == null) client.gui.setScreen(new ClickGuiScreen());
+            if (client.gui.screen() == null) client.gui.setScreen(dev.novautils.gui.GuiState.get().newMenu());
         }
     }
 
