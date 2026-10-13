@@ -18,6 +18,7 @@ Grab the jar for your loader and Minecraft version from the
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
 | 26.3 | `novautils-fabric-0.2.0-mc26.3.jar` | `novautils-neoforge-0.2.0-mc26.3.jar` | |
+| 26.2 | `novautils-fabric-0.2.0-mc26.2.jar` | | |
 | 26.1.2 | `novautils-fabric-0.2.0-mc26.1.2.jar` | `novautils-neoforge-0.2.0-mc26.1.2.jar` | |
 | 1.20.1 | | | `novautils-forge-0.2.0-mc1.20.1.jar` |
 
@@ -171,13 +172,13 @@ still get you kicked or banned on servers with anti-cheat; use them where they'r
 Needs JDK 25 (the 26.x builds) and JDK 21 (the 1.20.1 build compiles with it for Java 17).
 
 ```
-./gradlew :fabric:build :fabric261:build :neoforge:build :neoforge261:build :forge1201:build
+./gradlew :fabric:build :fabric261:build :fabric262:build :neoforge:build :neoforge261:build :forge1201:build
 ```
 
 - `common/` holds the code shared by the 26.x Fabric and NeoForge builds.
 - `forge1201/` is the Forge 1.20.1 port, with its own source tree.
 - In-game tests: `./gradlew :fabric:runClientGameTest` (26.3), `:fabric261:runClientGameTest`
-  (26.1.2, add `-PwithSodium` for Sodium + Iris), `:forge1201:runSelftest` (1.20.1, add
+  (26.1.2, add `-PwithSodium` for Sodium + Iris), `:fabric262:runClientGameTest` (26.2), `:forge1201:runSelftest` (1.20.1, add
   `-PwithEmbeddium` for Embeddium + Oculus).
 
 ## Contact

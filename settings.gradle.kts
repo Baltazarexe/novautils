@@ -37,3 +37,4 @@ include("fabric261")
 // Forge for MC 1.20.1 (2023, Java 17). Its Minecraft differs too much from 26.x to share common/,
 // so it has its own full source tree, ported from common/.
 include("forge1201")
+include("fabric262")
