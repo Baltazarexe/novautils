@@ -8,11 +8,12 @@ be installed on the server.
 
 **Português:** NovaUtils é um mod de utilidades só do lado do cliente (tipo Meteor): ESP, Xray,
 waypoints, HUD, automações e um menu limpo. Abra o menu com **Shift direito**. Os downloads estão
-na pasta [`dist/`](dist). Funciona com Sodium/Iris e com Embeddium/Oculus (shaders inclusos).
+nas [Releases](https://github.com/Baltazarexe/novautils/releases/latest). Funciona com Sodium/Iris e com Embeddium/Oculus (shaders inclusos).
 
 ## Downloads
 
-Pick the jar for your loader and Minecraft version from [`dist/`](dist):
+Grab the jar for your loader and Minecraft version from the
+[latest release](https://github.com/Baltazarexe/novautils/releases/latest) (also in [`dist/`](dist)):
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
@@ -173,3 +174,9 @@ Needs JDK 25 (the 26.x builds) and JDK 21 (the 1.20.1 build compiles with it for
 - In-game tests: `./gradlew :fabric:runClientGameTest` (26.3), `:fabric261:runClientGameTest`
   (26.1.2, add `-PwithSodium` for Sodium + Iris), `:forge1201:runSelftest` (1.20.1, add
   `-PwithEmbeddium` for Embeddium + Oculus).
+
+## Contact
+
+Questions, bugs or ideas: Discord **baltazar_exe** (or open an issue here).
+
+**Contato:** dúvidas, bugs ou sugestões, me chama no Discord **baltazar_exe**.
