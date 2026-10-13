@@ -26,3 +26,7 @@ Thumbs.db
 # third-party jars/shaderpacks for optional local test runs (-PwithSodium / -PwithShaders)
 fabric261/testmods/
 fabric261/testshaders/
+run-selftest/
+forge1201/run/
+forge1201/testmods/
+forge1201/testshaders/

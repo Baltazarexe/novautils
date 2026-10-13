@@ -6,6 +6,7 @@ import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.NonNullList;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -47,9 +48,20 @@ public class ShulkerPeek extends Module {
 
     /** Returns true when it drew the preview (the vanilla tooltip is then skipped). */
     public boolean draw(GuiGraphicsExtractor g, ItemStack stack, int mouseX, int mouseY) {
-        if (!isShulker(stack)) return false;
+        boolean echest = stack.is(net.minecraft.world.item.Items.ENDER_CHEST);
+        if (!isShulker(stack) && !echest) return false;
         if (shiftForVanilla.get() && mc.hasShiftDown()) return false;
-        NonNullList<ItemStack> items = contents(stack);
+        NonNullList<ItemStack> items;
+        if (echest) {
+            // what ChestTracker saw the last time you opened your ender chest
+            var tracker = dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.misc.ChestTracker.class);
+            var seen = tracker.isEnabled() ? tracker.enderChest() : null;
+            if (seen == null) return false;
+            items = NonNullList.withSize(27, ItemStack.EMPTY);
+            for (int i = 0; i < Math.min(27, seen.size()); i++) items.set(i, seen.get(i));
+        } else {
+            items = contents(stack);
+        }
         boolean any = false;
         for (ItemStack s : items) any |= !s.isEmpty();
         if (!any && !showEmpty.get()) return false;
@@ -69,7 +81,7 @@ public class ShulkerPeek extends Module {
         g.nextStratum();
         Theme.softShadow(g, x, y, w, h, 6, 0.6f);
         Theme.rounded(g, x, y, w, h, 6, bg);
-        g.text(mc.font, stack.getHoverName(), x + 6, y + 5, Theme.TEXT, false);
+        g.text(mc.font, echest ? Component.literal("Ender Chest (last opened)") : stack.getHoverName(), x + 6, y + 5, Theme.TEXT, false);
         int gx = x + 5, gy = y + 17;
         for (int i = 0; i < items.size(); i++) {
             int sx = gx + (i % COLS) * SLOT, sy = gy + (i / COLS) * SLOT;

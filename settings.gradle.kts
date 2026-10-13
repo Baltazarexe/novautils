@@ -34,3 +34,6 @@ include("neoforge261")
 // Fabric for MC 26.1.2 (for modpacks still on 26.1.2). Same common code, with the same two
 // 26.1.2-specific files neoforge261 uses.
 include("fabric261")
+// Forge for MC 1.20.1 (2023, Java 17). Its Minecraft differs too much from 26.x to share common/,
+// so it has its own full source tree, ported from common/.
+include("forge1201")

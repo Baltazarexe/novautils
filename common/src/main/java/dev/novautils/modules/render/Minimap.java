@@ -60,6 +60,12 @@ public class Minimap extends HudModule {
         return screenW - w - 4;
     }
 
+    // bottom-right: the top-right corner belongs to ActiveModules
+    @Override
+    protected int defaultY(int screenH, int h) {
+        return screenH - h - 4;
+    }
+
     @Override
     public void onDisable() {
         colors.clear();

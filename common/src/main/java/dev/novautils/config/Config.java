@@ -36,12 +36,41 @@ public class Config {
     }
 
     public void load(List<Module> modules) {
-        Path file = path();
-        if (!Files.exists(file)) return;
+        loadFrom(modules, path());
+    }
 
+    /** Applies a config file (the main one or a profile). False if it is missing or unreadable. */
+    public boolean loadFrom(List<Module> modules, Path file) {
+        if (!Files.exists(file)) return false;
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
-            if (root == null) return;
+            if (root == null) return false;
+            apply(modules, root);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            NovaUtils.LOG.error("Failed to load config " + file, e);
+            return false;
+        }
+    }
+
+    /** Applies config text (from .config import). False if it is not a NovaUtils config. */
+    public boolean importString(List<Module> modules, String json) {
+        try {
+            JsonObject root = GSON.fromJson(json, JsonObject.class);
+            if (root == null || !root.has(VERSION_KEY)) return false;
+            apply(modules, root);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    public String exportString(List<Module> modules) {
+        return GSON.toJson(toJson(modules));
+    }
+
+    private void apply(List<Module> modules, JsonObject root) {
+        {
 
             // MC 26.3 swapped GLFW key codes for SDL scancodes, so keybinds written by an older
             // build now point at completely different keys. Drop them instead of toggling modules
@@ -72,8 +101,6 @@ public class Config {
                     }
                 }
             }
-        } catch (IOException | RuntimeException e) {
-            NovaUtils.LOG.error("Failed to load config", e);
         }
     }
 
@@ -106,6 +133,10 @@ public class Config {
     }
 
     public void save(List<Module> modules) {
+        saveTo(modules, path());
+    }
+
+    private JsonObject toJson(List<Module> modules) {
         JsonObject root = new JsonObject();
         root.addProperty(VERSION_KEY, KEYBIND_FORMAT);
 
@@ -131,10 +162,14 @@ public class Config {
 
             root.add(module.name, obj);
         }
+        return root;
+    }
 
+    public void saveTo(List<Module> modules, Path file) {
+        JsonObject root = toJson(modules);
         try {
-            Files.createDirectories(path().getParent());
-            try (Writer writer = Files.newBufferedWriter(path(), StandardCharsets.UTF_8)) {
+            Files.createDirectories(file.getParent());
+            try (Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
                 GSON.toJson(root, writer);
             }
         } catch (IOException e) {

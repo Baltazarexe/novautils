@@ -1,0 +1,24 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "All rights reserved"
+
+[[mods]]
+modId = "novautils"
+version = "0.1.0"
+displayName = "NovaUtils"
+description = "Client utility mod."
+authors = "daniel"
+
+[[dependencies.novautils]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.novautils]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1,1.20.2)"
+ordering = "NONE"
+side = "CLIENT"

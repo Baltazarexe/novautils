@@ -1,0 +1,78 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev.legacyforge' version '2.0.147'
+}
+
+version = '0.1.0'
+group = 'dev.novautils'
+
+base {
+    archivesName = 'novautils-forge-1.20.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// JDK 21 builds it; the classes target Java 17, which is what 1.20.1 runs on
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+legacyForge {
+    version = '1.20.1-47.4.0'
+
+    runs {
+        client {
+            client()
+        }
+        // gradlew :forge1201:runSelftest - dev-only in-game test, see SelfTest.java
+        selftest {
+            client()
+            systemProperty "novautils.selftest", "true"
+            gameDirectory = project.file("run-selftest")
+        }
+    }
+
+    mods {
+        novautils {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, 'novautils.refmap.json'
+    config 'novautils.mixins.json'
+}
+
+dependencies {
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.4.1'))
+    implementation('io.github.llamalad7:mixinextras-forge:0.4.1')
+    jarJar('io.github.llamalad7:mixinextras-forge:0.4.1')
+}
+
+jar {
+    manifest.attributes([
+        'MixinConfigs': 'novautils.mixins.json'
+    ])
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 17
+    options.compilerArgs += ["-Xmaxerrs", "10000"]
+}
+
+// Optional: run the self test with the modpack's renderer mods.
+//   ./gradlew :forge1201:runSelftest -PwithEmbeddium     Embeddium + Oculus, no shader
+//   ... -PwithShaders                                      with the shaderpack in testshaders/
+// Drop the jars in forge1201/testmods/ and a shaderpack zip in forge1201/testshaders/ (gitignored).
+if (project.hasProperty("withEmbeddium")) {
+    repositories {
+        flatDir { dirs "testmods" }
+    }
+    dependencies {
+        modRuntimeOnly "local:embeddium:0.3.31+mc1.20.1"
+        modRuntimeOnly "local:oculus:mc1.20.1-1.8.0"
+    }
+}
