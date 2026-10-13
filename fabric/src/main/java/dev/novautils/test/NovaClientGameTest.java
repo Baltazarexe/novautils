@@ -777,6 +777,29 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("village"));
     }
 
+    /** Account manager: button on the multiplayer screen, offline nick swap and back. */
+    private static void accountChecks(ClientGameTestContext ctx) {
+        ctx.runOnClient(c -> c.gui.setScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen())));
+        ctx.waitTicks(5);
+        boolean button = ctx.computeOnClient(c -> c.gui.screen().children().stream().anyMatch(w -> w instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("Accounts")));
+        check(button, "multiplayer screen has the Accounts button");
+        String launcher = ctx.computeOnClient(c -> c.getUser().getName());
+        ctx.runOnClient(c -> {
+            dev.novautils.utils.Accounts.addOffline("NovaTester");
+            c.gui.setScreen(new dev.novautils.gui.screens.AccountScreen(c.gui.screen()));
+        });
+        ctx.waitTicks(5);
+        ctx.takeScreenshot("35_accounts");
+        ctx.runOnClient(c -> dev.novautils.utils.Accounts.useOffline("NovaTester"));
+        check(ctx.computeOnClient(c -> c.getUser().getName().equals("NovaTester")), "switching to an offline nick changes the account");
+        ctx.runOnClient(c -> {
+            dev.novautils.utils.Accounts.useLauncher();
+            dev.novautils.utils.Accounts.removeOffline("NovaTester");
+            c.gui.setScreen(null);
+        });
+        check(ctx.computeOnClient(c -> c.getUser().getName().equals(launcher)), "switching back to the launcher account");
+    }
+
     private static int count(ClientGameTestContext ctx, net.minecraft.world.item.Item item) {
         return ctx.computeOnClient(c -> {
             int n = 0;
@@ -1264,6 +1287,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             newFeatureChecks(context, sp);
             toolChecks(context, sp);
             structureFinderChecks(context, sp);
+            accountChecks(context);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

@@ -40,6 +40,8 @@
     "ChatSendMixin",
     "EntityRenderStateMixin",
     "ChamsMixin",
+    "MinecraftUserAccessor",
+    "MultiplayerScreenMixin",
     "ContainerScreenMixin",
     "FurnaceMenuInvoker",
     "BoatMixin"

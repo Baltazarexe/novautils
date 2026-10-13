@@ -17,10 +17,10 @@ Grab the jar for your loader and Minecraft version from the
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.3 | `novautils-fabric-0.2.0-mc26.3.jar` | `novautils-neoforge-0.2.0-mc26.3.jar` | |
-| 26.2 | `novautils-fabric-0.2.0-mc26.2.jar` | | |
-| 26.1.2 | `novautils-fabric-0.2.0-mc26.1.2.jar` | `novautils-neoforge-0.2.0-mc26.1.2.jar` | |
-| 1.20.1 | | | `novautils-forge-0.2.0-mc1.20.1.jar` |
+| 26.3 | `novautils-fabric-0.2.1-mc26.3.jar` | `novautils-neoforge-0.2.1-mc26.3.jar` | |
+| 26.2 | `novautils-fabric-0.2.1-mc26.2.jar` | | |
+| 26.1.2 | `novautils-fabric-0.2.1-mc26.1.2.jar` | `novautils-neoforge-0.2.1-mc26.1.2.jar` | |
+| 1.20.1 | | | `novautils-forge-0.2.1-mc1.20.1.jar` |
 
 Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in your `mods` folder.
 
@@ -158,6 +158,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | DeathPoint | Marks where you died. |
 | ChestTracker | Remembers what you saw in every chest; `.find` tells you where something is. |
 | AutoCommand | Runs a chat command on a timer (e.g. /rtp every 20s), stops after N runs. |
+| Accounts | "Accounts" button on the multiplayer screen: switch to an offline nick (offline-mode servers) and back, no restart. |
 | Friends | Middle-click a player to add them as a friend. |
 | AutoRespawn, AutoReconnect, AntiAfk | Quality of life. |
 

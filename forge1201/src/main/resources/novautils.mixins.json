@@ -11,6 +11,8 @@
     "ChatComponentMixin",
     "ChatSendMixin",
     "ChamsMixin",
+    "MinecraftUserAccessor",
+    "MultiplayerScreenMixin",
     "ClientPacketListenerMixin",
     "ContainerScreenMixin",
     "EmbeddiumXrayLightMixin",
