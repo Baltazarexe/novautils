@@ -461,6 +461,12 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> on(dev.novautils.modules.combat.Criticals.class));
         float crit = hitOnce(ctx);
         check(crit > normal * 1.3f, "Criticals (MINI_JUMP): normal hit " + normal + " dmg, with Criticals " + crit + " dmg");
+        cmd(sp, "/data merge entity @e[type=minecraft:husk,limit=1] {Health:20f}");
+        ctx.runOnClient(c -> ((Setting<dev.novautils.modules.combat.Criticals.Mode>) setting(dev.novautils.modules.combat.Criticals.class, "mode")).set(dev.novautils.modules.combat.Criticals.Mode.PACKET));
+        float packetCrit = hitOnce(ctx);
+        check(packetCrit > normal * 1.3f && ctx.computeOnClient(c -> c.getConnection() != null && c.player != null),
+            "Criticals (PACKET): " + packetCrit + " dmg, still connected (one move packet per tick)");
+        ctx.runOnClient(c -> ((Setting<dev.novautils.modules.combat.Criticals.Mode>) setting(dev.novautils.modules.combat.Criticals.class, "mode")).reset());
         cmd(sp, "/kill @e[tag=crit]");
 
         // Nuker (FLATTEN): two dirt blocks next to us, nothing under our feet level
@@ -706,6 +712,69 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
     private static String blockAt(ClientGameTestContext ctx, int x, int y, int z) {
         return ctx.computeOnClient(c -> c.level.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).toString());
+    }
+
+    /**
+     * .locate maths against the game's own structure placement on this world: every candidate
+     * chunk in a block of regions must match vanilla's, for every structure set.
+     */
+    private static void structureFinderChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        String[][] sets = {
+            {"village", "villages"}, {"desert_pyramid", "desert_pyramids"}, {"jungle_temple", "jungle_temples"},
+            {"igloo", "igloos"}, {"swamp_hut", "swamp_huts"}, {"monument", "ocean_monuments"},
+            {"mansion", "woodland_mansions"}, {"ruined_portal", "ruined_portals"}, {"shipwreck", "shipwrecks"},
+            {"ocean_ruin", "ocean_ruins"}, {"ancient_city", "ancient_cities"}, {"trail_ruins", "trail_ruins"},
+            {"trial_chambers", "trial_chambers"}, {"fortress", "nether_complexes"}, {"end_city", "end_cities"},
+            {"outpost", "pillager_outposts"},
+        };
+        String report = sp.getServer().computeOnServer(server -> {
+            long seed = server.overworld().getSeed();
+            var reg = server.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.STRUCTURE_SET);
+            var state = server.overworld().getChunkSource().getGeneratorState();
+            StringBuilder bad = new StringBuilder();
+            int compared = 0;
+            for (String[] s : sets) {
+                var set = reg.getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.STRUCTURE_SET,
+                    net.minecraft.resources.Identifier.withDefaultNamespace(s[1]))).value();
+                var placement = (net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement) set.placement();
+                var kind = dev.novautils.utils.StructureFinder.find(s[0]);
+                for (int rx = -6; rx <= 6; rx++) {
+                    for (int rz = -6; rz <= 6; rz++) {
+                        int[] ours = dev.novautils.utils.StructureFinder.candidate(seed, kind, rx, rz);
+                        var theirs = placement.getPotentialStructureChunk(seed, rx * placement.spacing(), rz * placement.spacing());
+                        compared++;
+                        if (ours[0] != theirs.x() || ours[1] != theirs.z()) {
+                            bad.append(s[0]).append(" region ").append(rx).append(',').append(rz).append("; ");
+                        } else if (s[0].equals("outpost")) {
+                            boolean v = placement.isStructureChunk(state, theirs.x(), theirs.z());
+                            if (v != dev.novautils.utils.StructureFinder.outpostAllowed(seed, theirs.x(), theirs.z())) {
+                                bad.append("outpost filter ").append(rx).append(',').append(rz).append("; ");
+                            }
+                        }
+                    }
+                }
+            }
+            // strongholds: the game nudges each ring spot toward a good biome (up to 112 blocks)
+            var sh = reg.getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.STRUCTURE_SET,
+                net.minecraft.resources.Identifier.withDefaultNamespace("strongholds"))).value();
+            var rings = state.getRingPositionsFor((net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement) sh.placement());
+            // flat worlds place strongholds with ring seed 0, normal worlds with the world seed
+            boolean flat = server.overworld().getChunkSource().getGenerator() instanceof net.minecraft.world.level.levelgen.FlatLevelSource;
+            var oursSh = dev.novautils.utils.StructureFinder.strongholdChunks(flat ? 0L : seed);
+            for (int i = 0; i < 6 && rings != null && i < rings.size(); i++) {
+                int dx = Math.abs(rings.get(i).x() - oursSh.get(i)[0]), dz = Math.abs(rings.get(i).z() - oursSh.get(i)[1]);
+                if (dx > 7 || dz > 7) bad.append("stronghold ").append(i).append(" off by ").append(dx).append(',').append(dz).append("; ");
+            }
+            return compared + " compared; " + (bad.length() == 0 ? "all match" : bad);
+        });
+        System.out.println("[novautils-test] StructureFinder: " + report);
+        check(report.endsWith("all match"), ".locate maths matches the game's structure placement");
+
+        // and the command itself, with the singleplayer seed
+        ctx.runOnClient(c -> dev.novautils.commands.Commands.handle(".locate village 2"));
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).list().toString().contains("village")),
+            ".locate sets a waypoint on the nearest one");
+        ctx.runOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("village"));
     }
 
     private static int count(ClientGameTestContext ctx, net.minecraft.world.item.Item item) {
@@ -1005,7 +1074,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/give @a minecraft:wheat_seeds 8");
         ctx.waitTicks(5);
         ctx.runOnClient(c -> on(dev.novautils.modules.world.AutoFarm.class));
-        ctx.waitTicks(30);
+        for (int i = 0; i < 80 && !blockAt(ctx, -3, 200, 2).contains("age=0"); i++) ctx.waitTick();
         String farmed = blockAt(ctx, -3, 200, 2);
         System.out.println("[novautils-test] AutoFarm: -3 200 2 is now " + farmed);
         check(farmed.contains("wheat") && farmed.contains("age=0"), "AutoFarm harvested and replanted wheat");
@@ -1194,6 +1263,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             featureChecks(context, sp);
             newFeatureChecks(context, sp);
             toolChecks(context, sp);
+            structureFinderChecks(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

@@ -51,4 +51,48 @@ public final class EspRender {
             return RenderTypes.debugFilledBox();
         }
     }
+
+    // ---- chams: the entity's own model again, through walls ----
+
+    private static RenderPipeline chamsPipeline;
+    private static final java.util.Map<Identifier, RenderType> CHAMS = new java.util.HashMap<>();
+    private static boolean chamsFailed;
+
+    /**
+     * Vanilla's translucent entity render type, except the depth test always passes: the model
+     * drawn with it shows through walls. One per texture (the mob's own, or plain white for a
+     * solid colour). Null if this version's internals don't allow it.
+     */
+    public static RenderType chams(Identifier texture) {
+        if (chamsFailed) return null;
+        RenderType cachedType = CHAMS.get(texture);
+        if (cachedType != null) return cachedType;
+        try {
+            if (chamsPipeline == null) {
+                Field snippetField = RenderPipelines.class.getDeclaredField("ENTITY_SNIPPET");
+                snippetField.setAccessible(true);
+                RenderPipeline.Snippet snippet = (RenderPipeline.Snippet) snippetField.get(null);
+                chamsPipeline = RenderPipeline.builder(snippet)
+                    .withLocation(Identifier.fromNamespaceAndPath(NovaUtils.MOD_ID, "pipeline/chams"))
+                    .withShaderDefine("ALPHA_CUTOUT", 0.1f)
+                    .withShaderDefine("PER_FACE_LIGHTING")
+                    .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.SAMPLER1)
+                    .withColorTargetState(new com.mojang.renderpearl.api.pipeline.ColorTargetState(com.mojang.renderpearl.api.pipeline.BlendFunction.TRANSLUCENT))
+                    .withCull(false)
+                    .withDepthStencilState(new DepthStencilState(com.mojang.renderpearl.api.pipeline.CompareOp.ALWAYS_PASS, false))
+                    .build();
+            }
+            RenderSetup setup = RenderSetup.builder(chamsPipeline)
+                .withTexture("Sampler0", texture).useLightmap().useOverlay().createRenderSetup();
+            Method create = RenderType.class.getDeclaredMethod("create", String.class, RenderSetup.class);
+            create.setAccessible(true);
+            RenderType type = (RenderType) create.invoke(null, "novautils_chams_" + CHAMS.size(), setup);
+            CHAMS.put(texture, type);
+            return type;
+        } catch (Throwable t) {
+            chamsFailed = true;
+            NovaUtils.LOG.error("Could not create the chams render type, chams falls back to glow", t);
+            return null;
+        }
+    }
 }

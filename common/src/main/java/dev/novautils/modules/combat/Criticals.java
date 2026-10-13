@@ -4,6 +4,8 @@ import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
 import dev.novautils.utils.InvUtils;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -15,11 +17,12 @@ import net.minecraft.world.entity.player.Player;
  * exactly as vanilla makes them (hard rule in code, not a setting), same as AutoFight.
  * <ul>
  *   <li>MINI_JUMP - holds the hit, does a tiny hop and lands it on the way down, which is a real
- *       vanilla crit made of normal movement. About 0.1 s later than the click; works on every
- *       server.</li>
- *   <li>PACKET - instant: tells the server you hopped up a hair and came back down, right before
- *       the hit. Only for servers older than 26.3: from 26.3 on, vanilla kicks for more than one
- *       position packet per tick ("Invalid move player packet").</li>
+ *       vanilla crit made of normal movement. About 0.1 s later than the click.</li>
+ *   <li>PACKET - no visible hop. The server now runs your movement once per client tick (when
+ *       the "tick end" packet arrives) and kicks for a second position packet in the same tick,
+ *       so this works in step with it: in one tick your position packet says you rose a hair, in
+ *       the next that you're falling, and the hit goes out at the start of the tick after, when
+ *       the server has counted the fall. One position packet per tick, always.</li>
  * </ul>
  * Vanilla never crits while sprinting, so by default it drops the sprint for that one hit.
  */
@@ -27,7 +30,7 @@ public class Criticals extends Module {
     public enum Mode { MINI_JUMP, PACKET }
 
     private final Setting<Mode> mode = register(Setting.builder(Mode.class, "mode")
-        .description("MINI_JUMP: works everywhere. PACKET: instant, but kicks on 26.3+ servers.")
+        .description("MINI_JUMP: a tiny real hop. PACKET: no hop, only the server sees it.")
         .defaultValue(Mode.MINI_JUMP).build());
 
     private final Setting<Boolean> stopSprint = register(Setting.builder(Boolean.class, "stop-sprint")
@@ -38,9 +41,18 @@ public class Criticals extends Module {
         .description("Only on (nearly) fully charged hits - weak hits can't crit anyway.")
         .defaultValue(true).build());
 
+    private static final int IDLE = 0, UP = 1, DOWN = 2, HIT = 3, RESYNC = 4;
+
     private Entity pending;
     private int pendingTicks;
     private boolean bypass;
+
+    /** PACKET state: which tick of the crit we're in. */
+    private int stage = IDLE;
+    private boolean movedThisTick;
+    private boolean sendingOwn;
+    private double baseY;
+    private int stageAge;
 
     public Criticals() {
         super("Criticals", "Every hit on a mob is a critical hit. Never applies to players.", Category.COMBAT);
@@ -49,6 +61,7 @@ public class Criticals extends Module {
     @Override
     public void onDisable() {
         pending = null;
+        stage = IDLE;
     }
 
     private boolean canCrit(Entity target) {
@@ -65,40 +78,34 @@ public class Criticals extends Module {
 
     /**
      * GameModeMixin, right before an attack goes out. Returns true to hold the attack back (it is
-     * sent later by {@link #onTick} once we're falling).
+     * sent later, once the server sees us falling).
      */
     public boolean beforeAttack(Entity target) {
-        if (bypass || pending != null || !canCrit(target)) return false;
+        if (bypass || pending != null || stage != IDLE || !canCrit(target)) return false;
         var p = mc.player;
         if (p.isSprinting()) p.setSprinting(false);
+        pending = target;
+        pendingTicks = 0;
 
         if (mode.get() == Mode.PACKET) {
-            double x = p.getX(), y = p.getY(), z = p.getZ();
-            boolean hc = p.horizontalCollision;
-            mc.getConnection().send(new ServerboundMovePlayerPacket.Pos(x, y + 0.0625, z, false, hc));
-            mc.getConnection().send(new ServerboundMovePlayerPacket.Pos(x, y, z, false, hc));
-            return false;
+            stage = UP;
+            stageAge = 0;
+            movedThisTick = false;
+            baseY = p.getY();
+            return true;
         }
 
         // MINI_JUMP: a small hop now, the hit once we're on the way down
         var v = p.getDeltaMovement();
         p.setDeltaMovement(v.x, 0.11, v.z);
-        pending = target;
-        pendingTicks = 0;
         return true;
     }
 
-    @Override
-    public void onTick() {
-        if (pending == null || mc.player == null || mc.gameMode == null) return;
+    private void hit() {
         var p = mc.player;
-        pendingTicks++;
-        boolean falling = !p.onGround() && p.getDeltaMovement().y < 0 && p.fallDistance > 0;
-        if (!falling && pendingTicks < 8) return;
-
         Entity target = pending;
         pending = null;
-        if (!target.isAlive() || p.distanceToSqr(target) > 36) return;
+        if (p == null || target == null || !target.isAlive() || p.distanceToSqr(target) > 36) return;
         if (p.isSprinting()) p.setSprinting(false);
         bypass = true;
         try {
@@ -107,5 +114,89 @@ public class Criticals extends Module {
             bypass = false;
         }
         InvUtils.swing();
+    }
+
+    private void sendOwn(Packet<?> packet) {
+        sendingOwn = true;
+        try {
+            mc.getConnection().send(packet);
+        } finally {
+            sendingOwn = false;
+        }
+    }
+
+    /** Our position for this tick: up a hair (UP), back where we were but in the air (DOWN). */
+    private ServerboundMovePlayerPacket spoof(double x, double z, float yaw, float pitch) {
+        double y = stage == UP ? baseY + 0.0625 : baseY;
+        return new ServerboundMovePlayerPacket.PosRot(x, y, z, yaw, pitch, false, mc.player.horizontalCollision);
+    }
+
+    @Override
+    public boolean onSendPacket(Packet<?> packet) {
+        if (stage == IDLE || sendingOwn || mc.player == null || mc.getConnection() == null) return false;
+        var p = mc.player;
+
+        if (packet instanceof ServerboundMovePlayerPacket move) {
+            switch (stage) {
+                case UP, DOWN -> {
+                    // this tick's position packet becomes ours
+                    sendOwn(spoof(move.getX(p.getX()), move.getZ(p.getZ()), move.getYRot(p.getYRot()), move.getXRot(p.getXRot())));
+                    movedThisTick = true;
+                    return true;
+                }
+                case HIT -> {
+                    // first thing in a new tick: the server has counted the fall, land the hit
+                    // before this (real, on the ground) position goes out
+                    hit();
+                    stage = RESYNC;
+                    movedThisTick = true;
+                    return false;
+                }
+                default -> {
+                    movedThisTick = true;
+                    return false;
+                }
+            }
+        }
+
+        if (packet instanceof ServerboundClientTickEndPacket) {
+            switch (stage) {
+                case UP, DOWN -> {
+                    if (!movedThisTick) sendOwn(spoof(p.getX(), p.getZ(), p.getYRot(), p.getXRot()));
+                    stage = stage == UP ? DOWN : HIT;
+                }
+                case HIT -> {
+                    // a tick without movement: the hit goes out now, the fall was counted last tick
+                    hit();
+                    stage = RESYNC;
+                }
+                case RESYNC -> {
+                    if (!movedThisTick) sendOwn(new ServerboundMovePlayerPacket.StatusOnly(p.onGround(), p.horizontalCollision));
+                    stage = IDLE;
+                }
+                default -> { }
+            }
+            movedThisTick = false;
+            stageAge = 0;
+        }
+        return false;
+    }
+
+    @Override
+    public void onTick() {
+        if (stage != IDLE) {
+            // safety: never get stuck if tick-end packets stop (disconnect, loading screen)
+            if (++stageAge > 10) {
+                stage = IDLE;
+                pending = null;
+            }
+            return;
+        }
+        if (pending == null || mc.player == null || mc.gameMode == null) return;
+        var p = mc.player;
+        pendingTicks++;
+        boolean falling = !p.onGround() && p.getDeltaMovement().y < 0 && p.fallDistance > 0;
+        if (!falling && pendingTicks < 8) return;
+        hit();
     }
 }

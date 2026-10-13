@@ -71,6 +71,14 @@ public class Waypoints extends Module {
         saveWaypoints();
     }
 
+    /** Removes every waypoint; returns how many there were. */
+    public int clear() {
+        int n = waypoints.size();
+        waypoints.clear();
+        saveWaypoints();
+        return n;
+    }
+
     public boolean remove(String name) {
         boolean removed = waypoints.removeIf(w -> w.name.equalsIgnoreCase(name));
         if (removed) saveWaypoints();

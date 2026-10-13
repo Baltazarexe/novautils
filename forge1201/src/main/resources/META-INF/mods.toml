@@ -4,7 +4,7 @@ license = "All rights reserved"
 
 [[mods]]
 modId = "novautils"
-version = "0.1.0"
+version = "0.2.0"
 displayName = "NovaUtils"
 description = "Client utility mod."
 authors = "baltazar_exe"

@@ -35,6 +35,23 @@ public final class RenderUtils {
         quad(pose, buffer, color, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ, minX, minY, minZ);
     }
 
+    /** Only the 12 edges of a box, as thin ribbons (wireframe ESP). */
+    public static void drawEdges(PoseStack.Pose pose, VertexConsumer buffer, AABB box, int color, double width) {
+        if (ScreenSpace.capturing()) {
+            ScreenSpace.queueBox(box, color & 0x00FFFFFF);
+            return;
+        }
+        double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
+        Vec3 a = new Vec3(x0, y0, z0), b = new Vec3(x1, y0, z0), c = new Vec3(x1, y0, z1), d = new Vec3(x0, y0, z1);
+        Vec3 e = new Vec3(x0, y1, z0), f = new Vec3(x1, y1, z0), g = new Vec3(x1, y1, z1), h = new Vec3(x0, y1, z1);
+        drawRibbon(pose, buffer, a, b, width, color); drawRibbon(pose, buffer, b, c, width, color);
+        drawRibbon(pose, buffer, c, d, width, color); drawRibbon(pose, buffer, d, a, width, color);
+        drawRibbon(pose, buffer, e, f, width, color); drawRibbon(pose, buffer, f, g, width, color);
+        drawRibbon(pose, buffer, g, h, width, color); drawRibbon(pose, buffer, h, e, width, color);
+        drawRibbon(pose, buffer, a, e, width, color); drawRibbon(pose, buffer, b, f, width, color);
+        drawRibbon(pose, buffer, c, g, width, color); drawRibbon(pose, buffer, d, h, width, color);
+    }
+
     /**
      * Nicer box: a soft translucent fill plus crisp brighter edges. {@code color} is ARGB; its alpha
      * is used for the fill and boosted for the edges.

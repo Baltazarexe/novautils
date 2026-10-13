@@ -553,6 +553,49 @@ public final class SelfTest {
             allOff();
         });
 
+        // --- every ESP style, then chams through a wall (screenshots) -----------------------
+        step(5, () -> {
+            allOff();
+            cmd("/kill @e[type=!minecraft:player]");
+            cmd("/summon minecraft:zombie 7 100 -2 {NoAI:1b,PersistenceRequired:1b,Health:9f}");
+            cmd("/summon minecraft:skeleton 8 100 1 {NoAI:1b,PersistenceRequired:1b}");
+            cmd("/summon minecraft:cow 5 100 3 {NoAI:1b,PersistenceRequired:1b}");
+            cmd("/tp @a 0 100 0 -90 5");
+            set(dev.novautils.modules.render.Esp.class, "passive-mobs", true);
+            set(dev.novautils.modules.render.Esp.class, "name-distance", true);
+            on(dev.novautils.modules.render.Esp.class);
+        });
+        for (var espMode : dev.novautils.modules.render.Esp.Mode.values()) {
+            step(10, () -> set(dev.novautils.modules.render.Esp.class, "mode", espMode));
+            step(10, () -> shot("08_esp_" + espMode.name().toLowerCase()));
+        }
+        step(2, () -> {
+            cmd("/fill 3 100 -4 3 103 4 minecraft:stone");
+            set(dev.novautils.modules.render.Esp.class, "mode", dev.novautils.modules.render.Esp.Mode.CHAMS);
+        });
+        step(10, () -> shot("09_chams_wall_solid"));
+        step(2, () -> {
+            set(dev.novautils.modules.render.Esp.class, "chams-style", dev.novautils.modules.render.Esp.ChamsStyle.TEXTURED);
+            set(dev.novautils.modules.render.Esp.class, "rainbow", true);
+        });
+        step(10, () -> {
+            shot("10_chams_wall_textured_rainbow");
+            for (var s : mod(dev.novautils.modules.render.Esp.class).getSettings()) s.reset();
+            allOff();
+            cmd("/fill 3 100 -4 3 103 4 minecraft:air");
+            cmd("/kill @e[type=!minecraft:player]");
+        });
+
+        // --- .locate and waypoints by coordinates -----------------------------------------
+        step(5, () -> {
+            dev.novautils.commands.Commands.handle(".locate village 2");
+            dev.novautils.commands.Commands.handle(".wp add nova base 100 70 -200");
+            String wps = mod(dev.novautils.modules.render.Waypoints.class).list().toString();
+            check(wps.contains("village") && wps.contains("nova base: 100, 70, -200"), ".locate and .wp add with coordinates (" + wps + ")");
+            dev.novautils.commands.Commands.handle(".wp clear");
+            check(mod(dev.novautils.modules.render.Waypoints.class).list().isEmpty(), ".wp clear removes them");
+        });
+
         // --- config ------------------------------------------------------------------------
         step(5, () -> {
             allOff();

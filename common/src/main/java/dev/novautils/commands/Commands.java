@@ -122,10 +122,17 @@ public final class Commands {
                 else for (var s : items) say(s.getCount() + "x " + s.getHoverName().getString());
             }
             case "seed" -> {
-                need(a, 2, "seed <world seed>");
-                ModuleManager.get().get(dev.novautils.modules.render.ChunkBorders.class).setSeed(rest(a, 1));
-                say("Seed set (ChunkBorders slime chunks)");
+                var cb = ModuleManager.get().get(dev.novautils.modules.render.ChunkBorders.class);
+                if (a.length < 2) {
+                    Long s = cb.seed();
+                    say(s == null ? "No seed yet: " + PREFIX + "seed <number>, or " + PREFIX + "seed 2b2t" : "Seed: " + s);
+                    return;
+                }
+                String value = a[1].equalsIgnoreCase("2b2t") ? String.valueOf(dev.novautils.utils.StructureFinder.SEED_2B2T) : rest(a, 1);
+                cb.setSeed(value);
+                say("Seed set to " + cb.seed() + " (" + PREFIX + "locate, slime chunks)");
             }
+            case "locate", "loc" -> locate(a);
             case "sort" -> ModuleManager.get().get(dev.novautils.modules.player.InventorySort.class).setEnabled(true);
             case "drop" -> drop(a);
             case "panic" -> say("Turned off " + ModuleManager.get().disableAll() + " modules");
@@ -141,7 +148,7 @@ public final class Commands {
             {"bind <module> <key>", "bind a key, mouse4/mouse5, or none"},
             {"set <module> <setting> <value>", "change a setting"},
             {"reset <module>", "reset a module's settings"},
-            {"wp add|del|list [name]", "waypoints"},
+            {"wp add <name> [x y z] | del <name> | list | clear", "waypoints"},
             {"friend add|del|list [name]", "friends"},
             {"coords", "copy your coordinates"},
             {"profile save|load|del|list [name]", "whole-config profiles"},
@@ -150,7 +157,8 @@ public final class Commands {
             {"echest", "what's in your ender chest"},
             {"sort", "sort the open chest or your inventory"},
             {"drop add|del|list [item]", "AutoDrop's extra items"},
-            {"seed <seed>", "seed for slime chunks"},
+            {"seed [seed|2b2t]", "world seed for .locate and slime chunks"},
+            {"locate <structure> [count]", "nearest structures from the seed (" + PREFIX + "locate list)"},
             {"panic", "turn every module off"},
         };
         for (String[] c : list) {
@@ -205,21 +213,31 @@ public final class Commands {
         var wps = ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class);
         switch (a[1].toLowerCase(Locale.ROOT)) {
             case "add" -> {
-                need(a, 3, "wp add <name>");
-                wps.add(rest(a, 2), mc.player.getX(), mc.player.getY(), mc.player.getZ());
-                wps.setEnabled(true);
-                say("Waypoint " + rest(a, 2) + " added");
+                need(a, 3, "wp add <name> [x y z]");
+                // ".wp add base 100 64 -200" marks coordinates, ".wp add base" marks where you stand
+                if (a.length >= 6) {
+                    String name = String.join(" ", java.util.Arrays.copyOfRange(a, 2, a.length - 3));
+                    double x = Double.parseDouble(a[a.length - 3]), y = Double.parseDouble(a[a.length - 2]), z = Double.parseDouble(a[a.length - 1]);
+                    wps.add(name, x, y, z);
+                    wps.setEnabled(true);
+                    say("Waypoint " + name + " added at " + (int) x + " " + (int) y + " " + (int) z);
+                } else {
+                    wps.add(rest(a, 2), mc.player.getX(), mc.player.getY(), mc.player.getZ());
+                    wps.setEnabled(true);
+                    say("Waypoint " + rest(a, 2) + " added here");
+                }
             }
             case "del", "remove" -> {
                 need(a, 3, "wp del <name>");
                 say(wps.remove(rest(a, 2)) ? "Removed" : "No waypoint called " + rest(a, 2));
             }
+            case "clear" -> say("Removed " + wps.clear() + " waypoints");
             case "list" -> {
                 var lines = wps.list();
                 if (lines.isEmpty()) say("No waypoints");
                 for (String l : lines) say(l);
             }
-            default -> error("usage: " + PREFIX + "wp add|del|list [name]");
+            default -> error("usage: " + PREFIX + "wp add <name> [x y z] | del <name> | list | clear");
         }
     }
 
@@ -298,6 +316,48 @@ public final class Commands {
             case "import" -> say(Config.get().importString(modules, mc.keyboardHandler.getClipboard())
                 ? "Config imported from the clipboard" : "The clipboard doesn't hold a NovaUtils config", 0xFFD84A);
             default -> error("usage: " + PREFIX + "config export|import");
+        }
+    }
+
+    private static void locate(String[] a) {
+        need(a, 2, "locate <structure> [count]  (" + PREFIX + "locate list)");
+        if (a[1].equalsIgnoreCase("list")) {
+            List<String> names = new ArrayList<>();
+            for (var k : dev.novautils.utils.StructureFinder.KINDS) names.add(k.name());
+            say("Structures: " + String.join(", ", names));
+            return;
+        }
+        var kind = dev.novautils.utils.StructureFinder.find(a[1]);
+        if (kind == null) throw new IllegalArgumentException("unknown structure " + a[1] + " (" + PREFIX + "locate list)");
+        Long seed = ModuleManager.get().get(dev.novautils.modules.render.ChunkBorders.class).seed();
+        if (seed == null) throw new IllegalArgumentException("set the world seed first: " + PREFIX + "seed <number>");
+        int count = a.length > 2 ? Math.max(1, Math.min(10, Integer.parseInt(a[2]))) : 3;
+
+        // work in the structure's own dimension (nether coordinates are 1/8 of the overworld's)
+        String here = mc.level.dimension().identifier().getPath();
+        double x = mc.player.getX(), z = mc.player.getZ();
+        var dim = kind.dim();
+        boolean inNether = here.equals("the_nether");
+        if (dim == dev.novautils.utils.StructureFinder.Dim.NETHER && !inNether) { x /= 8; z /= 8; }
+        if (dim == dev.novautils.utils.StructureFinder.Dim.OVERWORLD && inNether) { x *= 8; z *= 8; }
+        var results = dev.novautils.utils.StructureFinder.nearest(seed, kind, (int) x, (int) z, count, 160);
+        if (results.isEmpty()) {
+            say("None within range.");
+            return;
+        }
+        String dimName = switch (dim) { case NETHER -> "nether"; case END -> "the end"; default -> "overworld"; };
+        say("Nearest " + kind.name() + " (" + dimName + " coords):");
+        for (var r : results) {
+            say("  " + r.x() + ", " + r.z() + "  (" + Math.round(r.distance()) + "m)" + (r.note().isEmpty() ? "" : "  " + r.note()), 0xFFD84A);
+        }
+        say("Candidate spots from the seed - the game also needs the right biome/terrain, so one may be empty.", 0x9196A4);
+        boolean sameDim = switch (dim) { case NETHER -> inNether; case END -> here.equals("the_end"); default -> here.equals("overworld"); };
+        if (sameDim) {
+            var wps = ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class);
+            wps.remove(kind.name());
+            wps.add(kind.name(), results.get(0).x(), mc.player.getY(), results.get(0).z());
+            wps.setEnabled(true);
+            say("Waypoint \"" + kind.name() + "\" set on the nearest one.", 0x9196A4);
         }
     }
 

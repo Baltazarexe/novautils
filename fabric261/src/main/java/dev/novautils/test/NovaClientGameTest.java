@@ -476,7 +476,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         float crit = hitOnce(ctx);
         check(crit > normal * 1.3f, "Criticals (MINI_JUMP): normal hit " + normal + " dmg, with Criticals " + crit + " dmg");
         cmd(sp, "/kill @e[tag=crit]");
-        // PACKET mode is only for servers before 26.3, which this one is
+        // PACKET mode on a fresh husk
         cmd(sp, "/summon minecraft:husk 2 200 5 {NoAI:1b,PersistenceRequired:1b,Tags:[\"crit\"]}");
         ctx.waitTicks(10);
         ctx.runOnClient(c -> ((Setting<Object>) (Setting) setting(dev.novautils.modules.combat.Criticals.class, "mode")).set(dev.novautils.modules.combat.Criticals.Mode.PACKET));
@@ -956,6 +956,55 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/kill @e[type=!minecraft:player]");
 
+        // --- every ESP style (screenshots)
+        cmd(sp, "/summon minecraft:zombie 7 200 -2 {NoAI:1b,PersistenceRequired:1b,Health:9f}");
+        cmd(sp, "/summon minecraft:skeleton 8 200 1 {NoAI:1b,PersistenceRequired:1b}");
+        cmd(sp, "/summon minecraft:cow 5 200 3 {NoAI:1b,PersistenceRequired:1b}");
+        cmd(sp, "/tp @a 0 200 0 -90 5");
+        for (Esp.Mode espMode : Esp.Mode.values()) {
+            ctx.runOnClient(c -> {
+                ((Setting<Esp.Mode>) setting(Esp.class, "mode")).set(espMode);
+                ((Setting<Boolean>) setting(Esp.class, "passive-mobs")).set(true);
+                ((Setting<Boolean>) setting(Esp.class, "name-distance")).set(true);
+                on(Esp.class);
+            });
+            ctx.waitTicks(10);
+            shot(ctx, "32_esp_" + espMode.name().toLowerCase());
+        }
+        // chams through a wall: solid, then textured + rainbow
+        cmd(sp, "/fill 3 200 -4 3 203 4 minecraft:stone");
+        ctx.runOnClient(c -> ((Setting<Esp.Mode>) setting(Esp.class, "mode")).set(Esp.Mode.CHAMS));
+        ctx.waitTicks(10);
+        shot(ctx, "33_chams_wall_solid");
+        ctx.runOnClient(c -> {
+            ((Setting<Esp.ChamsStyle>) setting(Esp.class, "chams-style")).set(Esp.ChamsStyle.TEXTURED);
+            ((Setting<Boolean>) setting(Esp.class, "rainbow")).set(true);
+        });
+        ctx.waitTicks(10);
+        shot(ctx, "34_chams_wall_textured_rainbow");
+        cmd(sp, "/fill 3 200 -4 3 203 4 minecraft:air");
+        ctx.runOnClient(c -> {
+            for (Setting<?> s : mod(Esp.class).getSettings()) s.reset();
+            allOff();
+        });
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+
+        // --- AutoCommand fires on a timer and stops after N runs
+        ctx.runOnClient(c -> {
+            allOff();
+            var ac = mod(dev.novautils.modules.misc.AutoCommand.class);
+            ac.setCommand("/time set day");
+            ((Setting<Double>) setting(dev.novautils.modules.misc.AutoCommand.class, "delay-seconds")).set(1.0);
+            ((Setting<Integer>) setting(dev.novautils.modules.misc.AutoCommand.class, "runs")).set(3);
+            ((Setting<Boolean>) setting(dev.novautils.modules.misc.AutoCommand.class, "first-now")).set(true);
+            on(dev.novautils.modules.misc.AutoCommand.class);
+        });
+        for (int i = 0; i < 120 && ctx.computeOnClient(c -> mod(dev.novautils.modules.misc.AutoCommand.class).isEnabled()); i++) ctx.waitTick();
+        int ran = ctx.computeOnClient(c -> mod(dev.novautils.modules.misc.AutoCommand.class).ranCount());
+        System.out.println("[novautils-test] AutoCommand ran " + ran + " times");
+        check(ran == 3 && !ctx.computeOnClient(c -> mod(dev.novautils.modules.misc.AutoCommand.class).isEnabled()), "AutoCommand fires on a timer and stops after N runs");
+        ctx.runOnClient(c -> allOff());
+
         // --- FallPredict sees the landing spot; ChunkBorders knows the singleplayer seed
         cmd(sp, "/tp @a 0 215 0 -90 60");
         ctx.runOnClient(c -> {
@@ -1026,7 +1075,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/give @a minecraft:wheat_seeds 8");
         ctx.waitTicks(5);
         ctx.runOnClient(c -> on(dev.novautils.modules.world.AutoFarm.class));
-        ctx.waitTicks(30);
+        for (int i = 0; i < 80 && !blockAt(ctx, -3, 200, 2).contains("age=0"); i++) ctx.waitTick();
         String farmed = blockAt(ctx, -3, 200, 2);
         System.out.println("[novautils-test] AutoFarm: -3 200 2 is now " + farmed);
         check(farmed.contains("wheat") && farmed.contains("age=0"), "AutoFarm harvested and replanted wheat");

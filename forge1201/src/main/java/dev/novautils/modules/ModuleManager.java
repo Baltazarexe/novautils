@@ -224,6 +224,7 @@ public class ModuleManager {
         register(new Notifier());
         register(new dev.novautils.modules.misc.DurabilityAlert());
         register(new dev.novautils.modules.misc.ChestTracker());
+        register(new dev.novautils.modules.misc.AutoCommand());
         register(new AntiAfk());
         register(new AutoRespawn());
         register(new AutoReconnect());

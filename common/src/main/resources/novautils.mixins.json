@@ -38,6 +38,8 @@
     "ViewModelMixin",
     "MinecraftUseMixin",
     "ChatSendMixin",
+    "EntityRenderStateMixin",
+    "ChamsMixin",
     "ContainerScreenMixin",
     "FurnaceMenuInvoker",
     "BoatMixin"

@@ -17,9 +17,9 @@ Grab the jar for your loader and Minecraft version from the
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.3 | `novautils-fabric-0.1.0-mc26.3.jar` | `novautils-neoforge-0.1.0-mc26.3.jar` | |
-| 26.1.2 | `novautils-fabric-0.1.0-mc26.1.2.jar` | `novautils-neoforge-0.1.0-mc26.1.2.jar` | |
-| 1.20.1 | | | `novautils-forge-0.1.0-mc1.20.1.jar` |
+| 26.3 | `novautils-fabric-0.2.0-mc26.3.jar` | `novautils-neoforge-0.2.0-mc26.3.jar` | |
+| 26.1.2 | `novautils-fabric-0.2.0-mc26.1.2.jar` | `novautils-neoforge-0.2.0-mc26.1.2.jar` | |
+| 1.20.1 | | | `novautils-forge-0.2.0-mc1.20.1.jar` |
 
 Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in your `mods` folder.
 
@@ -55,6 +55,9 @@ Type them in chat; they never reach the server. `.help` lists them.
 | `.echest` | what's in your ender chest |
 | `.sort` | sort the open chest or your inventory |
 | `.drop add/del/list <item>` | extra items for AutoDrop |
+| `.seed <n|2b2t>` | set the world seed for `.locate` and slime chunks |
+| `.locate <structure> [n]` | nearest structures from the seed, with a waypoint |
+| `.wp add <name> [x y z] / del / list / clear` | waypoints, by coordinates or where you stand |
 | `.coords`, `.seed <seed>`, `.panic` | copy coordinates, slime-chunk seed, everything off |
 
 ## Compatibility
@@ -87,6 +90,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | BreakIndicator | Shows the progress of blocks being broken, yours and other players'. |
 | HitsToKill | A mob's health and how many hits it still needs. |
 | HealthBars | Health bars over mobs and/or players (filter: mobs, players or both; hostile only). |
+| Esp styles | CORNERS, 2D box, 3D box, wireframe, CHAMS (through-wall model, solid/textured/rainbow) or glow. |
 | FallPredict | Where you'll land and how much fall damage it will do. |
 | ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |
@@ -152,6 +156,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | BetterChat | Timestamps, anti-spam stacking, longer history. |
 | DeathPoint | Marks where you died. |
 | ChestTracker | Remembers what you saw in every chest; `.find` tells you where something is. |
+| AutoCommand | Runs a chat command on a timer (e.g. /rtp every 20s), stops after N runs. |
 | Friends | Middle-click a player to add them as a friend. |
 | AutoRespawn, AutoReconnect, AntiAfk | Quality of life. |
 

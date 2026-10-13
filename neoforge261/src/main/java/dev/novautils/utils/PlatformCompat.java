@@ -57,4 +57,13 @@ public final class PlatformCompat {
     public static void reloadChunks(Minecraft mc) {
         mc.levelRenderer.allChanged();
     }
+
+    /** Chams: submits {@code model} once more with the see-through render type, in a flat colour. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static void submitChams(net.minecraft.client.renderer.SubmitNodeCollector collector, net.minecraft.client.model.Model model,
+                                   Object state, com.mojang.blaze3d.vertex.PoseStack pose,
+                                   net.minecraft.client.renderer.rendertype.RenderType type, int color) {
+        collector.submitModel((net.minecraft.client.model.Model) model, state, pose, type, 0xF000F0,
+            net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, color, null, 0, null);
+    }
 }
