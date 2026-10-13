@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin {
-    /** Movement modules rewrite the vector inside vanilla physics (Meteor PlayerMoveEvent). */
+    /** Movement modules rewrite the vector inside vanilla physics. */
     @WrapMethod(method = "move")
     private void novautils$move(MoverType type, Vec3 movement, Operation<Void> original) {
         if (type == MoverType.SELF && dev.novautils.NovaUtils.modulesReady) movement = ModuleManager.get().onPlayerMove(movement);

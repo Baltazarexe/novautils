@@ -25,7 +25,7 @@ import java.util.List;
  * <p>"exposed-only" keeps ores that touch air/water - useful on servers with anti-xray, which
  * hides real ores and scatters fake ones inside solid stone.
  *
- * <p>Two ways to show them (mode): SEE_THROUGH works like Meteor's xray - everything that isn't an
+ * <p>Two ways to show them (mode): SEE_THROUGH: everything that isn't an
  * ore you picked (plus spawners and chests) simply isn't drawn, so you look straight through the
  * world at the ores themselves, fully lit. BOXES keeps the world and draws coloured boxes around
  * ores through it. BOTH does both. SEE_THROUGH works with plain Minecraft and with Sodium (XrayMixin,
@@ -42,7 +42,7 @@ public class Xray extends Module {
     public enum Mode { SEE_THROUGH, BOXES, BOTH }
 
     private final Setting<Mode> mode = register(Setting.builder(Mode.class, "mode")
-        .description("SEE_THROUGH: hide everything but ores (like Meteor). BOXES: boxes through walls. BOTH.")
+        .description("SEE_THROUGH: hide everything but ores. BOXES: boxes through walls. BOTH.")
         .defaultValue(Mode.SEE_THROUGH).build());
 
     private final Setting<Boolean> showFluids = register(Setting.builder(Boolean.class, "show-fluids")

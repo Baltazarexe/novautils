@@ -1,12 +1,12 @@
 # NovaUtils
 
-A client-side utility mod for Minecraft, in the spirit of Meteor Client: ESP, Xray, waypoints,
+A client-side utility mod for Minecraft: ESP, Xray, waypoints,
 HUD, automation and a clean single-window menu. Everything runs on your side only; nothing has to
 be installed on the server.
 
 ![Menu](docs/img/menu.png)
 
-**Português:** NovaUtils é um mod de utilidades só do lado do cliente (tipo Meteor): ESP, Xray,
+**Português:** NovaUtils é um mod de utilidades só do lado do cliente: ESP, Xray,
 waypoints, HUD, automações e um menu limpo. Abra o menu com **Shift direito**. Os downloads estão
 nas [Releases](https://github.com/Baltazarexe/novautils/releases/latest). Funciona com Sodium/Iris e com Embeddium/Oculus (shaders inclusos).
 
@@ -28,7 +28,7 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 - **Right Shift** opens the menu. **Delete** turns every module off (panic key).
 - Click a module (or its switch) to toggle it, right-click it to open its settings,
   middle-click it to add it to the **Favorites** tab.
-- Two menu styles: the single **Nova** window, or **Classic**, Meteor-like draggable panels per
+- Two menu styles: the single **Nova** window, or **Classic**, draggable panels per
   category. The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
 - Any module can be bound to a key or a mouse button (side buttons too) from its settings.
 - **Edit HUD** in the menu lets you drag the HUD elements (coords, armour, minimap, ...) anywhere.
@@ -75,7 +75,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Module | What it does |
 |---|---|
 | Fullbright | Makes everything fully lit, no more caves or night. |
-| Xray | Hides everything but the ores you pick (see-through, like Meteor), or boxes them. |
+| Xray | Hides everything but the ores you pick (see-through), or boxes them. |
 | Esp | Highlights entities through walls (chams / box). |
 | StorageEsp | Highlights chests, shulkers, barrels and more through walls. |
 | Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. |

@@ -7,7 +7,8 @@ modId = "novautils"
 version = "0.1.0"
 displayName = "NovaUtils"
 description = "Client utility mod."
-authors = "daniel"
+authors = "baltazar_exe"
+displayURL = "https://github.com/Baltazarexe/novautils"
 
 [[dependencies.novautils]]
 modId = "forge"

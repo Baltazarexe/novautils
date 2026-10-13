@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Xray SEE_THROUGH: the blocks we keep sit inside hidden stone, where the real light is 0, so they
- * would be drawn pitch black. Give their faces full light instead (what Meteor's xray does).
+ * would be drawn pitch black. Give their faces full light instead.
  */
 @Mixin(BlockModelLighter.class)
 public abstract class XrayLightMixin {

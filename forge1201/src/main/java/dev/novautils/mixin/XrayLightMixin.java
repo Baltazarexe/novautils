@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Xray SEE_THROUGH, vanilla renderer: the kept blocks sit inside hidden stone where the real light
- * is 0, so give them full light and no corner shading (what Meteor does).
+ * is 0, so give them full light and no corner shading.
  */
 @Mixin(LevelRenderer.class)
 public abstract class XrayLightMixin {

@@ -167,7 +167,7 @@ public class ClickGuiScreen extends Screen {
         return wy + wh - 44;
     }
 
-    /** "Classic menu" switches to the Meteor-style panels (remembered). */
+    /** "Classic menu" switches to the classic panels (remembered). */
     private int styleButtonY() {
         return hudButtonY() - 19;
     }

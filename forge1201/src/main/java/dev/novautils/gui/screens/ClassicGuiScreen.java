@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The classic menu, Meteor style: a draggable panel per category, modules toggled with a left
+ * The classic menu: a draggable panel per category, modules toggled with a left
  * click and their settings opened inline with a right click. Panel positions are remembered.
  * The other style is ClickGuiScreen; the button next to Edit HUD switches between them.
  */

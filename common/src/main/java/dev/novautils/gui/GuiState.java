@@ -22,7 +22,7 @@ public class GuiState {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Map<Category, int[]> positions = new EnumMap<>(Category.class);
-    /** Menu style: the classic Meteor-like panels instead of the single Nova window. */
+    /** Menu style: the classic draggable panels instead of the single Nova window. */
     private boolean classic;
     private boolean loaded;
 

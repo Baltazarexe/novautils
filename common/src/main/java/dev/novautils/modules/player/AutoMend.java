@@ -56,7 +56,7 @@ public class AutoMend extends Module {
         return left < belowPercent;
     }
 
-    /** Started below the threshold: keep going until fully repaired (99.9%), like Meteor. */
+    /** Started below the threshold: keep going until fully repaired (99.9%). */
     private boolean anythingToMend() {
         int limit = mending ? 100 : threshold.get();
         for (EquipmentSlot slot : ARMOR) if (needsRepair(mc.player.getItemBySlot(slot), limit)) return true;

@@ -4,6 +4,8 @@ license="MIT"
 modId="novautils"
 version="0.1.0"
 displayName="NovaUtils"
+authors="baltazar_exe"
+displayURL="https://github.com/Baltazarexe/novautils"
 
 description='''
 Client-side utility mod: HUD, ESP, waypoints, fullbright, zoom and more. Configured entirely in-game.

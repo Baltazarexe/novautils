@@ -5,8 +5,13 @@
   "version": "${version}",
   "description": "Client-side utility mod: HUD, ESP, waypoints, fullbright, zoom and more. Configured entirely in-game.",
   "authors": [
-    "you"
+    "baltazar_exe"
   ],
+  "contact": {
+    "homepage": "https://github.com/Baltazarexe/novautils",
+    "sources": "https://github.com/Baltazarexe/novautils",
+    "issues": "https://github.com/Baltazarexe/novautils/issues"
+  },
   "license": "MIT",
   "environment": "client",
   "entrypoints": {

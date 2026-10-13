@@ -894,7 +894,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
         cmd(sp, "/clear @a");
 
-        // --- menu: the little switch toggles; switching to the classic (Meteor-style) menu and back
+        // --- menu: the little switch toggles; switching to the classic menu and back
         cmd(sp, "/tp @a 0 200 0 -90 0");
         ctx.runOnClient(c -> {
             allOff();
@@ -912,7 +912,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         click(ctx, ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).styleButtonCenter()), 0);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof dev.novautils.gui.screens.ClassicGuiScreen
-            && dev.novautils.gui.GuiState.get().isClassic()), "Classic menu button opens the Meteor-style menu");
+            && dev.novautils.gui.GuiState.get().isClassic()), "Classic menu button opens the classic menu");
         int[] classicRow = ctx.computeOnClient(c -> ((dev.novautils.gui.screens.ClassicGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).rowCenter(mod(dev.novautils.modules.render.Zoom.class), null));
         click(ctx, classicRow, 0);
         check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.Zoom.class).isEnabled()), "left-click in the classic menu toggles a module");
