@@ -66,4 +66,11 @@ public final class PlatformCompat {
         collector.submitModel((net.minecraft.client.model.Model) model, state, pose, type, 0xF000F0,
             net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, color, null, 0, null);
     }
+
+    /** Typed letters reach screens on their own here (GLFW); only 26.3 needs to ask. */
+    public static void startTextInput(Minecraft mc, Object owner) {
+    }
+
+    public static void stopTextInput(Minecraft mc, Object owner) {
+    }
 }

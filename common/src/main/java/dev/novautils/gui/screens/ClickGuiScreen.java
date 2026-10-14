@@ -2,6 +2,7 @@ package dev.novautils.gui.screens;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.gui.Theme;
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
@@ -949,6 +950,20 @@ public class ClickGuiScreen extends Screen {
             return true;
         }
         return super.charTyped(event);
+    }
+
+    // From 26.x on, letters only reach a screen while it has asked for text input (vanilla text
+    // boxes do it on focus); the search here is drawn by hand, so ask for it while open.
+    @Override
+    protected void init() {
+        super.init();
+        PlatformCompat.startTextInput(this.minecraft, this);
+    }
+
+    @Override
+    public void removed() {
+        PlatformCompat.stopTextInput(this.minecraft, this);
+        super.removed();
     }
 
     @Override

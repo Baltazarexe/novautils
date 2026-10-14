@@ -81,7 +81,7 @@ public class Xray extends Module {
         ore("copper_ore", "copper", 0xE07A3C, false);
         ore("coal_ore", "coal", 0x585858, false);
         ore("quartz_ore", "quartz", 0xF0EAE2, false);
-        ore("", "other-ores", 0xFFB347, false);
+        ore("", "all-other-ores", 0xFFB347, true);
     }
 
     private void ore(String match, String name, int rgb, boolean onByDefault) {
@@ -168,9 +168,37 @@ public class Xray extends Module {
         applySeeThrough();
     }
 
+    /** Ore verdict per block (a tag lookup per scanned position would be slow); cleared on level change. */
+    private final java.util.Map<net.minecraft.world.level.block.Block, java.util.Optional<Ore>> oreCache = new java.util.HashMap<>();
+    private Object cacheLevel;
+
+    /**
+     * Any ore at all, modded ones included: a block tag that is an ore tag (c:ores, forge:ores,
+     * ores/iron, minecraft:coal_ores...), or a name that says "ore".
+     */
+    public static boolean looksLikeOre(BlockState state, String path) {
+        if (path.contains("_ore") || path.startsWith("ore_") || path.endsWith("_ores") || path.equals("ancient_debris")) return true;
+        return BuiltInRegistries.BLOCK.wrapAsHolder(state.getBlock()).tags().anyMatch(tag -> {
+            String p = tag.location().getPath();
+            return p.equals("ores") || p.startsWith("ores/") || p.endsWith("_ores");
+        });
+    }
+
     /** Which ore bucket a block falls in, or null when it is not an ore at all. */
     private Ore oreOf(BlockState state) {
         if (state.isAir()) return null;
+        if (mc.level != cacheLevel) {
+            cacheLevel = mc.level;
+            oreCache.clear();
+        }
+        var cached = oreCache.get(state.getBlock());
+        if (cached != null) return cached.orElse(null);
+        Ore result = classify(state);
+        oreCache.put(state.getBlock(), java.util.Optional.ofNullable(result));
+        return result;
+    }
+
+    private Ore classify(BlockState state) {
 
         ResourceLocation key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         if (key == null) return null;
@@ -184,7 +212,7 @@ public class Xray extends Module {
                 return ore;
             }
         }
-        return path.contains("_ore") ? fallback : null;
+        return looksLikeOre(state, path) ? fallback : null;
     }
 
     private boolean exposed(BlockPos pos) {

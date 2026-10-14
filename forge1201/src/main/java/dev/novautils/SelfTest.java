@@ -191,6 +191,14 @@ public final class SelfTest {
             allOff();
         });
 
+        step(0, () -> {
+        check(dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "tin_ore")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "ore_silver")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.IRON_ORE.defaultBlockState(), "mysterious_block")
+            && !dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "reactor_core"),
+            "Xray recognises any ore: modded names and ore tags, not stone or cores");
+        });
+
         // --- xray / fullbright / esp -------------------------------------------------------
         step(5, () -> on(dev.novautils.modules.render.Xray.class));
         step(60, () -> {
@@ -594,6 +602,24 @@ public final class SelfTest {
             check(wps.contains("village") && wps.contains("nova base: 100, 70, -200"), ".locate and .wp add with coordinates (" + wps + ")");
             dev.novautils.commands.Commands.handle(".wp clear");
             check(mod(dev.novautils.modules.render.Waypoints.class).list().isEmpty(), ".wp clear removes them");
+        });
+
+        // --- account manager: button on the multiplayer screen, offline nick swap and back ---
+        step(5, () -> {
+            allOff();
+            mc.setScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new TitleScreen()));
+        });
+        step(5, () -> {
+            boolean button = mc.screen.children().stream().anyMatch(w -> w instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("Accounts"));
+            check(button, "multiplayer screen has the Accounts button");
+            String launcher = mc.getUser().getName();
+            dev.novautils.utils.Accounts.addOffline("NovaTester");
+            dev.novautils.utils.Accounts.useOffline("NovaTester");
+            check(mc.getUser().getName().equals("NovaTester"), "switching to an offline nick changes the account");
+            dev.novautils.utils.Accounts.useLauncher();
+            dev.novautils.utils.Accounts.removeOffline("NovaTester");
+            check(mc.getUser().getName().equals(launcher), "switching back to the launcher account");
+            mc.setScreen(null);
         });
 
         // --- config ------------------------------------------------------------------------

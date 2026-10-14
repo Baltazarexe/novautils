@@ -3,6 +3,7 @@ package dev.novautils.gui.screens;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.gui.GuiState;
 import dev.novautils.gui.Theme;
+import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
@@ -119,6 +120,7 @@ public class ClassicGuiScreen extends Screen {
 
     @Override
     protected void init() {
+        PlatformCompat.startTextInput(this.minecraft, this);
         if (PANELS.isEmpty()) {
             GuiState.get().load();
             int columns = Math.max(1, (this.width - 8) / (PANEL_W + 6));
@@ -149,6 +151,12 @@ public class ClassicGuiScreen extends Screen {
             panel.x = Math.max(0, Math.min(panel.x, this.width - PANEL_W));
             panel.y = Math.max(0, Math.min(panel.y, this.height - HEADER_H));
         }
+    }
+
+    @Override
+    public void removed() {
+        PlatformCompat.stopTextInput(this.minecraft, this);
+        super.removed();
     }
 
     @Override

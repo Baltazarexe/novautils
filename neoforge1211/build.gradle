@@ -1,0 +1,56 @@
+plugins {
+    id 'java-library'
+    alias(libs.plugins.neoforge.moddev)
+}
+
+version = '0.2.2'
+group = 'dev.novautils'
+
+base {
+    archivesName = 'novautils-neoforge-1.21.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// MC 1.21.1 runs on Java 21
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = '21.1.251'
+
+    runs {
+        client {
+            client()
+        }
+        // gradlew :neoforge1211:runSelftest - dev-only in-game test, see SelfTest.java
+        selftest {
+            client()
+            systemProperty 'novautils.selftest', 'true'
+            gameDirectory = project.file('run-selftest')
+        }
+    }
+
+    mods {
+        novautils {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs += ['-Xmaxerrs', '10000']
+}
+
+// Optional: ./gradlew :neoforge1211:runSelftest -PwithSodium runs with the jars in testmods/
+if (project.hasProperty('withSodium')) {
+    repositories {
+        flatDir { dirs 'testmods' }
+    }
+    dependencies {
+        runtimeOnly 'local:sodium-neoforge-0.8.13+mc1.21.1'
+    }
+}

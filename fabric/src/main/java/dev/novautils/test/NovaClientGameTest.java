@@ -56,6 +56,17 @@ public class NovaClientGameTest implements FabricClientGameTest {
         for (Module m : ModuleManager.get().getModules()) m.setEnabled(false);
     }
 
+    /** Screenshot; with Sodium the framework's own one crashes, so press F2 instead. */
+    private static void shot(ClientGameTestContext ctx, String name) {
+        if (FabricLoader.getInstance().isModLoaded("sodium")) {
+            System.out.println("[novautils-test] screenshot (F2): " + name);
+            ctx.getInput().pressKey(InputConstants.KEY_F2);
+            ctx.waitTicks(2);
+        } else {
+            ctx.takeScreenshot(name);
+        }
+    }
+
     private static void check(boolean ok, String what) {
         if (!ok) throw new AssertionError("menu test: " + what);
         System.out.println("[novautils-test] ok: " + what);
@@ -130,7 +141,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(true, "Right Shift opens the menu");
         clickCategory(ctx, dev.novautils.modules.Category.RENDER);
         check(reveal(ctx, RENDER, Fullbright.class, null) != null, "clicking Render in the sidebar lists its modules");
-        ctx.takeScreenshot("08a_menu_opened");
+        shot(ctx, "08a_menu_opened");
 
         // left-click toggles a module on and off
         click(ctx, row(ctx, Fullbright.class, null), 0);
@@ -143,7 +154,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(reveal(ctx, RENDER, Xray.class, "diamond") != null, "right-click shows Xray settings");
         click(ctx, row(ctx, Xray.class, "diamond"), 0);
         check(ctx.computeOnClient(c -> !((Setting<Boolean>) setting(Xray.class, "diamond")).get()), "click turns diamond off");
-        ctx.takeScreenshot("08_menu_clicked_settings");
+        shot(ctx, "08_menu_clicked_settings");
         click(ctx, row(ctx, Xray.class, "diamond"), 0);
         check(ctx.computeOnClient(c -> ((Setting<Boolean>) setting(Xray.class, "diamond")).get()), "click turns diamond back on");
 
@@ -166,7 +177,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         check(row(ctx, AutoSprint.class, null) != null, "search 'sprint' shows AutoSprint");
         check(row(ctx, Fullbright.class, null) == null, "search 'sprint' hides Fullbright");
-        ctx.takeScreenshot("09_menu_search");
+        shot(ctx, "09_menu_search");
         ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
         ctx.waitTicks(3);
         check(ctx.computeOnClient(c -> c.gui.screen() instanceof ClickGuiScreen s && s.searchText().isEmpty()),
@@ -179,7 +190,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.getInput().pressKey(InputConstants.KEY_K);
         ctx.waitTicks(3);
         check(ctx.computeOnClient(c -> mod(AutoSprint.class).getKeyBind()) == InputConstants.KEY_K, "bind row captures K");
-        ctx.takeScreenshot("10_menu_keybind");
+        shot(ctx, "10_menu_keybind");
 
         // ESC closes, then K toggles the module in game
         ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
@@ -192,7 +203,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.getInput().pressKey(InputConstants.KEY_K);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> !mod(AutoSprint.class).isEnabled()), "K toggles AutoSprint off again");
-        ctx.takeScreenshot("11_keybind_toast");
+        shot(ctx, "11_keybind_toast");
 
         // reopen, middle-click the bind row clears it
         ctx.getInput().pressKey(InputConstants.KEY_RSHIFT);
@@ -246,7 +257,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         int[] to = ctx.computeOnClient(c -> new int[]{mod(HudInfo.class).hudX(), mod(HudInfo.class).hudY()});
         check(to[0] > from[0] + 60 && to[1] > from[1] + 40 && mod(HudInfo.class).isMoved(),
             "dragging HudInfo moves it (" + from[0] + "," + from[1] + " -> " + to[0] + "," + to[1] + ")");
-        ctx.takeScreenshot("12_editor_dragged");
+        shot(ctx, "12_editor_dragged");
 
         ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
         ctx.waitForScreen(ClickGuiScreen.class);
@@ -354,7 +365,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         p = pos(ctx);
         boolean bridged = ctx.computeOnClient(c -> !c.level.getBlockState(new net.minecraft.core.BlockPos(15, 199, 5)).isAir());
         check(bridged && p[1] > 199.5 && p[0] > 15, "Scaffold builds a bridge over the void (x=" + String.format("%.1f", p[0]) + ", y=" + String.format("%.1f", p[1]) + ")");
-        ctx.takeScreenshot("13_scaffold");
+        shot(ctx, "13_scaffold");
 
         // Jesus: walk from the platform onto a pool
         cmd(sp, "/fill -3 196 7 3 199 11 minecraft:stone");
@@ -366,7 +377,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         p = pos(ctx);
         boolean wet = ctx.computeOnClient(c -> c.player.isInWater());
         check(p[2] > 8 && p[1] > 199.9 && !wet, "Jesus walks on water (z=" + String.format("%.1f", p[2]) + ", y=" + String.format("%.2f", p[1]) + ", inWater=" + wet + ")");
-        ctx.takeScreenshot("14_jesus");
+        shot(ctx, "14_jesus");
 
         // AutoEat: drain the food bar, then it must eat the bread by itself
         cmd(sp, "/tp @a -2 200 5 90 0");
@@ -549,7 +560,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             return s.isEmpty() ? null : s.get(0);
         });
         check(spot != null && spot.lights() > 0, "LightOverlay suggests a torch spot (" + (spot == null ? "none" : spot.pos().toShortString() + " lights " + spot.lights()) + " of " + darkBefore + " dark tiles)");
-        ctx.takeScreenshot("17_light_overlay_torch");
+        shot(ctx, "17_light_overlay_torch");
         cmd(sp, "/setblock " + spot.pos().getX() + " " + spot.pos().getY() + " " + spot.pos().getZ() + " minecraft:torch");
         ctx.waitTicks(50);
         int darkAfter = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.LightOverlay.class).darkCount());
@@ -587,7 +598,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         // turn around (1200 x 0.15 = 180 degrees) to look back at the body we left
         ctx.runOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Freecam.class).turn(1200, 60));
         ctx.waitTicks(3);
-        ctx.takeScreenshot("18_freecam");
+        shot(ctx, "18_freecam");
         ctx.runOnClient(c -> allOff());
         ctx.waitTicks(5);
 
@@ -617,7 +628,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         ctx.waitTicks(5);
         var predicted = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Trajectories.class).lastLanding());
-        ctx.takeScreenshot("19_trajectories");
+        shot(ctx, "19_trajectories");
         ctx.runOnClient(c -> c.gameMode.useItem(c.player, net.minecraft.world.InteractionHand.MAIN_HAND));
         ctx.waitTicks(60);
         double[] landed = pos(ctx);
@@ -669,7 +680,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             on(dev.novautils.modules.render.ViewModel.class);
         });
         ctx.waitTicks(5);
-        ctx.takeScreenshot("21_viewmodel");
+        shot(ctx, "21_viewmodel");
         ctx.runOnClient(c -> allOff());
 
         // InventoryHUD: screenshot
@@ -679,7 +690,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/give @a minecraft:golden_apple 5");
         ctx.runOnClient(c -> { allOff(); on(dev.novautils.modules.misc.InventoryHud.class); });
         ctx.waitTicks(10);
-        ctx.takeScreenshot("20_inventory_hud");
+        shot(ctx, "20_inventory_hud");
         ctx.runOnClient(c -> allOff());
 
         // Zoom, Nametags and a waypoint label: screenshot only
@@ -695,13 +706,13 @@ public class NovaClientGameTest implements FabricClientGameTest {
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).add("base", 60, 200, 30);
         });
         ctx.waitTicks(20);
-        ctx.takeScreenshot("15_nametags_waypoint");
+        shot(ctx, "15_nametags_waypoint");
         ctx.runOnClient(c -> {
             ((Setting<Boolean>) setting(dev.novautils.modules.render.Zoom.class, "hold")).set(false);
             on(dev.novautils.modules.render.Zoom.class);
         });
         ctx.waitTicks(30);
-        ctx.takeScreenshot("16_zoom");
+        shot(ctx, "16_zoom");
         ctx.runOnClient(c -> {
             allOff();
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("base");
@@ -777,6 +788,53 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("village"));
     }
 
+    /**
+     * Criticals PACKET like a real player: the user's module set on, walking and sprinting at a
+     * husk and clicking it with the mouse, many times. Must never get kicked.
+     */
+    private static void criticalsRealPlayChecks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/fill -10 199 -10 30 199 10 minecraft:stone");
+        cmd(sp, "/fill -10 200 -10 30 206 10 minecraft:air");
+        cmd(sp, "/tp @a 0 200 0 -90 10");
+        cmd(sp, "/item replace entity @a weapon.mainhand with minecraft:iron_sword");
+        ctx.runOnClient(c -> {
+            allOff();
+            for (var t : java.util.List.of(Fullbright.class, Esp.class, dev.novautils.modules.render.Nametags.class,
+                dev.novautils.modules.render.Trajectories.class, dev.novautils.modules.render.ViewModel.class,
+                dev.novautils.modules.render.ShulkerPeek.class, dev.novautils.modules.render.BreakIndicator.class,
+                dev.novautils.modules.render.HealthBars.class, StorageEsp.class, AutoSprint.class, ActiveModules.class,
+                Notifications.class, dev.novautils.modules.misc.ChestTracker.class, dev.novautils.modules.combat.Criticals.class)) on(t);
+            ((Setting<dev.novautils.modules.combat.Criticals.Mode>) setting(dev.novautils.modules.combat.Criticals.class, "mode")).set(dev.novautils.modules.combat.Criticals.Mode.PACKET);
+        });
+        ctx.waitTicks(10);
+        for (int round = 0; round < 12; round++) {
+            cmd(sp, "/summon minecraft:husk 4 200 0 {NoAI:1b,PersistenceRequired:1b,Health:200f,Attributes:[{id:\"minecraft:max_health\",base:200}]}");
+            cmd(sp, "/tp @a 0 200 0 -90 10");
+            ctx.waitTicks(3);
+            ctx.getInput().holdKey(o -> o.keyUp);
+            ctx.getInput().holdKey(o -> o.keySprint);
+            ctx.waitTicks(4 + round % 3);
+            ctx.getInput().pressMouse(0);
+            ctx.waitTicks(2 + round % 4);
+            ctx.getInput().pressMouse(0);
+            ctx.waitTicks(6);
+            ctx.getInput().releaseKey(o -> o.keyUp);
+            ctx.getInput().releaseKey(o -> o.keySprint);
+            ctx.waitTicks(12);
+            cmd(sp, "/kill @e[type=minecraft:husk]");
+            boolean connected = ctx.computeOnClient(c -> c.getConnection() != null && c.player != null);
+            if (!connected) throw new AssertionError("menu test: Criticals PACKET got kicked in round " + round);
+        }
+        check(true, "Criticals PACKET: 12 rounds of walking/sprinting/clicking, never kicked");
+        ctx.runOnClient(c -> {
+            ((Setting<?>) setting(dev.novautils.modules.combat.Criticals.class, "mode")).reset();
+            allOff();
+        });
+        cmd(sp, "/gamemode creative @a");
+    }
+
     /** Account manager: button on the multiplayer screen, offline nick swap and back. */
     private static void accountChecks(ClientGameTestContext ctx) {
         ctx.runOnClient(c -> c.gui.setScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen())));
@@ -789,7 +847,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             c.gui.setScreen(new dev.novautils.gui.screens.AccountScreen(c.gui.screen()));
         });
         ctx.waitTicks(5);
-        ctx.takeScreenshot("35_accounts");
+        shot(ctx, "35_accounts");
         ctx.runOnClient(c -> dev.novautils.utils.Accounts.useOffline("NovaTester"));
         check(ctx.computeOnClient(c -> c.getUser().getName().equals("NovaTester")), "switching to an offline nick changes the account");
         ctx.runOnClient(c -> {
@@ -957,7 +1015,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         System.out.println("[novautils-test] AutoTunnel: " + tunnel);
         check(tunnel.startsWith("oooooooo") && ctx.computeOnClient(c -> c.player.getX() > 3), "AutoTunnel digs and walks");
-        ctx.takeScreenshot("27_autotunnel");
+        shot(ctx, "27_autotunnel");
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
         cmd(sp, "/clear @a");
@@ -981,7 +1039,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         System.out.println("[novautils-test] AutoBuild: " + wall + "/6 wall blocks");
         check(wall == 6, "AutoBuild builds the wall");
-        ctx.takeScreenshot("28_autobuild");
+        shot(ctx, "28_autobuild");
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
         cmd(sp, "/clear @a");
@@ -1008,7 +1066,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         int[] classicRow = ctx.computeOnClient(c -> ((dev.novautils.gui.screens.ClassicGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).rowCenter(mod(dev.novautils.modules.render.Zoom.class), null));
         click(ctx, classicRow, 0);
         check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.Zoom.class).isEnabled()), "left-click in the classic menu toggles a module");
-        ctx.takeScreenshot("30_classic_menu");
+        shot(ctx, "30_classic_menu");
         click(ctx, new int[]{252, 15}, 0);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen
@@ -1023,7 +1081,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/summon minecraft:pig 4 200 3 {NoAI:1b,PersistenceRequired:1b}");
         ctx.runOnClient(c -> on(dev.novautils.modules.render.HealthBars.class));
         ctx.waitTicks(20);
-        ctx.takeScreenshot("31_health_bars");
+        shot(ctx, "31_health_bars");
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/kill @e[type=!minecraft:player]");
 
@@ -1038,7 +1096,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         System.out.println("[novautils-test] FallPredict: " + landing);
         check(landing != null && Math.abs(landing.y - 200) < 0.6, "FallPredict finds the floor below");
         check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.ChunkBorders.class).seed() != null), "ChunkBorders knows the seed");
-        ctx.takeScreenshot("29_fall_predict");
+        shot(ctx, "29_fall_predict");
         ctx.waitTicks(40);
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/gamemode creative @a");
@@ -1087,7 +1145,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         cursor(ctx, slot0[0], slot0[1]);
         ctx.waitTicks(5);
-        ctx.takeScreenshot("24_shulker_peek");
+        shot(ctx, "24_shulker_peek");
         ctx.runOnClient(c -> c.gui.setScreen(null));
         cmd(sp, "/clear @a");
 
@@ -1114,7 +1172,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             c.player.setXRot(-60);
         });
         ctx.waitTicks(4);
-        ctx.takeScreenshot("25_packet_mine");
+        shot(ctx, "25_packet_mine");
         ctx.waitTicks(40);
         check(blockAt(ctx, 2, 200, -2).contains("air"), "PacketMine broke the block while looking away");
         ctx.runOnClient(c -> allOff());
@@ -1173,7 +1231,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             c.player.setXRot(5);
         });
         ctx.waitTicks(40);
-        ctx.takeScreenshot("26_minimap_hits");
+        shot(ctx, "26_minimap_hits");
         double swordDmg = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.HitsToKill.class).damage());
         System.out.println("[novautils-test] HitsToKill: iron sword damage " + swordDmg);
         check(Math.abs(swordDmg - 6.0) < 0.01, "HitsToKill counts the sword damage (6)");
@@ -1205,10 +1263,16 @@ public class NovaClientGameTest implements FabricClientGameTest {
             context.runOnClient(client -> allOff());
             context.waitTicks(20);
 
-            // --- Xray: defaults (copper and coal are off by default -> 6 of the 8 ores) ---
+            check(dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "tin_ore")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "ore_silver")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.IRON_ORE.defaultBlockState(), "mysterious_block")
+            && !dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "reactor_core"),
+            "Xray recognises any ore: modded names and ore tags, not stone or cores");
+
+        // --- Xray: defaults (copper and coal are off by default -> 6 of the 8 ores) ---
             context.runOnClient(client -> on(Xray.class));
             context.waitTicks(60);
-            context.takeScreenshot("01_xray_defaults");
+            shot(context, "01_xray_defaults");
 
             // --- Xray: switch gold and redstone off -> should vanish immediately ---
             context.runOnClient(client -> {
@@ -1216,7 +1280,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 ((Setting<Boolean>) setting(Xray.class, "redstone")).set(false);
             });
             context.waitTicks(5);
-            context.takeScreenshot("02_xray_gold_redstone_off");
+            shot(context, "02_xray_gold_redstone_off");
 
             // --- Menu with Xray's ore toggles visible ---
             context.runOnClient(client -> {
@@ -1228,7 +1292,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 if (client.gui.screen() instanceof ClickGuiScreen s) s.mouseScrolled(60, 90, 0, -4);
             });
             context.waitTicks(10);
-            context.takeScreenshot("03_menu_xray_toggles");
+            shot(context, "03_menu_xray_toggles");
 
             // --- HUD elements at their default positions ---
             sp.getServer().runCommand("/item replace entity @a armor.chest with minecraft:diamond_chestplate");
@@ -1251,7 +1315,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 Toasts.push("Esp ON", Theme.ACCENT);
             });
             context.waitTicks(20);
-            context.takeScreenshot("04_hud_default");
+            shot(context, "04_hud_default");
 
             // --- Move two HUD elements: HudInfo to the middle, ActiveModules bottom-left ---
             context.runOnClient(client -> {
@@ -1262,12 +1326,12 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 list.moveTo(4, h - list.hudHeight() - 60);
             });
             context.waitTicks(10);
-            context.takeScreenshot("05_hud_moved");
+            shot(context, "05_hud_moved");
 
             // --- HUD editor open on top ---
             context.runOnClient(client -> client.gui.setScreen(new HudEditorScreen(new ClickGuiScreen())));
             context.waitTicks(10);
-            context.takeScreenshot("06_hud_editor");
+            shot(context, "06_hud_editor");
 
             // --- Storage ESP: chest, ender chest, shulker, and a chest minecart ---
             sp.getServer().runCommand("/setblock 7 200 0 minecraft:chest");
@@ -1280,7 +1344,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 on(StorageEsp.class);
             });
             context.waitTicks(40);
-            context.takeScreenshot("07_storage_esp");
+            shot(context, "07_storage_esp");
 
             menuInteraction(context);
             featureChecks(context, sp);
@@ -1288,6 +1352,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             toolChecks(context, sp);
             structureFinderChecks(context, sp);
             accountChecks(context);
+            criticalsRealPlayChecks(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

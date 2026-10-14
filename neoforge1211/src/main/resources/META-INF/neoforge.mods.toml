@@ -1,0 +1,30 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "novautils"
+version = "0.2.2"
+displayName = "NovaUtils"
+authors = "baltazar_exe"
+displayURL = "https://github.com/Baltazarexe/novautils"
+description = '''
+Client-side utility mod: HUD, ESP, waypoints, fullbright, zoom and more. Configured entirely in-game.
+'''
+
+[[mixins]]
+config = "novautils.mixins.json"
+
+[[dependencies.novautils]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.novautils]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1]"
+ordering = "NONE"
+side = "CLIENT"

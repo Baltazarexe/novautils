@@ -3,7 +3,7 @@ plugins {
     id("maven-publish")
 }
 
-version = "0.2.1"
+version = "0.2.2"
 group = "dev.novautils"
 
 base {
@@ -67,5 +67,13 @@ tasks {
     withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
         options.release.set(libs.versions.jdk.get().toInt())
+    }
+}
+
+// Optional: ./gradlew :fabric:runClientGameTest -PwithSodium runs with the jars in fabric/testmods/
+// (Sodium, Iris, whatever else a modpack has - gitignored).
+if (project.hasProperty("withSodium")) {
+    dependencies {
+        runtimeOnly(fileTree("testmods") { include("*.jar") })
     }
 }

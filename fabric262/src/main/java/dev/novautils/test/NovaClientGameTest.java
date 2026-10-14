@@ -1284,7 +1284,13 @@ public class NovaClientGameTest implements FabricClientGameTest {
             context.waitTicks(20);
             jeiCheck(context, sp);
 
-            // --- Xray: defaults (copper and coal are off by default -> 6 of the 8 ores) ---
+            check(dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "tin_ore")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "ore_silver")
+            && dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.IRON_ORE.defaultBlockState(), "mysterious_block")
+            && !dev.novautils.modules.render.Xray.looksLikeOre(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), "reactor_core"),
+            "Xray recognises any ore: modded names and ore tags, not stone or cores");
+
+        // --- Xray: defaults (copper and coal are off by default -> 6 of the 8 ores) ---
             context.runOnClient(client -> on(Xray.class));
             context.waitTicks(60);
             shot(context, "01_xray_defaults");

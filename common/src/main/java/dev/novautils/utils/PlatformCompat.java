@@ -70,4 +70,13 @@ public final class PlatformCompat {
         collector.submitModel((net.minecraft.client.model.Model) model, state, pose, type, 0xF000F0,
             net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, color, null, 0);
     }
+
+    /** 26.3 (SDL): a screen only gets typed letters while it has asked for text input. */
+    public static void startTextInput(Minecraft mc, Object owner) {
+        mc.textInputManager().startTextInput(owner);
+    }
+
+    public static void stopTextInput(Minecraft mc, Object owner) {
+        mc.textInputManager().stopTextInput(owner);
+    }
 }

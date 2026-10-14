@@ -38,3 +38,4 @@ include("fabric261")
 // so it has its own full source tree, ported from common/.
 include("forge1201")
 include("fabric262")
+include("neoforge1211")
