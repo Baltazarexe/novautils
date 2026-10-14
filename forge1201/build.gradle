@@ -76,3 +76,21 @@ if (project.hasProperty("withEmbeddium")) {
         modRuntimeOnly "local:oculus:mc1.20.1-1.8.0"
     }
 }
+
+// Optional: the UI/optimisation mods of the Project Infinity modpack, to check nothing conflicts.
+//   ./gradlew :forge1201:runSelftest -PwithPack
+if (project.hasProperty("withPack")) {
+    repositories {
+        flatDir { dirs "testmods" }
+    }
+    dependencies {
+        modRuntimeOnly "local:jei-1.20.1-forge:15.56.0.205"
+        modRuntimeOnly "local:fancymenu:3.9.12"
+        modRuntimeOnly "local:konkrete:1.0"
+        modRuntimeOnly "local:melody:1.0"
+        modRuntimeOnly "local:modernfix:5.27.83"
+        modRuntimeOnly "local:ferritecore:6.0.1-forge"
+        modRuntimeOnly "local:entityculling:1.10.5"
+        modRuntimeOnly "local:journeymap:5.10.3"
+    }
+}
