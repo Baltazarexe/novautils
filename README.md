@@ -17,11 +17,11 @@ Grab the jar for your loader and Minecraft version from the
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.3 | `novautils-fabric-0.2.2-mc26.3.jar` | `novautils-neoforge-0.2.2-mc26.3.jar` | |
-| 26.2 | `novautils-fabric-0.2.2-mc26.2.jar` | | |
-| 26.1.2 | `novautils-fabric-0.2.2-mc26.1.2.jar` | `novautils-neoforge-0.2.2-mc26.1.2.jar` | |
-| 1.21.1 | | `novautils-neoforge-0.2.2-beta-mc1.21.1.jar` (beta) | |
-| 1.20.1 | | | `novautils-forge-0.2.2-mc1.20.1.jar` |
+| 26.3 | `novautils-fabric-0.3.0-mc26.3.jar` | `novautils-neoforge-0.3.0-mc26.3.jar` | |
+| 26.2 | `novautils-fabric-0.3.0-mc26.2.jar` | | |
+| 26.1.2 | `novautils-fabric-0.3.0-mc26.1.2.jar` | `novautils-neoforge-0.3.0-mc26.1.2.jar` | |
+| 1.21.1 | | `novautils-neoforge-0.3.0-beta-mc1.21.1.jar` (beta) | |
+| 1.20.1 | | | `novautils-forge-0.3.0-mc1.20.1.jar` |
 
 Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in your `mods` folder.
 
@@ -52,6 +52,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | `.profile save/load/del/list <name>` | save and switch whole setups ("2b2t", "mining"...) |
 | `.config export` / `.config import` | copy your config to the clipboard / load it from there |
 | `.wp add/del/list <name>` | waypoints |
+| `.search add <block> [hex] / del / list / clear` | your own blocks for Search |
 | `.friend add/del/list <name>` | friends |
 | `.find <item>` | which chest you left it in (ChestTracker) |
 | `.echest` | what's in your ender chest |
@@ -83,7 +84,11 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Xray | Hides everything but the ores you pick (see-through), or boxes them. |
 | Esp | Highlights entities through walls (chams / box). |
 | StorageEsp | Highlights chests, shulkers, barrels and more through walls. |
-| Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. |
+| Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`. |
+| BlockHighlight | Outlines the block you are looking at (rainbow option). |
+| TargetHud | Name, health, armour and distance of the creature you look at (works past survival reach). |
+| Compass | A heading bar with your waypoints on it. |
+| GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
 | Tracers | Lines from your crosshair to nearby entities. |
 | Nametags | Better name tags: health, ping, distance, totem pops. |
 | Waypoints | Named markers with distance, visible through walls. |
@@ -131,7 +136,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | InventorySort | Sorts the open chest or your inventory (its key works inside chests). |
 | AutoDrop | Throws away junk blocks and items. |
 | AntiHunger | Sprint without the server charging sprint hunger. |
-| AutoTool | Picks the fastest tool, counting Efficiency, even from your inventory. |
+| AutoTool | Picks the fastest tool, counting Efficiency. Silent mode swaps only while mining, so your hand never shows it. |
 | AutoEat, AutoReplenish, AutoMend, ElytraReplace, ChestSwap | Inventory upkeep. |
 | FastUse, FastBreak, AutoClicker | Faster using and mining. |
 

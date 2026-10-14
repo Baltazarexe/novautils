@@ -104,14 +104,14 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
     /** Scrolls the panel under {@code panelAt} with the mouse wheel until the row is fully shown. */
     private static int[] reveal(ClientGameTestContext ctx, int[] panelAt, Class<? extends Module> type, String setting) {
-        for (int i = 0; i < 60; i++) {
+        for (int i = 0; i < 140; i++) {
             int[] r = row(ctx, type, setting);
             if (r != null) return r;
             int[] at = ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen s
                 ? (setting == null ? s.listCenter() : s.settingsCenter()) : new int[]{0, 0});
             cursor(ctx, at[0], at[1]);
             ctx.waitTick();
-            ctx.getInput().scroll(i < 20 ? -1 : 1);
+            ctx.getInput().scroll(i < 70 ? -1 : 1);
             ctx.waitTicks(2);
         }
         return null;
@@ -721,6 +721,11 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(20);
     }
 
+    /** Waits (up to 3 s) until the client sees the block, since server commands land a few ticks late. */
+    private static void waitForBlock(ClientGameTestContext ctx, int x, int y, int z, String contains) {
+        for (int i = 0; i < 60 && !blockAt(ctx, x, y, z).contains(contains); i++) ctx.waitTick();
+    }
+
     private static String blockAt(ClientGameTestContext ctx, int x, int y, int z) {
         return ctx.computeOnClient(c -> c.level.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).toString());
     }
@@ -856,6 +861,160 @@ public class NovaClientGameTest implements FabricClientGameTest {
             c.gui.setScreen(null);
         });
         check(ctx.computeOnClient(c -> c.getUser().getName().equals(launcher)), "switching back to the launcher account");
+    }
+
+    /**
+     * Silent AutoTool (the hand keeps showing the held item while the pickaxe does the mining),
+     * GhostHand (chest, chest minecart and lever through a stone wall) and the new visuals.
+     */
+    private static void silentToolGhostHandAndVisuals(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+        cmd(sp, "/gamemode survival @a");
+        cmd(sp, "/clear @a");
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/fill -6 199 -6 14 199 6 minecraft:stone");
+        cmd(sp, "/fill -6 200 -6 14 206 6 minecraft:air");
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 0");
+        cmd(sp, "/item replace entity @a hotbar.0 with minecraft:stick");
+        cmd(sp, "/item replace entity @a hotbar.1 with minecraft:diamond_pickaxe");
+        cmd(sp, "/setblock 2 201 0 minecraft:stone");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            allOff();
+            dev.novautils.utils.InvUtils.selectHotbar(0);
+            on(dev.novautils.modules.player.AutoTool.class);
+        });
+        ctx.waitTicks(10);
+
+        // --- silent AutoTool: stone falls fast (pickaxe), the selected slot never moves
+        ctx.getInput().holdKey(o -> o.keyAttack);
+        int ticks = 0;
+        boolean slotStayed = true;
+        for (; ticks < 100 && !blockAt(ctx, 2, 201, 0).contains("air"); ticks++) {
+            ctx.waitTick();
+            if (ctx.computeOnClient(c -> c.player.getInventory().getSelectedSlot()) != 0) slotStayed = false;
+        }
+        ctx.getInput().releaseKey(o -> o.keyAttack);
+        System.out.println("[novautils-test] silent AutoTool: stone broke after " + ticks + " ticks, slot stayed=" + slotStayed);
+        check(ticks < 40, "silent AutoTool mines with the pickaxe (" + ticks + " ticks, bare hand needs ~150)");
+        check(slotStayed, "silent AutoTool never changes the slot you see");
+        // the server must really have broken it, and must not "finish digging" later what gets put there
+        ctx.waitTicks(10);
+        String brokeOnServer = sp.getServer().computeOnServer(s -> s.overworld().getBlockState(new net.minecraft.core.BlockPos(2, 201, 0)).getBlock().toString());
+        check(brokeOnServer.contains("air"), "silent AutoTool: the server really broke the block (" + brokeOnServer + ")");
+        cmd(sp, "/setblock 2 201 0 minecraft:stone");
+        ctx.waitTicks(100);
+        String stillThere = sp.getServer().computeOnServer(s -> s.overworld().getBlockState(new net.minecraft.core.BlockPos(2, 201, 0)).getBlock().toString());
+        check(stillThere.contains("stone"), "silent AutoTool: a block placed there later is not dug up by a leftover server-side dig (" + stillThere + ")");
+        cmd(sp, "/setblock 2 201 0 minecraft:air");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/clear @a");
+
+        // --- GhostHand: a chest behind a wall
+        cmd(sp, "/item replace entity @a hotbar.0 with minecraft:stick");
+        cmd(sp, "/setblock 1 201 3 minecraft:stone");
+        cmd(sp, "/setblock 2 201 3 minecraft:chest");
+        cmd(sp, "/tp @a 0.5 200 3.5 -90 0");
+        waitForBlock(ctx, 2, 201, 3, "chest");
+        waitForBlock(ctx, 1, 201, 3, "stone");
+                ctx.runOnClient(c -> {
+            dev.novautils.utils.InvUtils.selectHotbar(0);
+            on(dev.novautils.modules.world.GhostHand.class);
+        });
+        ctx.waitTicks(3);
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu), "GhostHand opens a chest through a wall");
+        ctx.runOnClient(c -> c.player.closeContainer());
+        ctx.waitTicks(3);
+
+        // --- GhostHand: a lever behind the wall
+        cmd(sp, "/setblock 2 201 3 minecraft:air");
+        cmd(sp, "/setblock 3 201 3 minecraft:stone");
+        cmd(sp, "/setblock 2 201 3 minecraft:lever[face=wall,facing=west,powered=false]");
+        ctx.waitTicks(5);
+        waitForBlock(ctx, 2, 201, 3, "lever");
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(8);
+        check(blockAt(ctx, 2, 201, 3).contains("powered=true"), "GhostHand flips a lever through a wall");
+
+        // --- GhostHand: a creature (chest minecart) behind the wall
+        cmd(sp, "/setblock 2 201 3 minecraft:air");
+        cmd(sp, "/setblock 3 201 3 minecraft:air");
+        cmd(sp, "/summon minecraft:chest_minecart 2.5 201 3.5 {NoGravity:1b,Motion:[0.0,0.0,0.0]}");
+        ctx.waitTicks(5);
+        for (int i = 0; i < 60 && ctx.computeOnClient(c -> c.level.getEntitiesOfClass(net.minecraft.world.entity.vehicle.minecart.MinecartChest.class, new net.minecraft.world.phys.AABB(1, 200, 2, 4, 203, 5)).isEmpty()); i++) ctx.waitTick();
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu), "GhostHand opens a chest minecart through a wall");
+        ctx.runOnClient(c -> {
+            c.player.closeContainer();
+            allOff();
+        });
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/fill 1 201 3 3 201 3 minecraft:air");
+
+        // --- sneaking turns GhostHand off (placing against walls must still work)
+        cmd(sp, "/setblock 2 201 3 minecraft:chest");
+        cmd(sp, "/setblock 1 201 3 minecraft:stone");
+        waitForBlock(ctx, 2, 201, 3, "chest");
+        waitForBlock(ctx, 1, 201, 3, "stone");
+        ctx.runOnClient(c -> on(dev.novautils.modules.world.GhostHand.class));
+        ctx.getInput().holdKey(o -> o.keyShift);
+        ctx.waitTicks(3);
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(8);
+        check(!ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu), "GhostHand stays off while sneaking");
+        ctx.getInput().releaseKey(o -> o.keyShift);
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill 1 201 3 3 201 3 minecraft:air");
+
+        // --- Search custom blocks: .search add makes an ordinary block findable
+        cmd(sp, "/setblock 5 201 3 minecraft:gold_block");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            allOff();
+            check(ModuleManager.get().get(dev.novautils.modules.render.Search.class).addCustom("gold_block", 0xFFFFD700) == null, "search add accepts gold_block");
+        });
+        ctx.waitTicks(60);
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Search.class).count() >= 1), "Search finds the custom block");
+        ctx.runOnClient(c -> {
+            var sr = ModuleManager.get().get(dev.novautils.modules.render.Search.class);
+            check(sr.removeCustom("gold_block"), "search del removes it");
+            allOff();
+        });
+        cmd(sp, "/setblock 5 201 3 minecraft:air");
+
+        // --- the new visuals (screenshots): block highlight, then target hud + compass + rainbow list
+        cmd(sp, "/setblock 3 200 1 minecraft:oak_stairs");
+        cmd(sp, "/tp @a 0.5 200 0.5 -60 35");
+        ctx.runOnClient(c -> {
+            on(dev.novautils.modules.render.BlockHighlight.class);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.BlockHighlight.class, "rainbow")).set(true);
+        });
+        ctx.waitTicks(15);
+        shot(ctx, "36_block_highlight");
+        cmd(sp, "/summon minecraft:zombie 4.5 200 0.5 {NoAI:1b,PersistenceRequired:1b,Health:11f,ArmorItems:[{},{},{id:\"minecraft:iron_chestplate\",count:1},{}]}");
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 0");
+        ctx.runOnClient(c -> {
+            allOff();
+            on(dev.novautils.modules.render.TargetHud.class);
+            on(dev.novautils.modules.render.Compass.class);
+            on(dev.novautils.modules.misc.ActiveModules.class);
+            on(dev.novautils.modules.render.Esp.class);
+            on(dev.novautils.modules.render.Waypoints.class);
+            ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).add("home", 30, 200, -25);
+            ((Setting<dev.novautils.modules.misc.ActiveModules.ColorMode>) setting(dev.novautils.modules.misc.ActiveModules.class, "color-mode")).set(dev.novautils.modules.misc.ActiveModules.ColorMode.RAINBOW);
+        });
+        ctx.waitTicks(20);
+        shot(ctx, "37_target_compass_rainbow");
+        ctx.runOnClient(c -> {
+            ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("home");
+            for (Module m : ModuleManager.get().getModules()) for (Setting<?> s : m.getSettings()) if (!s.name.startsWith("hud-")) s.reset();
+            allOff();
+        });
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/gamemode creative @a");
+        ctx.waitTicks(10);
     }
 
     private static int count(ClientGameTestContext ctx, net.minecraft.world.item.Item item) {
@@ -1353,6 +1512,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
             structureFinderChecks(context, sp);
             accountChecks(context);
             criticalsRealPlayChecks(context, sp);
+            silentToolGhostHandAndVisuals(context, sp);
 
             // --- Autosave: flip something, wait past the interval, read novautils.json back ---
             context.runOnClient(client -> on(Notifier.class));

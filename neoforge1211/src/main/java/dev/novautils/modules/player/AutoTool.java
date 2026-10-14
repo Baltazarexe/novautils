@@ -22,6 +22,10 @@ import net.minecraft.world.phys.HitResult;
 public class AutoTool extends Module {
     public enum Prefer { NONE, SILK_TOUCH, FORTUNE }
 
+    private final Setting<Boolean> silent = register(Setting.builder(Boolean.class, "silent")
+        .description("Swap only for the server and the mining itself - your hand keeps showing the item you hold (hotbar tools only).")
+        .defaultValue(true).build());
+
     private final Setting<Prefer> prefer = register(Setting.builder(Prefer.class, "prefer")
         .description("Break ties toward Silk Touch or Fortune tools.")
         .defaultValue(Prefer.NONE).build());
@@ -32,13 +36,15 @@ public class AutoTool extends Module {
 
     private final Setting<Boolean> switchBack = register(Setting.builder(Boolean.class, "switch-back")
         .description("Go back to the previous slot when you stop mining.")
-        .defaultValue(true).build());
+        .defaultValue(true).visible(() -> !silent.get()).build());
 
     private final Setting<Boolean> fromInventory = register(Setting.builder(Boolean.class, "from-inventory")
         .description("If the right tool is only in your main inventory, swap it into your hand.")
-        .defaultValue(true).build());
+        .defaultValue(true).visible(() -> !silent.get()).build());
 
     private int previousSlot = -1;
+    /** Silent mode: the slot we borrowed the tool from, to give back after this tick's clicks. */
+    private int silentOriginal = -1;
 
     public AutoTool() {
         super("AutoTool", "Picks the best hotbar tool for the block you mine.", Category.PLAYER);
@@ -52,6 +58,54 @@ public class AutoTool extends Module {
     private void restore() {
         if (switchBack.get() && previousSlot != -1 && mc.player != null) InvUtils.selectHotbar(previousSlot);
         previousSlot = -1;
+    }
+
+    /** MinecraftUseMixin, right before vanilla handles this tick's attack and use keys. */
+    public static void beforeKeybinds() {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
+        AutoTool m = dev.novautils.modules.ModuleManager.get().get(AutoTool.class);
+        if (m.isEnabled() && m.silent.get()) m.silentSwap();
+    }
+
+    /** MinecraftUseMixin, right after: the slot goes back before the frame is drawn, so nothing shows. */
+    public static void afterKeybinds() {
+        if (!dev.novautils.NovaUtils.modulesReady) return;
+        dev.novautils.modules.ModuleManager.get().get(AutoTool.class).silentRestore();
+    }
+
+    private int bestHotbar(BlockState state, int current) {
+        var inv = mc.player.getInventory();
+        int best = current;
+        double bestScore = score(inv.getItem(current), state);
+        for (int i = 0; i < 9; i++) {
+            double s = score(inv.getItem(i), state);
+            if (s > bestScore) {
+                bestScore = s;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private void silentSwap() {
+        silentOriginal = -1;
+        if (mc.player == null || mc.level == null || mc.gameMode == null || mc.player.getAbilities().instabuild) return;
+        if (dev.novautils.utils.PlatformCompat.currentScreen(mc) != null || !mc.options.keyAttack.isDown()) return;
+        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
+        BlockState state = mc.level.getBlockState(hit.getBlockPos());
+        if (state.getDestroySpeed(mc.level, hit.getBlockPos()) == 0) return;
+        int current = mc.player.getInventory().selected;
+        int best = bestHotbar(state, current);
+        if (best == current) return;
+        silentOriginal = current;
+        InvUtils.selectHotbar(best);
+    }
+
+    private void silentRestore() {
+        if (silentOriginal == -1) return;
+        int original = silentOriginal;
+        silentOriginal = -1;
+        if (mc.player != null) InvUtils.selectHotbar(original);
     }
 
     private int level(ItemStack stack, ResourceKey<Enchantment> key) {
@@ -77,6 +131,7 @@ public class AutoTool extends Module {
     @Override
     public void onTick() {
         if (mc.player == null || mc.level == null) return;
+        if (silent.get()) return;
         if (!mc.options.keyAttack.isDown()) {
             restore();
             return;

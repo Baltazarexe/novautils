@@ -133,6 +133,7 @@ public final class Commands {
                 say("Seed set to " + cb.seed() + " (" + PREFIX + "locate, slime chunks)");
             }
             case "locate", "loc" -> locate(a);
+            case "search" -> search(a);
             case "sort" -> ModuleManager.get().get(dev.novautils.modules.player.InventorySort.class).setEnabled(true);
             case "drop" -> drop(a);
             case "panic" -> say("Turned off " + ModuleManager.get().disableAll() + " modules");
@@ -149,6 +150,7 @@ public final class Commands {
             {"set <module> <setting> <value>", "change a setting"},
             {"reset <module>", "reset a module's settings"},
             {"wp add <name> [x y z] | del <name> | list | clear", "waypoints"},
+            {"search add <block> [hex] | del <block> | list | clear", "your own blocks for Search"},
             {"friend add|del|list [name]", "friends"},
             {"coords", "copy your coordinates"},
             {"profile save|load|del|list [name]", "whole-config profiles"},
@@ -206,6 +208,31 @@ public final class Commands {
             return;
         }
         throw new IllegalArgumentException(m.name + " has no setting " + name);
+    }
+
+    private static void search(String[] a) {
+        need(a, 2, "search add|del|list|clear");
+        var s = ModuleManager.get().get(dev.novautils.modules.render.Search.class);
+        switch (a[1].toLowerCase(Locale.ROOT)) {
+            case "add" -> {
+                need(a, 3, "search add <block> [hex colour]");
+                Integer color = null;
+                if (a.length >= 4) color = 0x80000000 | (Integer.parseInt(a[3].replace("#", ""), 16) & 0xFFFFFF);
+                String err = s.addCustom(a[2].toLowerCase(Locale.ROOT), color);
+                say(err != null ? err : "Search now looks for " + a[2]);
+            }
+            case "del", "remove" -> {
+                need(a, 3, "search del <block>");
+                say(s.removeCustom(a[2].toLowerCase(Locale.ROOT)) ? "Removed" : "Not in your list: " + a[2]);
+            }
+            case "clear" -> say("Removed " + s.clearCustoms() + " blocks");
+            case "list" -> {
+                var lines = s.listCustoms();
+                if (lines.isEmpty()) say("No custom blocks (" + PREFIX + "search add <block>)");
+                for (String l : lines) say(l);
+            }
+            default -> error("usage: " + PREFIX + "search add <block> [hex] | del <block> | list | clear");
+        }
     }
 
     private static void waypoint(String[] a) {

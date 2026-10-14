@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.fabric.loom)
 }
 
-version = "0.2.2"
+version = "0.3.0"
 group = "dev.novautils"
 
 base {

@@ -3,7 +3,7 @@ plugins {
     id("maven-publish")
 }
 
-version = "0.2.2"
+version = "0.3.0"
 group = "dev.novautils"
 
 base {

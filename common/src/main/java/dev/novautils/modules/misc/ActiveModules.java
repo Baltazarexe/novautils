@@ -19,6 +19,11 @@ import java.util.List;
  */
 public class ActiveModules extends HudModule {
     public enum Sort { LENGTH, ALPHABETICAL, CATEGORY }
+    public enum ColorMode { COLORS, RAINBOW, BY_CATEGORY }
+
+    private final Setting<ColorMode> colorMode = register(Setting.builder(ColorMode.class, "color-mode")
+        .description("COLORS: your two colours. RAINBOW: cycles. BY_CATEGORY: one colour per category.")
+        .defaultValue(ColorMode.COLORS).build());
 
     private final Setting<Sort> sort = register(Setting.builder(Sort.class, "sort")
         .description("LENGTH gives the usual staircase look.")
@@ -42,16 +47,16 @@ public class ActiveModules extends HudModule {
 
     private final Setting<Boolean> gradient = register(Setting.builder(Boolean.class, "gradient")
         .description("Fade from the active colour to the second colour down the list.")
-        .defaultValue(true).build());
+        .defaultValue(true).visible(() -> colorMode.get() == ColorMode.COLORS).build());
 
     private final Setting<Integer> activeColor = register(Setting.builder(Integer.class, "active-color")
         .description("Colour for modules that are on (top of the list when gradient is on).")
-        .defaultValue(0xFF22D3EE).asColor().build());
+        .defaultValue(0xFF22D3EE).asColor().visible(() -> colorMode.get() == ColorMode.COLORS).build());
 
     private final Setting<Integer> secondColor = register(Setting.builder(Integer.class, "second-color")
         .description("Bottom colour of the gradient.")
         .defaultValue(0xFF8B5CF6).asColor()
-        .visible(() -> gradient.get()).build());
+        .visible(() -> colorMode.get() == ColorMode.COLORS && gradient.get()).build());
 
     private final Setting<Integer> disabledColor = register(Setting.builder(Integer.class, "disabled-color")
         .description("Colour for modules that are off.")
@@ -70,6 +75,17 @@ public class ActiveModules extends HudModule {
     @Override
     protected int defaultY(int screenH, int h) {
         return 2;
+    }
+
+    private static int categoryColor(Module m) {
+        return switch (m.category) {
+            case RENDER -> 0xFF8B9CFF;
+            case MOVEMENT -> 0xFF66E07A;
+            case COMBAT -> 0xFFFF7A7A;
+            case PLAYER -> 0xFFFFC94A;
+            case WORLD -> 0xFF55E6FF;
+            case MISC -> 0xFFC49BFF;
+        };
     }
 
     private String label(Module module) {
@@ -116,6 +132,11 @@ public class ActiveModules extends HudModule {
             int color;
             if (!module.isEnabled()) {
                 color = disabledColor.get();
+            } else if (colorMode.get() == ColorMode.RAINBOW) {
+                float hue = ((System.currentTimeMillis() % 5000) / 5000f) + i * 0.04f;
+                color = 0xFF000000 | (java.awt.Color.HSBtoRGB(hue, 0.55f, 1f) & 0xFFFFFF);
+            } else if (colorMode.get() == ColorMode.BY_CATEGORY) {
+                color = categoryColor(module);
             } else if (gradient.get() && enabledCount > 1) {
                 color = Theme.mix(activeColor.get(), secondColor.get(), i / (float) (enabledCount - 1));
             } else {

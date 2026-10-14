@@ -15,6 +15,16 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import dev.novautils.NovaUtils;
+import dev.novautils.utils.Storage;
+
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +61,17 @@ public class Search extends Module {
     private int passes;
     private final Map<Kind, String> names = new HashMap<>();
 
+    /** A block you asked for with .search add (saved in novautils_search.json). */
+    public static final class Custom {
+        public String id;
+        public int color;
+    }
+
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final int[] PALETTE = {0xFFFF8A3D, 0xFF4DD2FF, 0xFFFF5EA8, 0xFF7CFF6B, 0xFFFFE14D, 0xFFB48CFF};
+    private final List<Custom> customs = new ArrayList<>();
+    private final List<Kind> customKinds = new ArrayList<>();
+
     private final Map<Long, List<Hit>> found = new HashMap<>();
     private final List<Long> queue = new ArrayList<>();
     private Object lastLevel;
@@ -64,6 +85,7 @@ public class Search extends Module {
         kind("dragon-egg", 0x80B040FF, true, "dragon_egg");
         kind("budding-amethyst", 0x60C080FF, false, "budding_amethyst");
         kind("conduits", 0x8040A0FF, false, "conduit");
+        loadCustoms();
     }
 
     private void kind(String name, int color, boolean on, String... ids) {
@@ -85,8 +107,99 @@ public class Search extends Module {
                         .ifPresent(b -> byBlock.put(b, k));
                 }
             }
+            for (Kind k : customKinds) {
+                for (String id : k.ids()) {
+                    net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(id);
+                    if (rl != null) BuiltInRegistries.BLOCK.getOptional(rl).ifPresent(b -> byBlock.put(b, k));
+                }
+            }
         }
         return byBlock.get(state.getBlock());
+    }
+
+    private java.nio.file.Path customFile() {
+        return Storage.configDir().resolve("novautils_search.json");
+    }
+
+    private void loadCustoms() {
+        java.nio.file.Path file = customFile();
+        if (!Files.exists(file)) return;
+        try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            List<Custom> loaded = GSON.fromJson(r, new TypeToken<List<Custom>>() {}.getType());
+            if (loaded != null) for (Custom c : loaded) if (c != null && c.id != null) customs.add(c);
+        } catch (java.io.IOException | RuntimeException e) {
+            NovaUtils.LOG.error("Failed to load custom search blocks", e);
+        }
+        rebuildCustoms();
+    }
+
+    private void saveCustoms() {
+        try {
+            Files.createDirectories(customFile().getParent());
+            try (Writer w = Files.newBufferedWriter(customFile(), StandardCharsets.UTF_8)) {
+                GSON.toJson(customs, w);
+            }
+        } catch (java.io.IOException e) {
+            NovaUtils.LOG.error("Failed to save custom search blocks", e);
+        }
+    }
+
+    /** Rebuilds the lookup after the custom list changed and rescans what is loaded. */
+    private void rebuildCustoms() {
+        customKinds.clear();
+        for (Custom c : customs) {
+            Kind k = new Kind(new String[]{c.id},
+                Setting.builder(Boolean.class, "custom").defaultValue(true).build(),
+                Setting.builder(Integer.class, "custom-color").defaultValue(c.color).asColor().build());
+            customKinds.add(k);
+            names.put(k, c.id.replace("minecraft:", ""));
+        }
+        byBlock.clear();
+        found.clear();
+        known.clear();
+        queue.clear();
+        primed = false;
+        passes = 0;
+    }
+
+    /** .search add: id with or without "minecraft:", optional hex colour. Returns an error message or null. */
+    public String addCustom(String id, Integer color) {
+        net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(id.contains(":") ? id : "minecraft:" + id);
+        if (rl == null || BuiltInRegistries.BLOCK.getOptional(rl).isEmpty()) return "No block called " + id;
+        String full = rl.toString();
+        customs.removeIf(c -> c.id.equals(full));
+        Custom c = new Custom();
+        c.id = full;
+        c.color = color != null ? color : PALETTE[customs.size() % PALETTE.length];
+        customs.add(c);
+        saveCustoms();
+        rebuildCustoms();
+        setEnabled(true);
+        return null;
+    }
+
+    public boolean removeCustom(String id) {
+        String full = id.contains(":") ? id : "minecraft:" + id;
+        boolean removed = customs.removeIf(c -> c.id.equals(full));
+        if (removed) {
+            saveCustoms();
+            rebuildCustoms();
+        }
+        return removed;
+    }
+
+    public int clearCustoms() {
+        int n = customs.size();
+        customs.clear();
+        saveCustoms();
+        rebuildCustoms();
+        return n;
+    }
+
+    public List<String> listCustoms() {
+        List<String> out = new ArrayList<>();
+        for (Custom c : customs) out.add(c.id + "  #" + String.format("%06X", c.color & 0xFFFFFF));
+        return out;
     }
 
     @Override
@@ -202,16 +315,22 @@ public class Search extends Module {
     public void onRenderHud(net.minecraft.client.gui.GuiGraphics g, float delta) {
         if (!showCount.get() || found.isEmpty()) return;
         Map<Kind, Integer> counts = new java.util.LinkedHashMap<>();
-        for (Kind k : kinds) counts.put(k, 0);
+        for (Kind k : allKinds()) counts.put(k, 0);
         for (List<Hit> hits : found.values()) for (Hit h : hits) counts.merge(h.kind(), 1, Integer::sum);
         int y = g.guiHeight() / 2 - 20;
-        for (Kind k : kinds) {
+        for (Kind k : allKinds()) {
             int n = counts.get(k);
             if (n == 0 || !k.shown().get()) continue;
             String t = names.get(k) + ": " + n;
             g.drawString(mc.font, t, 4, y, k.color().get() | 0xFF000000, true);
             y += mc.font.lineHeight + 1;
         }
+    }
+
+    private List<Kind> allKinds() {
+        List<Kind> all = new ArrayList<>(kinds);
+        all.addAll(customKinds);
+        return all;
     }
 
     /** Number of matching blocks currently known (for tests and the HUD). */

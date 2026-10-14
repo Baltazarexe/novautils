@@ -131,6 +131,9 @@ public class ModuleManager {
         register(new dev.novautils.modules.render.HitsToKill());
         register(new dev.novautils.modules.render.HealthBars());
         register(new dev.novautils.modules.render.FallPredict());
+        register(new dev.novautils.modules.render.BlockHighlight());
+        register(new dev.novautils.modules.render.TargetHud());
+        register(new dev.novautils.modules.render.Compass());
         register(new dev.novautils.modules.render.ChunkBorders());
         register(new StorageEsp());
         register(new Waypoints());
@@ -206,6 +209,7 @@ public class ModuleManager {
         register(new dev.novautils.modules.world.AutoFarm());
         register(new dev.novautils.modules.world.AutoSmelt());
         register(new dev.novautils.modules.world.AutoCompact());
+        register(new dev.novautils.modules.world.GhostHand());
         register(new dev.novautils.modules.world.AutoTunnel());
         register(new dev.novautils.modules.world.AutoBuild());
 
