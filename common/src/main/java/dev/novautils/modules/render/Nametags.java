@@ -169,9 +169,9 @@ public class Nametags extends Module {
         return Math.max(0, w - 4);
     }
 
-    private static void drawInfo(GuiGraphicsExtractor g, List<Object[]> parts, int x, int y) {
+    private static void drawInfo(GuiGraphicsExtractor g, List<Object[]> parts, int x, int y, boolean shadow) {
         for (Object[] p : parts) {
-            g.text(mc.font, (String) p[0], x, y, (int) p[1], true);
+            g.text(mc.font, (String) p[0], x, y, (int) p[1], shadow);
             x += mc.font.width((String) p[0]) + 4;
         }
     }
@@ -217,39 +217,53 @@ public class Nametags extends Module {
         return String.format(Locale.ROOT, "%.1f", l.getHealth() + l.getAbsorptionAmount());
     }
 
-    /** Card: [icon] name ........ info / health bar. Anchored with its bottom edge at 0. */
+    /**
+     * Card: a translucent rounded box with a hairline border. Name centred on top, a smaller
+     * second line (health, ping, distance) under it, a thin rounded health bar at the bottom, and
+     * the held item just outside on the left. Anchored with its bottom edge at 0.
+     */
     private void drawCard(GuiGraphicsExtractor g, Entity e) {
         LivingEntity l = e instanceof LivingEntity le ? le : null;
         Component n = name(e);
         List<Object[]> parts = info(e);
         boolean bar = l != null && (health.get() == Health.BAR || health.get() == Health.BAR_AND_NUMBER);
         boolean num = l != null && (health.get() == Health.NUMBER || health.get() == Health.BAR_AND_NUMBER);
-        if (num) parts.add(0, new Object[]{hpText(l) + "❤", HealthDisplay.color(l.getHealth() / Math.max(1f, l.getMaxHealth()))});
+        if (num) parts.add(0, new Object[]{"❤ " + hpText(l), HealthDisplay.color(l.getHealth() / Math.max(1f, l.getMaxHealth()))});
         ItemStack held = heldItem.get() && l != null ? l.getMainHandItem() : ItemStack.EMPTY;
 
-        int icon = held.isEmpty() ? 0 : 12;
-        int nameW = mc.font.width(n), infoW = width(parts);
-        int w = Math.max(70, icon + nameW + (infoW > 0 ? infoW + 8 : 0) + 10);
-        int h = bar ? 19 : 14;
+        final float small = 0.75f;
+        int nameW = mc.font.width(n);
+        int infoW = Math.round(width(parts) * small);
+        int w = Math.max(56, Math.max(nameW, infoW) + 14);
+        int h = 4 + 9 + (infoW > 0 ? 8 : 0) + (bar ? 5 : 2);
         int x = -w / 2, y = -h;
 
         float bg = background.get().floatValue();
-        Theme.softShadow(g, x, y, w, h, 4, 0.35f * bg);
-        Theme.rounded(g, x, y, w, h, 4, Theme.alpha(0xFF101216, bg));
-        Theme.rounded(g, x, y, 2, h, 1, relationColor(e));
+        Theme.softShadow(g, x, y, w, h, 4, 0.3f * bg);
+        Theme.rounded(g, x, y, w, h, 4, Theme.alpha(0xFF0D0E12, bg * 0.85f));
+        // hairline border, and a short accent under the name in the relation colour
+        Theme.border(g, x, y, w, h, Theme.alpha(0xFFFFFFFF, 0.08f + 0.06f * bg));
+        int accent = relationColor(e);
+        g.fill(-Math.min(nameW, w - 14) / 2, y + 13, Math.min(nameW, w - 14) / 2, y + 14, Theme.alpha(accent, 0.55f));
 
-        int tx = x + 5;
+        g.text(mc.font, n, -nameW / 2, y + 3, 0xFFFFFFFF, false);
+
+        if (infoW > 0) {
+            g.pose().pushMatrix();
+            g.pose().translate(-infoW / 2f, y + 15.5f);
+            g.pose().scale(small, small);
+            drawInfo(g, parts, 0, 0, false);
+            g.pose().popMatrix();
+        }
+        if (bar) HealthDisplay.bar(g, x + 4, y + h - 4, w - 8, 2, l, false, 1f);
+
         if (!held.isEmpty()) {
             g.pose().pushMatrix();
-            g.pose().translate(tx, y + 2);
-            g.pose().scale(0.625f, 0.625f);
+            g.pose().translate(x - 15, y + h / 2f - 6.5f);
+            g.pose().scale(0.8f, 0.8f);
             g.item(held, 0, 0);
             g.pose().popMatrix();
-            tx += icon;
         }
-        g.text(mc.font, n, tx, y + 3, 0xFFFFFFFF, true);
-        if (infoW > 0) drawInfo(g, parts, x + w - 5 - infoW, y + 3);
-        if (bar) HealthDisplay.bar(g, x + 5, y + h - 5, w - 10, 2, l, false, 1f);
     }
 
     /** Classic: one line on a strip, with a thin bar under it. */
@@ -265,7 +279,7 @@ public class Nametags extends Module {
         int x = -w / 2, y = -12;
         g.fill(x, y, x + w, y + 11, Theme.alpha(0xFF000000, background.get().floatValue() * 0.75f));
         g.text(mc.font, n, x + 3, y + 2, 0xFFFFFFFF, true);
-        if (infoW > 0) drawInfo(g, parts, x + 3 + nameW + 4, y + 2);
+        if (infoW > 0) drawInfo(g, parts, x + 3 + nameW + 4, y + 2, true);
         if (bar) HealthDisplay.bar(g, x, y + 11, w, 1, l, false, 1f);
     }
 
@@ -277,6 +291,6 @@ public class Nametags extends Module {
         int nameW = mc.font.width(n), infoW = width(parts);
         int w = nameW + (infoW > 0 ? infoW + 4 : 0);
         g.text(mc.font, n, -w / 2, -10, 0xFFFFFFFF, true);
-        if (infoW > 0) drawInfo(g, parts, -w / 2 + nameW + 4, -10);
+        if (infoW > 0) drawInfo(g, parts, -w / 2 + nameW + 4, -10, true);
     }
 }

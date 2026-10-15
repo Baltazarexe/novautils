@@ -150,7 +150,7 @@ public final class Commands {
             {"set <module> <setting> <value>", "change a setting"},
             {"reset <module>", "reset a module's settings"},
             {"wp add <name> [x y z] | del <name> | list | clear", "waypoints"},
-            {"search add <block> [hex] | del <block> | list | clear", "your own blocks for Search"},
+            {"search add [block|#tag] [hex] | mob add [mob] | del | list", "your own blocks and mobs for Search"},
             {"friend add|del|list [name]", "friends"},
             {"coords", "copy your coordinates"},
             {"profile save|load|del|list [name]", "whole-config profiles"},
@@ -210,28 +210,43 @@ public final class Commands {
         throw new IllegalArgumentException(m.name + " has no setting " + name);
     }
 
+    /**
+     * .search add [block | #tag] [hex]       - blocks (nothing = the block you look at; #c:ores = every ore)
+     * .search mob add [mob | #tag] [hex]     - mobs (nothing = the mob you look at)
+     * .search del <id> | list | clear
+     */
     private static void search(String[] a) {
-        need(a, 2, "search add|del|list|clear");
+        need(a, 2, "search add|mob|del|list|clear");
         var s = ModuleManager.get().get(dev.novautils.modules.render.Search.class);
-        switch (a[1].toLowerCase(Locale.ROOT)) {
+        String sub = a[1].toLowerCase(Locale.ROOT);
+        boolean mob = sub.equals("mob") || sub.equals("mobs");
+        if (mob) {
+            a = java.util.Arrays.copyOfRange(a, 1, a.length);
+            sub = a.length >= 2 ? a[1].toLowerCase(Locale.ROOT) : "list";
+        }
+        switch (sub) {
             case "add" -> {
-                need(a, 3, "search add <block> [hex colour]");
+                String id = a.length >= 3 ? a[2].toLowerCase(Locale.ROOT) : (mob ? s.lookedAtEntity() : s.lookedAtBlock());
+                if (id == null) {
+                    error(mob ? "Look at a mob, or: " + PREFIX + "search mob add <mob>" : "Look at a block, or: " + PREFIX + "search add <block>");
+                    return;
+                }
                 Integer color = null;
                 if (a.length >= 4) color = 0x80000000 | (Integer.parseInt(a[3].replace("#", ""), 16) & 0xFFFFFF);
-                String err = s.addCustom(a[2].toLowerCase(Locale.ROOT), color);
-                say(err != null ? err : "Search now looks for " + a[2]);
+                String err = mob ? s.addEntity(id, color) : s.addCustom(id, color);
+                say(err != null ? err : "Search now looks for " + id);
             }
             case "del", "remove" -> {
-                need(a, 3, "search del <block>");
+                need(a, 3, "search del <id>");
                 say(s.removeCustom(a[2].toLowerCase(Locale.ROOT)) ? "Removed" : "Not in your list: " + a[2]);
             }
-            case "clear" -> say("Removed " + s.clearCustoms() + " blocks");
+            case "clear" -> say("Removed " + s.clearCustoms() + " entries");
             case "list" -> {
                 var lines = s.listCustoms();
-                if (lines.isEmpty()) say("No custom blocks (" + PREFIX + "search add <block>)");
+                if (lines.isEmpty()) say("Nothing custom yet (" + PREFIX + "search add <block>, " + PREFIX + "search mob add <mob>)");
                 for (String l : lines) say(l);
             }
-            default -> error("usage: " + PREFIX + "search add <block> [hex] | del <block> | list | clear");
+            default -> error("usage: " + PREFIX + "search add [block|#tag] [hex] | mob add [mob|#tag] [hex] | del <id> | list | clear");
         }
     }
 

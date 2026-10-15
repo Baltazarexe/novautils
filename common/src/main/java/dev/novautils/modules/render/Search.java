@@ -66,12 +66,19 @@ public class Search extends Module {
     public static final class Custom {
         public String id;
         public int color;
+        /** true = a mob / entity type instead of a block. */
+        public boolean entity;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final int[] PALETTE = {0xFFFF8A3D, 0xFF4DD2FF, 0xFFFF5EA8, 0xFF7CFF6B, 0xFFFFE14D, 0xFFB48CFF};
     private final List<Custom> customs = new ArrayList<>();
     private final List<Kind> customKinds = new ArrayList<>();
+    private final List<Kind> entityKinds = new ArrayList<>();
+    private final Map<net.minecraft.world.entity.EntityType<?>, Kind> byEntity = new HashMap<>();
+    private record EntityHit(net.minecraft.world.entity.Entity entity, Kind kind) {}
+    private final List<EntityHit> entityHits = new ArrayList<>();
+    private final java.util.Set<Integer> seenEntities = new java.util.HashSet<>();
 
     private final Map<Long, List<Hit>> found = new HashMap<>();
     private final List<Long> queue = new ArrayList<>();
@@ -110,6 +117,13 @@ public class Search extends Module {
             }
             for (Kind k : customKinds) {
                 for (String id : k.ids()) {
+                    if (id.startsWith("#")) {
+                        net.minecraft.resources.Identifier tagId = net.minecraft.resources.Identifier.tryParse(id.substring(1));
+                        if (tagId == null) continue;
+                        var tag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, tagId);
+                        for (Block b : BuiltInRegistries.BLOCK) if (b.defaultBlockState().is(tag)) byBlock.putIfAbsent(b, k);
+                        continue;
+                    }
                     net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(id);
                     if (rl != null) BuiltInRegistries.BLOCK.getOptional(rl).ifPresent(b -> byBlock.put(b, k));
                 }
@@ -148,11 +162,15 @@ public class Search extends Module {
     /** Rebuilds the lookup after the custom list changed and rescans what is loaded. */
     private void rebuildCustoms() {
         customKinds.clear();
+        entityKinds.clear();
+        byEntity.clear();
+        entityHits.clear();
+        seenEntities.clear();
         for (Custom c : customs) {
             Kind k = new Kind(new String[]{c.id},
                 Setting.builder(Boolean.class, "custom").defaultValue(true).build(),
                 Setting.builder(Integer.class, "custom-color").defaultValue(c.color).asColor().build());
-            customKinds.add(k);
+            (c.entity ? entityKinds : customKinds).add(k);
             names.put(k, c.id.replace("minecraft:", ""));
         }
         byBlock.clear();
@@ -163,14 +181,50 @@ public class Search extends Module {
         passes = 0;
     }
 
-    /** .search add: id with or without "minecraft:", optional hex colour. Returns an error message or null. */
+    private static String full(String id) {
+        if (id.startsWith("#")) return "#" + (id.contains(":") ? id.substring(1) : "minecraft:" + id.substring(1));
+        return id.contains(":") ? id : "minecraft:" + id;
+    }
+
+    /** .search add: a block id or #tag (ex. #c:ores), optional hex colour. Returns an error message or null. */
     public String addCustom(String id, Integer color) {
-        net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(id.contains(":") ? id : "minecraft:" + id);
-        if (rl == null || BuiltInRegistries.BLOCK.getOptional(rl).isEmpty()) return "No block called " + id;
-        String full = rl.toString();
-        customs.removeIf(c -> c.id.equals(full));
+        String full = full(id);
+        if (full.startsWith("#")) {
+            net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(full.substring(1));
+            if (rl == null) return "Bad tag " + id;
+            var tag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, rl);
+            int n = 0;
+            for (Block b : BuiltInRegistries.BLOCK) if (b.defaultBlockState().is(tag)) n++;
+            if (n == 0) return "No blocks in tag " + id;
+        } else {
+            net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(full);
+            if (rl == null || BuiltInRegistries.BLOCK.getOptional(rl).isEmpty()) return "No block called " + id;
+        }
+        return put(full, color, false);
+    }
+
+    /** .search mob add: an entity id or #tag, optional hex colour. */
+    public String addEntity(String id, Integer color) {
+        String full = full(id);
+        if (full.startsWith("#")) {
+            net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(full.substring(1));
+            if (rl == null) return "Bad tag " + id;
+            var tag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ENTITY_TYPE, rl);
+            int n = 0;
+            for (var t : BuiltInRegistries.ENTITY_TYPE) if (t.builtInRegistryHolder().is(tag)) n++;
+            if (n == 0) return "No mobs in tag " + id;
+        } else {
+            net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(full);
+            if (rl == null || BuiltInRegistries.ENTITY_TYPE.getOptional(rl).isEmpty()) return "No mob called " + id;
+        }
+        return put(full, color, true);
+    }
+
+    private String put(String full, Integer color, boolean entity) {
+        customs.removeIf(c -> c.id.equals(full) && c.entity == entity);
         Custom c = new Custom();
         c.id = full;
+        c.entity = entity;
         c.color = color != null ? color : PALETTE[customs.size() % PALETTE.length];
         customs.add(c);
         saveCustoms();
@@ -179,8 +233,73 @@ public class Search extends Module {
         return null;
     }
 
+    /** Id of the block under the crosshair, for ".search add" with nothing after it. */
+    public String lookedAtBlock() {
+        if (mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult b && b.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            return BuiltInRegistries.BLOCK.getKey(mc.level.getBlockState(b.getBlockPos()).getBlock()).toString();
+        }
+        return null;
+    }
+
+    /** Id of the mob under the crosshair (or the nearest one in front of you, up to 64 blocks). */
+    public String lookedAtEntity() {
+        net.minecraft.world.entity.Entity e = mc.crosshairPickEntity;
+        if (e == null && mc.player != null) {
+            var eye = mc.player.getEyePosition();
+            var end = eye.add(mc.player.getLookAngle().scale(64));
+            double best = Double.MAX_VALUE;
+            for (var x : mc.level.getEntities(mc.player, new net.minecraft.world.phys.AABB(eye, end).inflate(1), en -> !en.isSpectator())) {
+                var hit = x.getBoundingBox().inflate(0.3).clip(eye, end);
+                if (hit.isPresent() && hit.get().distanceTo(eye) < best) {
+                    best = hit.get().distanceTo(eye);
+                    e = x;
+                }
+            }
+        }
+        return e == null ? null : BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString();
+    }
+
+    private Kind entityKindOf(net.minecraft.world.entity.Entity e) {
+        if (entityKinds.isEmpty()) return null;
+        if (byEntity.isEmpty()) {
+            for (Kind k : entityKinds) {
+                for (String id : k.ids()) {
+                    if (id.startsWith("#")) {
+                        net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(id.substring(1));
+                        if (rl == null) continue;
+                        var tag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ENTITY_TYPE, rl);
+                        for (var t : BuiltInRegistries.ENTITY_TYPE) if (t.builtInRegistryHolder().is(tag)) byEntity.putIfAbsent(t, k);
+                    } else {
+                        net.minecraft.resources.Identifier rl = net.minecraft.resources.Identifier.tryParse(id);
+                        if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(t -> byEntity.put(t, k));
+                    }
+                }
+            }
+        }
+        return byEntity.get(e.getType());
+    }
+
+    /** Custom mobs currently loaded, refreshed every tick; new ones (after the first look) get a toast. */
+    private void scanEntities() {
+        entityHits.clear();
+        if (entityKinds.isEmpty()) return;
+        java.util.Set<Integer> now = new java.util.HashSet<>();
+        for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
+            if (e == mc.player || !e.isAlive()) continue;
+            Kind k = entityKindOf(e);
+            if (k == null) continue;
+            entityHits.add(new EntityHit(e, k));
+            now.add(e.getId());
+            if (!seenEntities.contains(e.getId()) && primed && alert.get()) {
+                dev.novautils.gui.Toasts.push("Found " + names.get(k) + " at " + e.blockPosition().getX() + " " + e.blockPosition().getY() + " " + e.blockPosition().getZ(), k.color().get() | 0xFF000000);
+            }
+        }
+        seenEntities.clear();
+        seenEntities.addAll(now);
+    }
+
     public boolean removeCustom(String id) {
-        String full = id.contains(":") ? id : "minecraft:" + id;
+        String full = full(id);
         boolean removed = customs.removeIf(c -> c.id.equals(full));
         if (removed) {
             saveCustoms();
@@ -199,7 +318,7 @@ public class Search extends Module {
 
     public List<String> listCustoms() {
         List<String> out = new ArrayList<>();
-        for (Custom c : customs) out.add(c.id + "  #" + String.format("%06X", c.color & 0xFFFFFF));
+        for (Custom c : customs) out.add((c.entity ? "[mob] " : "") + c.id + "  #" + String.format("%06X", c.color & 0xFFFFFF));
         return out;
     }
 
@@ -254,6 +373,7 @@ public class Search extends Module {
     @Override
     public void onTick() {
         if (mc.level == null || mc.player == null) return;
+        scanEntities();
         if (mc.level != lastLevel) {
             lastLevel = mc.level;
             known.clear();
@@ -294,9 +414,19 @@ public class Search extends Module {
 
     @Override
     public void onRenderWorld(RenderContext context) {
-        if (found.isEmpty() || mc.player == null) return;
+        if ((found.isEmpty() && entityHits.isEmpty()) || mc.player == null) return;
         Vec3 cam = context.cameraPos();
         Vec3 start = cam.add(mc.player.getLookAngle().scale(0.8));
+        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        for (EntityHit h : entityHits) {
+            int c = h.kind().color().get();
+            var e = h.entity();
+            AABB box = e.getBoundingBox().move(e.getPosition(partial).subtract(e.position()));
+            RenderUtils.world(context, (pose, buffer) -> {
+                RenderUtils.drawBox(pose, buffer, box, (c & 0xFFFFFF) | 0x50000000);
+                if (tracers.get()) RenderUtils.drawRibbon(pose, buffer, start, box.getCenter(), 0.012, c | 0xFF000000);
+            });
+        }
         int drawn = 0;
         for (List<Hit> hits : found.values()) {
             for (Hit h : hits) {
@@ -314,10 +444,11 @@ public class Search extends Module {
 
     @Override
     public void onRenderHud(net.minecraft.client.gui.GuiGraphicsExtractor g, net.minecraft.client.DeltaTracker delta) {
-        if (!showCount.get() || found.isEmpty()) return;
+        if (!showCount.get() || (found.isEmpty() && entityHits.isEmpty())) return;
         Map<Kind, Integer> counts = new java.util.LinkedHashMap<>();
         for (Kind k : allKinds()) counts.put(k, 0);
         for (List<Hit> hits : found.values()) for (Hit h : hits) counts.merge(h.kind(), 1, Integer::sum);
+        for (EntityHit h : entityHits) counts.merge(h.kind(), 1, Integer::sum);
         int y = g.guiHeight() / 2 - 20;
         for (Kind k : allKinds()) {
             int n = counts.get(k);
@@ -331,7 +462,13 @@ public class Search extends Module {
     private List<Kind> allKinds() {
         List<Kind> all = new ArrayList<>(kinds);
         all.addAll(customKinds);
+        all.addAll(entityKinds);
         return all;
+    }
+
+    /** Custom mobs currently highlighted (for tests). */
+    public int entityCount() {
+        return entityHits.size();
     }
 
     /** Number of matching blocks currently known (for tests and the HUD). */

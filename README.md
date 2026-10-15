@@ -52,7 +52,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | `.profile save/load/del/list <name>` | save and switch whole setups ("2b2t", "mining"...) |
 | `.config export` / `.config import` | copy your config to the clipboard / load it from there |
 | `.wp add/del/list <name>` | waypoints |
-| `.search add <block> [hex] / del / list / clear` | your own blocks for Search |
+| `.search add [block or #tag] [hex]`, `.search mob add [mob] [hex]`, `del` / `list` / `clear` | your own blocks (or the one you look at) and mobs for Search |
 | `.friend add/del/list <name>` | friends |
 | `.find <item>` | which chest you left it in (ChestTracker) |
 | `.echest` | what's in your ender chest |

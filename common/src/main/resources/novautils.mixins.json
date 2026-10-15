@@ -40,6 +40,7 @@
     "ChatSendMixin",
     "EntityRenderStateMixin",
     "ChamsMixin",
+    "NametagHideMixin",
     "EspGlowColorMixin",
     "MinecraftUserAccessor",
     "MultiplayerScreenMixin",

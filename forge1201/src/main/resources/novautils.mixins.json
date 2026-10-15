@@ -11,6 +11,7 @@
     "ChatComponentMixin",
     "ChatSendMixin",
     "ChamsMixin",
+    "NametagHideMixin",
     "EspGlowColorMixin",
     "MinecraftUserAccessor",
     "MultiplayerScreenMixin",
