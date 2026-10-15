@@ -1007,6 +1007,37 @@ public class NovaClientGameTest implements FabricClientGameTest {
         });
         ctx.waitTicks(20);
         shot(ctx, "37_target_compass_rainbow");
+
+        // --- prettier ESP: two-tone chams through a wall + an arrow for the husk behind you, then glow coloured by health
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill 2 200 -1 2 202 2 minecraft:stone");
+        cmd(sp, "/summon minecraft:husk -5.5 200 0.5 {NoAI:1b,PersistenceRequired:1b,Health:5f}");
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 0");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            ((Setting<dev.novautils.modules.render.Esp.Mode>) setting(dev.novautils.modules.render.Esp.class, "mode")).set(dev.novautils.modules.render.Esp.Mode.CHAMS);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "two-tone")).set(true);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "passive-mobs")).set(true);
+            on(dev.novautils.modules.render.Esp.class);
+        });
+        ctx.waitTicks(15);
+        shot(ctx, "38_esp_two_tone_arrows");
+        check(ctx.computeOnClient(c -> {
+            var z = c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10), x -> "zombie".equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(x.getType()).getPath())).stream().findFirst().orElse(null);
+            return z != null && (dev.novautils.modules.render.Esp.chamsColor(z) & 0xFFFFFF) == 0xB48CFF;
+        }), "two-tone: the zombie behind the wall gets the behind-wall colour");
+        ctx.runOnClient(c -> {
+            ((Setting<dev.novautils.modules.render.Esp.Mode>) setting(dev.novautils.modules.render.Esp.class, "mode")).set(dev.novautils.modules.render.Esp.Mode.GLOW);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "two-tone")).set(false);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "color-by-health")).set(true);
+        });
+        cmd(sp, "/fill 2 200 -1 2 202 2 minecraft:air");
+        ctx.waitTicks(15);
+        shot(ctx, "39_esp_glow_health");
+        check(ctx.computeOnClient(c -> {
+            var h = c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10), x -> "husk".equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(x.getType()).getPath())).stream().findFirst().orElse(null);
+            return h != null && (h.getTeamColor() >> 16 & 0xFF) == 255 && (h.getTeamColor() >> 8 & 0xFF) < 200;
+        }), "glow takes the exact health colour (low health = red)");
         ctx.runOnClient(c -> {
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("home");
             for (Module m : ModuleManager.get().getModules()) for (Setting<?> s : m.getSettings()) if (!s.name.startsWith("hud-")) s.reset();

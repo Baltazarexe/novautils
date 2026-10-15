@@ -85,8 +85,29 @@ public class Esp extends Module {
         .visible(() -> mode.get() == Mode.CHAMS).build());
 
     private final Setting<Boolean> rainbow = register(Setting.builder(Boolean.class, "rainbow")
-        .description("Cycle the chams colour through the rainbow.").defaultValue(false)
-        .visible(() -> mode.get() == Mode.CHAMS).build());
+        .description("Cycle the colour through the rainbow (every style).").defaultValue(false).build());
+
+    private final Setting<Boolean> healthColor = register(Setting.builder(Boolean.class, "color-by-health")
+        .description("Colour by health: green when full, yellow, then red when nearly dead.").defaultValue(false)
+        .visible(() -> !rainbow.get()).build());
+
+    private final Setting<Boolean> twoTone = register(Setting.builder(Boolean.class, "two-tone")
+        .description("A different colour while the entity is behind a wall.").defaultValue(false).build());
+
+    private final Setting<Integer> behindColor = register(Setting.builder(Integer.class, "behind-wall-color")
+        .description("Colour used behind walls (two-tone).").defaultValue(0xFFB48CFF).asColor().visible(twoTone::get).build());
+
+    private final Setting<Boolean> fade = register(Setting.builder(Boolean.class, "distance-fade")
+        .description("Far away entities are drawn fainter, close ones stronger.").defaultValue(true).build());
+
+    private final Setting<Boolean> pulse = register(Setting.builder(Boolean.class, "pulse")
+        .description("Gently breathe the opacity.").defaultValue(false).build());
+
+    private final Setting<Boolean> arrows = register(Setting.builder(Boolean.class, "offscreen-arrows")
+        .description("Arrows around the crosshair pointing at highlighted entities you can't see on screen.").defaultValue(true).build());
+
+    private final Setting<Integer> arrowRadius = register(Setting.builder(Integer.class, "arrow-radius")
+        .description("How far from the crosshair the arrows sit.").defaultValue(60).range(25, 200).visible(arrows::get).build());
 
     private final Setting<Integer> thickness = register(Setting.builder(Integer.class, "thickness")
         .description("Line thickness.").defaultValue(1).range(1, 3)
@@ -109,10 +130,12 @@ public class Esp extends Module {
 
     private final Map<Kind, PlayerTeam> teams = new HashMap<>();
     private final Map<Integer, Entity> glowing = new HashMap<>();
+    /** Line of sight per entity id, refreshed every tick (two-tone). */
+    private final Map<Integer, Boolean> visible = new HashMap<>();
     private Scoreboard boundTo;
 
     public Esp() {
-        super("Esp", "Highlights entities through walls: corners, 2D/3D box, wireframe or glow.", Category.RENDER);
+        super("Esp", "Highlights entities through walls: corners, 2D/3D box, wireframe, chams or glow.", Category.RENDER);
         instance = this;
     }
 
@@ -128,15 +151,43 @@ public class Esp extends Module {
         if (mc.player == null) return 0;
         Kind kind = esp.kindOf(e);
         if (kind == null) return 0;
-        int rgb;
-        if (esp.rainbow.get()) {
+        int a = Math.max(26, Math.min(255, (int) (esp.chamsOpacity.get() * 255 * esp.alphaFor(e))));
+        return a << 24 | esp.rgbFor(e, kind);
+    }
+
+    /** EspGlowColorMixin: the exact outline colour for GLOW (RGB), or 0 to leave the game's. */
+    public static int glowColor(Entity e) {
+        Esp esp = instance;
+        if (esp == null || !esp.isEnabled() || !esp.glowing() || mc.player == null) return 0;
+        Kind kind = esp.kindOf(e);
+        return kind == null ? 0 : 0xFF000000 | esp.rgbFor(e, kind);
+    }
+
+    /** RGB for an entity: behind-wall colour, rainbow, health or its kind's colour. */
+    private int rgbFor(Entity e, Kind kind) {
+        if (twoTone.get() && !visible.getOrDefault(e.getId(), true)) return behindColor.get() & 0xFFFFFF;
+        if (rainbow.get()) {
             float hue = (System.currentTimeMillis() % 3600) / 3600f + e.getId() * 0.07f;
-            rgb = java.awt.Color.HSBtoRGB(hue, 0.65f, 1f) & 0xFFFFFF;
-        } else {
-            rgb = esp.colorOf(kind) & 0xFFFFFF;
+            return java.awt.Color.HSBtoRGB(hue, 0.65f, 1f) & 0xFFFFFF;
         }
-        int a = Math.max(26, Math.min(255, (int) (esp.chamsOpacity.get() * 255)));
-        return a << 24 | rgb;
+        if (healthColor.get() && e instanceof LivingEntity l) return healthRgb(l.getHealth() / Math.max(1f, l.getMaxHealth()));
+        return colorOf(kind) & 0xFFFFFF;
+    }
+
+    /** Opacity multiplier from distance fade and pulse, 0.2..1. */
+    private float alphaFor(Entity e) {
+        float a = 1f;
+        if (fade.get()) {
+            double d = mc.player.distanceTo(e);
+            a *= (float) Math.max(0.3, 1 - Math.max(0, d - 12) / Math.max(1, range.get() - 12));
+        }
+        if (pulse.get()) a *= 0.6f + 0.4f * (float) (0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 260.0 + e.getId()));
+        return Math.max(0.2f, a);
+    }
+
+    private static int healthRgb(float f) {
+        f = Math.max(0f, Math.min(1f, f));
+        return (int) (255 * Math.min(1f, 2f * (1f - f))) << 16 | (int) (220 * Math.min(1f, 2f * f)) << 8 | 0x40;
     }
 
     public static boolean chamsTextured() {
@@ -213,6 +264,12 @@ public class Esp extends Module {
     @Override
     public void onTick() {
         if (mc.level == null || mc.player == null) return;
+        visible.clear();
+        if (twoTone.get()) {
+            for (Entity e : mc.level.entitiesForRendering()) {
+                if (kindOf(e) != null) visible.put(e.getId(), mc.player.hasLineOfSight(e));
+            }
+        }
         if (!glowing()) {
             if (!glowing.isEmpty()) clearGlow();
             return;
@@ -251,15 +308,17 @@ public class Esp extends Module {
         for (Entity e : mc.level.entitiesForRendering()) {
             Kind kind = kindOf(e);
             if (kind == null) continue;
-            int c = colorOf(kind);
+            int c = rgbFor(e, kind);
+            float fa = alphaFor(e);
             AABB box = boxAt(e, partial);
             if (m == Mode.BOX_3D) {
-                int a = (int) (40 + 215 * fill.get());
-                int color = (Math.min(255, a) << 24) | (c & 0xFFFFFF);
+                int a = (int) ((40 + 215 * fill.get()) * fa);
+                int color = (Math.min(255, a) << 24) | c;
                 RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
             } else {
                 double w = 0.008 * thickness.get();
-                RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawEdges(pose, buffer, box, c | 0xFF000000, w));
+                int color = Math.min(255, (int) (255 * fa)) << 24 | c;
+                RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawEdges(pose, buffer, box, color, w));
             }
         }
     }
@@ -282,22 +341,60 @@ public class Esp extends Module {
 
     /** A line with a dark 1px border so it reads on any background. */
     private static void line(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int color) {
-        g.fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, 0xA0000000);
+        g.fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, Theme.alpha(0xA0000000, ((color >>> 24) / 255f)));
         g.fill(x1, y1, x2, y2, color);
+    }
+
+    /** A filled triangle, drawn as one row of pixels at a time. */
+    private static void triangle(GuiGraphicsExtractor g, double ax, double ay, double bx, double by, double cx, double cy, int color) {
+        int top = (int) Math.floor(Math.min(ay, Math.min(by, cy))), bottom = (int) Math.ceil(Math.max(ay, Math.max(by, cy)));
+        double[][] edges = {{ax, ay, bx, by}, {bx, by, cx, cy}, {cx, cy, ax, ay}};
+        for (int y = top; y < bottom; y++) {
+            double sy = y + 0.5, lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+            for (double[] ed : edges) {
+                if ((sy < ed[1]) == (sy < ed[3])) continue;
+                double x = ed[0] + (sy - ed[1]) * (ed[2] - ed[0]) / (ed[3] - ed[1]);
+                lo = Math.min(lo, x);
+                hi = Math.max(hi, x);
+            }
+            if (hi > lo) g.fill((int) Math.round(lo), y, (int) Math.round(hi), y + 1, color);
+        }
+    }
+
+    /** An arrow around the crosshair pointing towards an entity that is off screen. */
+    private void arrow(GuiGraphicsExtractor g, Entity e, float partial, int color) {
+        Vec3 p = e.getPosition(partial);
+        double dx = p.x - mc.player.getX(), dz = p.z - mc.player.getZ();
+        double rel = Math.toRadians(net.minecraft.util.Mth.wrapDegrees(Math.toDegrees(Math.atan2(dz, dx)) - 90 - mc.player.getYRot()));
+        double sx = Math.sin(rel), sy = -Math.cos(rel);
+        double cx = g.guiWidth() / 2.0 + sx * arrowRadius.get(), cy = g.guiHeight() / 2.0 + sy * arrowRadius.get();
+        double px = -sy, py = sx;
+        // dark outline first, then the colour
+        triangle(g, cx + sx * 7.5, cy + sy * 7.5, cx - sx * 4.5 + px * 6, cy - sy * 4.5 + py * 6, cx - sx * 4.5 - px * 6, cy - sy * 4.5 - py * 6,
+            Theme.alpha(0xB0000000, ((color >>> 24) / 255f)));
+        triangle(g, cx + sx * 6, cy + sy * 6, cx - sx * 3.5 + px * 4.5, cy - sy * 3.5 + py * 4.5, cx - sx * 3.5 - px * 4.5, cy - sy * 3.5 - py * 4.5, color);
     }
 
     @Override
     public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker delta) {
-        if (!flat() || mc.level == null || mc.player == null || !ScreenSpace.begin()) return;
+        if ((!flat() && !arrows.get()) || mc.level == null || mc.player == null || !ScreenSpace.begin()) return;
         float partial = delta.getGameTimeDeltaPartialTick(false);
         int t = thickness.get();
         for (Entity e : mc.level.entitiesForRendering()) {
             Kind kind = kindOf(e);
             if (kind == null) continue;
+            int c = Math.min(255, (int) (255 * alphaFor(e))) << 24 | rgbFor(e, kind);
+            if (arrows.get()) {
+                double[] s = ScreenSpace.project(boxAt(e, partial).getCenter());
+                if (s == null || s[0] < 0 || s[1] < 0 || s[0] > g.guiWidth() || s[1] > g.guiHeight()) {
+                    arrow(g, e, partial, c);
+                    continue;
+                }
+            }
+            if (!flat()) continue;
             int[] r = screenRect(boxAt(e, partial));
             if (r == null || r[2] < 0 || r[3] < 0 || r[0] > g.guiWidth() || r[1] > g.guiHeight()) continue;
             int x1 = r[0], y1 = r[1], x2 = Math.max(r[2], x1 + 3), y2 = Math.max(r[3], y1 + 3);
-            int c = colorOf(kind) | 0xFF000000;
 
             if (fill.get() > 0) g.fill(x1, y1, x2, y2, Theme.alpha(c, fill.get().floatValue() * 0.6f));
             if (mode.get() == Mode.BOX_2D) {
@@ -317,18 +414,25 @@ public class Esp extends Module {
                 line(g, x2 - t, y2 - ly, x2, y2, c);
             }
 
+            int below = y2 + 3;
             if (healthBar.get() && e instanceof LivingEntity l) {
                 float f = Math.max(0f, Math.min(1f, l.getHealth() / l.getMaxHealth()));
-                int bx = x1 - 4, h = y2 - y1;
+                int bx = x1 - 5, h = y2 - y1;
                 int filled = Math.round(h * f);
-                int hc = 0xFF000000 | (int) (255 * Math.min(1f, 2f * (1f - f))) << 16 | (int) (220 * Math.min(1f, 2f * f)) << 8 | 0x40;
-                g.fill(bx - 1, y1 - 1, bx + 2, y2 + 1, 0xA0000000);
-                g.fill(bx, y2 - filled, bx + 1, y2, hc);
+                g.fill(bx - 1, y1 - 1, bx + 3, y2 + 1, 0xA0000000);
+                g.fill(bx, y2 - filled, bx + 2, y2, 0xFF000000 | healthRgb(f));
+                int armor = l.getArmorValue();
+                if (armor > 0) {
+                    int w = Math.round((x2 - x1) * Math.min(1f, armor / 20f));
+                    g.fill(x1 - 1, y2 + 2, x2 + 1, y2 + 5, 0xA0000000);
+                    g.fill(x1, y2 + 3, x1 + w, y2 + 4, 0xFF5AA0FF);
+                    below = y2 + 7;
+                }
             }
             if (info.get()) {
                 String text = e.getName().getString() + " " + Math.round(mc.player.distanceTo(e)) + "m";
                 int tw = mc.font.width(text);
-                g.text(mc.font, text, (x1 + x2) / 2 - tw / 2, y2 + 3, 0xFFFFFFFF, true);
+                g.text(mc.font, text, (x1 + x2) / 2 - tw / 2, below, 0xFFFFFFFF, true);
             }
         }
     }

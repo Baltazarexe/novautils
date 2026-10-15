@@ -97,7 +97,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | BreakIndicator | Shows the progress of blocks being broken, yours and other players'. |
 | HitsToKill | A mob's health and how many hits it still needs. |
 | HealthBars | Health bars over mobs and/or players (filter: mobs, players or both; hostile only). |
-| Esp styles | CORNERS, 2D box, 3D box, wireframe, CHAMS (through-wall model, solid/textured/rainbow) or glow. |
+| Esp styles | CORNERS, 2D box, 3D box, wireframe, CHAMS (through-wall model, solid/textured/rainbow) or glow. Plus colour by health, rainbow, two-tone (another colour behind walls), distance fade, pulse, glow in the exact colour, and arrows pointing at what is off screen. |
 | FallPredict | Where you'll land and how much fall damage it will do. |
 | ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |
