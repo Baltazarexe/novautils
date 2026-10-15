@@ -1403,6 +1403,8 @@ public class NovaClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        // hide the throwaway test window so it never gets in the way (-Dnovautils.showWindow to see it)
+        context.runOnClient(c -> { if (System.getProperty("novautils.showWindow") == null) org.lwjgl.sdl.SDLVideo.SDL_HideWindow(c.getWindow().handle()); });
         // silent test runs: master volume 0 (only this throwaway test instance, not your game)
         context.runOnClient(c -> c.options.getSoundSourceOptionInstance(net.minecraft.sounds.SoundSource.MASTER).set(0.0));
         try (TestSingleplayerContext sp = context.worldBuilder().create()) {

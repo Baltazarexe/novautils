@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Xray SEE_THROUGH with Sodium: draw every face of the blocks we keep (their neighbours are gone). */
 @Pseudo
-@Mixin(targets = "net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext")
+@Mixin(targets = {"net.caffeinemc.mods.sodium.client.render.frapi.render.AbstractBlockRenderContext", "net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext"})
 public abstract class SodiumXrayFaceMixin {
     @Inject(method = "isFaceCulled", at = @At("HEAD"), cancellable = true, require = 0)
     private void novautils$xrayFace(Direction face, CallbackInfoReturnable<Boolean> cir) {

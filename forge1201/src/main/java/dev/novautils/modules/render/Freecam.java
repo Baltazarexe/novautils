@@ -21,6 +21,7 @@ public class Freecam extends Module {
     private double x, y, z;
     private float yaw, pitch;
     private long lastFrame;
+    private boolean smartCullBefore = true;
 
     public Freecam() {
         super("Freecam", "Fly the camera freely while your body stays put.", Category.RENDER);
@@ -45,6 +46,13 @@ public class Freecam extends Module {
         yaw = mc.player.getYRot();
         pitch = mc.player.getXRot();
         lastFrame = 0;
+        smartCullBefore = mc.smartCull;
+    }
+
+    /** Occlusion culling starts from the camera; inside rock (or far from the body) it would hide the whole world. */
+    @Override
+    public void onDisable() {
+        mc.smartCull = smartCullBefore;
     }
 
     /** Entity.turn on the local player while active: the mouse turns the camera instead. */
@@ -66,6 +74,7 @@ public class Freecam extends Module {
         long now = System.nanoTime();
         double dt = lastFrame == 0 ? 0 : Math.min(0.1, (now - lastFrame) / 1e9);
         lastFrame = now;
+        mc.smartCull = false;
         if (PlatformCompat.currentScreen(mc) == null) {
             double f = (mc.options.keyUp.isDown() ? 1 : 0) - (mc.options.keyDown.isDown() ? 1 : 0);
             double s = (mc.options.keyLeft.isDown() ? 1 : 0) - (mc.options.keyRight.isDown() ? 1 : 0);

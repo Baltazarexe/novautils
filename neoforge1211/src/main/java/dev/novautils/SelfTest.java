@@ -52,6 +52,8 @@ public final class SelfTest {
     private static int inWorld;
     private static final Minecraft mc = Minecraft.getInstance();
 
+    private static boolean windowHidden;
+
     private SelfTest() {}
 
     private static void step(int waitTicks, Runnable action) {
@@ -111,6 +113,10 @@ public final class SelfTest {
     /** NovaUtilsForge's client tick, end phase. */
     public static void tick() {
         if (!ENABLED) return;
+        if (!windowHidden) {
+            windowHidden = true;
+            org.lwjgl.glfw.GLFW.glfwHideWindow(org.lwjgl.glfw.GLFW.glfwGetCurrentContext());
+        }
         if (!worldRequested) {
             if (!(mc.screen instanceof TitleScreen)) return;
             worldRequested = true;

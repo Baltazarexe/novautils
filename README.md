@@ -17,11 +17,11 @@ Grab the jar for your loader and Minecraft version from the
 
 | Minecraft | Fabric | NeoForge | Forge |
 |---|---|---|---|
-| 26.3 | `novautils-fabric-0.3.0-mc26.3.jar` | `novautils-neoforge-0.3.0-mc26.3.jar` | |
-| 26.2 | `novautils-fabric-0.3.0-mc26.2.jar` | | |
-| 26.1.2 | `novautils-fabric-0.3.0-mc26.1.2.jar` | `novautils-neoforge-0.3.0-mc26.1.2.jar` | |
-| 1.21.1 | | `novautils-neoforge-0.3.0-beta-mc1.21.1.jar` (beta) | |
-| 1.20.1 | | | `novautils-forge-0.3.0-mc1.20.1.jar` |
+| 26.3 | `novautils-fabric-0.3.1-mc26.3.jar` | `novautils-neoforge-0.3.1-mc26.3.jar` | |
+| 26.2 | `novautils-fabric-0.3.1-mc26.2.jar` | | |
+| 26.1.2 | `novautils-fabric-0.3.1-mc26.1.2.jar` | `novautils-neoforge-0.3.1-mc26.1.2.jar` | |
+| 1.21.1 | | `novautils-neoforge-0.3.1-beta-mc1.21.1.jar` (beta) | |
+| 1.20.1 | | | `novautils-forge-0.3.1-mc1.20.1.jar` |
 
 Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in your `mods` folder.
 

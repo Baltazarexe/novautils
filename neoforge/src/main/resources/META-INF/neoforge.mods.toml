@@ -2,7 +2,7 @@ license="MIT"
 
 [[mods]]
 modId="novautils"
-version="0.3.0"
+version="0.3.1"
 displayName="NovaUtils"
 authors="baltazar_exe"
 displayURL="https://github.com/Baltazarexe/novautils"
