@@ -910,6 +910,33 @@ public class NovaClientGameTest implements FabricClientGameTest {
             var h = c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10), x -> "husk".equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(x.getType()).getPath())).stream().findFirst().orElse(null);
             return h != null && (h.getTeamColor() >> 16 & 0xFF) == 255 && (h.getTeamColor() >> 8 & 0xFF) < 200;
         }), "glow takes the exact health colour (low health = red)");
+        // --- GearView: armour, held items and enchantments above a zombie dressed in enchanted gear
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/kill @e[type=!minecraft:player]");
+        cmd(sp, "/summon minecraft:zombie 4.5 200 0.5 {NoAI:1b,PersistenceRequired:1b,Silent:1b}");
+        ctx.waitTicks(3);
+        cmd(sp, "/item replace entity @e[type=minecraft:zombie,limit=1] armor.head with minecraft:diamond_helmet[minecraft:enchantments={protection:4,unbreaking:3}]");
+        cmd(sp, "/item replace entity @e[type=minecraft:zombie,limit=1] armor.chest with minecraft:diamond_chestplate[minecraft:enchantments={protection:4},minecraft:damage=300]");
+        cmd(sp, "/item replace entity @e[type=minecraft:zombie,limit=1] armor.legs with minecraft:iron_leggings");
+        cmd(sp, "/item replace entity @e[type=minecraft:zombie,limit=1] armor.feet with minecraft:diamond_boots[minecraft:enchantments={feather_falling:4}]");
+        cmd(sp, "/item replace entity @e[type=minecraft:zombie,limit=1] weapon.mainhand with minecraft:diamond_sword[minecraft:enchantments={sharpness:5,knockback:2,fire_aspect:2}]");
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 -10");
+        ctx.waitTicks(5);
+        ctx.runOnClient(c -> {
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.GearView.class, "mobs")).set(true);
+            on(dev.novautils.modules.render.GearView.class);
+        });
+        ctx.waitTicks(10);
+        shot(ctx, "40_gearview_short");
+        ctx.runOnClient(c -> {
+            ((Setting<dev.novautils.modules.render.GearView.Names>) setting(dev.novautils.modules.render.GearView.class, "enchantments")).set(dev.novautils.modules.render.GearView.Names.FULL);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.GearView.class, "durability-percent")).set(true);
+        });
+        ctx.waitTicks(5);
+        shot(ctx, "41_gearview_full");
+        check(ctx.computeOnClient(c -> c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10),
+            x -> !x.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).getEnchantments().isEmpty()).size() == 1), "GearView test zombie wears enchanted gear");
+
         ctx.runOnClient(c -> {
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("home");
             for (Module m : ModuleManager.get().getModules()) for (Setting<?> s : m.getSettings()) if (!s.name.startsWith("hud-")) s.reset();

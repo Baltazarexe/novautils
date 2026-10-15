@@ -87,6 +87,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`. |
 | BlockHighlight | Outlines the block you are looking at (rainbow option). |
 | TargetHud | Name, health, armour and distance of the creature you look at (works past survival reach). |
+| GearView | Armour, held items and enchantments (short tags or full names) above other players, with durability. |
 | Compass | A heading bar with your waypoints on it. |
 | GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
 | Tracers | Lines from your crosshair to nearby entities. |
