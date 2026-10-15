@@ -91,7 +91,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Compass | A heading bar with your waypoints on it. |
 | GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
 | Tracers | Lines from your crosshair to nearby entities. |
-| Nametags | Better name tags: health, ping, distance, totem pops. |
+| Nametags | Name tags in three styles (card with an animated health bar, classic, minimal): health, ping, distance, totem pops, held item. |
 | Waypoints | Named markers with distance, visible through walls. |
 | Minimap | A small map with you, mobs, players and waypoints. |
 | ShulkerPeek | Hover a shulker box to see what's inside. |

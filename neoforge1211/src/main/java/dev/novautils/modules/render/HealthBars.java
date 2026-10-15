@@ -1,9 +1,9 @@
 package dev.novautils.modules.render;
 
-import dev.novautils.gui.Theme;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
+import dev.novautils.utils.HealthDisplay;
 import dev.novautils.utils.ScreenSpace;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.Entity;
@@ -37,6 +37,12 @@ public class HealthBars extends Module {
     private final Setting<Boolean> numbers = register(Setting.builder(Boolean.class, "numbers")
         .description("Write the health over the bar.").defaultValue(true).build());
 
+    private final Setting<Boolean> ticks = register(Setting.builder(Boolean.class, "heart-ticks")
+        .description("A mark every two hearts on the bar.").defaultValue(true).build());
+
+    private final Setting<Integer> thickness = register(Setting.builder(Integer.class, "thickness")
+        .description("Bar height.").defaultValue(4).range(2, 8).build());
+
     private final Setting<Integer> range = register(Setting.builder(Integer.class, "range")
         .description("Only entities this close.").defaultValue(32).range(4, 128).build());
 
@@ -54,6 +60,7 @@ public class HealthBars extends Module {
         if (!player && target.get() == Target.PLAYERS) return false;
         if (!player && hostileOnly.get() && !(e instanceof Enemy)) return false;
         if (damagedOnly.get() && l.getHealth() >= l.getMaxHealth()) return false;
+        if (dev.novautils.modules.ModuleManager.get().get(Nametags.class).showsHealth(e)) return false;
         return mc.player.distanceTo(e) <= range.get();
     }
 
@@ -78,17 +85,16 @@ public class HealthBars extends Module {
             if (p == null) continue;
             double dist = mc.player.distanceTo(e);
             float size = (float) (scale.get() * Math.max(0.55, Math.min(1.0, 8.0 / Math.max(1.0, dist))));
-            int w = Math.round(40 * size), h = Math.max(2, Math.round(4 * size));
+            int w = Math.round(44 * size), h = Math.max(2, Math.round(thickness.get() * size));
             int x = (int) p[0] - w / 2, y = (int) p[1];
 
             float hp = e.getHealth() + e.getAbsorptionAmount();
-            float f = Math.max(0f, Math.min(1f, e.getHealth() / e.getMaxHealth()));
-            Theme.rounded(g, x - 1, y - 1, w + 2, h + 2, 1, 0xB0000000);
-            if (f > 0) g.fill(x, y, x + Math.max(1, Math.round(w * f)), y + h, color(f));
-            if (e.getAbsorptionAmount() > 0) g.fill(x, y, x + Math.min(w, Math.round(w * e.getAbsorptionAmount() / e.getMaxHealth())), y + 1, 0xFFFFD84A);
+            // animated: slides down, the lost part lingers as a pale ghost, absorption in gold
+            HealthDisplay.bar(g, x, y, w, h, e, ticks.get(), 1f);
             if (numbers.get() && size > 0.6f) {
                 String t = String.format(java.util.Locale.ROOT, "%.1f", hp);
-                g.drawString(mc.font, t, (int) p[0] - mc.font.width(t) / 2, y - 10, 0xFFFFFFFF, true);
+                int c = HealthDisplay.color(e.getHealth() / Math.max(1f, e.getMaxHealth()));
+                g.drawString(mc.font, t, (int) p[0] - mc.font.width(t) / 2, y - 10, c, true);
             }
         }
     }

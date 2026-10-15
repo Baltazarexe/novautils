@@ -1,30 +1,53 @@
 package dev.novautils.modules.render;
 
+import dev.novautils.gui.Theme;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
-import dev.novautils.render.RenderContext;
 import dev.novautils.settings.Setting;
-import dev.novautils.utils.RenderUtils;
+import dev.novautils.utils.Friends;
+import dev.novautils.utils.HealthDisplay;
+import dev.novautils.utils.ScreenSpace;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Bigger, more useful name tags that stay readable at any distance and show through walls:
- * health (coloured), ping, distance, how many totems a player has popped, and what they hold.
- * Replaces the vanilla tag while on (NametagMixin hides it).
+ * Name tags drawn on the HUD at each entity's position, in three looks:
+ * <ul>
+ *   <li>CARD - a rounded dark card with a coloured edge, the name, ping/distance on the right and
+ *       an animated health bar underneath.</li>
+ *   <li>CLASSIC - one line of text on a dark strip (name, health, ping, distance).</li>
+ *   <li>MINIMAL - just the text with a shadow.</li>
+ * </ul>
+ * Replaces the vanilla tag while on (NametagMixin hides it). Works the same on every version and
+ * with shaderpacks, since nothing is drawn in the world.
  */
 public class Nametags extends Module {
+    public enum Style { CARD, CLASSIC, MINIMAL }
+    public enum Health { BAR_AND_NUMBER, NUMBER, BAR, OFF }
+    public enum NameColor { TEAM, RELATION, WHITE }
+
+    private final Setting<Style> style = register(Setting.builder(Style.class, "style")
+        .description("CARD: rounded card with a health bar. CLASSIC: one line on a dark strip. MINIMAL: text only.")
+        .defaultValue(Style.CARD).build());
+
     private final Setting<Boolean> players = register(Setting.builder(Boolean.class, "players")
         .description("Tags on players.").defaultValue(true).build());
     private final Setting<Boolean> mobs = register(Setting.builder(Boolean.class, "mobs")
@@ -32,28 +55,36 @@ public class Nametags extends Module {
     private final Setting<Boolean> items = register(Setting.builder(Boolean.class, "items")
         .description("Tags on dropped items (name and count).").defaultValue(false).build());
 
-    private final Setting<Boolean> health = register(Setting.builder(Boolean.class, "health")
-        .description("Show health (absorption included).").defaultValue(true).build());
+    private final Setting<Health> health = register(Setting.builder(Health.class, "health")
+        .description("Health as a bar, a number, both, or not at all.").defaultValue(Health.BAR_AND_NUMBER).build());
+    private final Setting<NameColor> nameColor = register(Setting.builder(NameColor.class, "name-color")
+        .description("TEAM: the colour the server gives. RELATION: friends cyan, players red, mobs by type. WHITE.")
+        .defaultValue(NameColor.TEAM).build());
     private final Setting<Boolean> ping = register(Setting.builder(Boolean.class, "ping")
-        .description("Show player ping.").defaultValue(true).build());
+        .description("Player ping, green / yellow / red.").defaultValue(true).build());
     private final Setting<Boolean> distance = register(Setting.builder(Boolean.class, "distance")
-        .description("Show distance in blocks.").defaultValue(true).build());
+        .description("Distance in blocks.").defaultValue(true).build());
     private final Setting<Boolean> pops = register(Setting.builder(Boolean.class, "totem-pops")
-        .description("Show how many totems a player has popped.").defaultValue(true).build());
+        .description("How many totems a player has popped.").defaultValue(true).build());
     private final Setting<Boolean> heldItem = register(Setting.builder(Boolean.class, "held-item")
-        .description("Second line with the item in their main hand.").defaultValue(false).build());
+        .description("Small icon of the item in their hand.").defaultValue(true).build());
 
+    private final Setting<Double> background = register(Setting.builder(Double.class, "background")
+        .description("How dark the card / strip is.").defaultValue(0.75).range(0.0, 1.0)
+        .visible(() -> style.get() != Style.MINIMAL).build());
     private final Setting<Double> scale = register(Setting.builder(Double.class, "scale")
-        .description("Tag size.").defaultValue(1.0).range(0.5, 3.0).build());
+        .description("Tag size.").defaultValue(1.0).range(0.5, 2.0).build());
+    private final Setting<Boolean> shrink = register(Setting.builder(Boolean.class, "shrink-with-distance")
+        .description("Smaller tags for far entities, like real name tags.").defaultValue(true).build());
     private final Setting<Boolean> throughWalls = register(Setting.builder(Boolean.class, "through-walls")
-        .description("Draw tags through blocks.").defaultValue(true).build());
+        .description("Also tag entities you can't see.").defaultValue(true).build());
     private final Setting<Integer> maxDistance = register(Setting.builder(Integer.class, "max-distance")
         .description("Don't tag things further than this.").defaultValue(128).range(16, 512).build());
 
     private final Map<UUID, Integer> popCounts = new HashMap<>();
 
     public Nametags() {
-        super("Nametags", "Better name tags: health, ping, distance, totem pops.", Category.RENDER);
+        super("Nametags", "Better name tags: card style, animated health bar, ping, distance, totem pops.", Category.RENDER);
     }
 
     /** Whether vanilla's own tag should be hidden for this entity (NametagMixin). */
@@ -84,65 +115,167 @@ public class Nametags extends Module {
         for (Player p : mc.level.players()) if (p.isDeadOrDying()) popCounts.remove(p.getUUID());
     }
 
-    private static int healthColor(float hp, float max) {
-        float f = hp / Math.max(1f, max);
-        if (f > 0.66f) return 0x55FF55;
-        if (f > 0.33f) return 0xFFFF55;
-        return 0xFF5555;
-    }
-
-    private MutableComponent tagFor(Entity e) {
-        MutableComponent c = Component.empty();
-        if (e instanceof ItemEntity item) {
-            var stack = item.getItem();
-            c.append(stack.getHoverName().copy());
-            if (stack.getCount() > 1) c.append(Component.literal(" x" + stack.getCount()).withColor(0xAAAAAA));
-            return c;
-        }
-
-        if (dev.novautils.utils.Friends.isFriend(e)) c.append(Component.literal(e.getName().getString()).withColor(0x55FFFF));
-        else c.append(e.getDisplayName().copy());
-        if (e instanceof LivingEntity living && health.get()) {
-            float hp = living.getHealth() + living.getAbsorptionAmount();
-            c.append(Component.literal(String.format(" %.1f", hp)).withColor(healthColor(hp, living.getMaxHealth())));
-        }
-        if (e instanceof Player p) {
-            if (ping.get() && mc.getConnection() != null) {
-                var info = mc.getConnection().getPlayerInfo(p.getUUID());
-                if (info != null) c.append(Component.literal(" " + info.getLatency() + "ms").withColor(0xAAAAAA));
-            }
-            int popped = popCounts.getOrDefault(p.getUUID(), 0);
-            if (pops.get() && popped > 0) c.append(Component.literal(" -" + popped).withColor(0xFFAA00));
-        }
-        if (distance.get()) {
-            c.append(Component.literal(" " + Math.round(mc.player.distanceTo(e)) + "m").withColor(0x7F7F7F));
-        }
-        return c;
+    /** HealthBars skips entities whose tag already shows their health. */
+    public boolean showsHealth(Entity e) {
+        return isEnabled() && e instanceof LivingEntity && health.get() != Health.OFF && mc.player != null && wanted(e);
     }
 
     private boolean wanted(Entity e) {
-        if (e == mc.player || e.isInvisible()) return false;
+        if (e == mc.player || e.isInvisible() || e instanceof ArmorStand) return false;
+        if (mc.player.distanceTo(e) > maxDistance.get()) return false;
+        if (!throughWalls.get() && !mc.player.hasLineOfSight(e)) return false;
         if (e instanceof Player) return players.get();
         if (e instanceof ItemEntity) return items.get();
         return e instanceof LivingEntity && mobs.get();
     }
 
-    @Override
-    public void onRenderWorld(RenderContext context) {
-        if (mc.level == null || mc.player == null) return;
-        float partial = mc.getTimer().getGameTimeDeltaPartialTick(false);
-        double maxSq = maxDistance.get() * (double) maxDistance.get();
-        float s = scale.get().floatValue();
+    private int relationColor(Entity e) {
+        if (e instanceof Player p) return Friends.isFriend(p) ? 0xFF55E6FF : 0xFFFF6B6B;
+        if (e instanceof Enemy) return 0xFFFFA040;
+        return 0xFF66E07A;
+    }
 
-        for (Entity e : mc.level.entitiesForRendering()) {
-            if (!wanted(e) || mc.player.distanceToSqr(e) > maxSq) continue;
-            Vec3 top = e.getPosition(partial).add(0, e.getBbHeight() + 0.5, 0);
-            if (heldItem.get() && e instanceof LivingEntity living && !living.getMainHandItem().isEmpty()) {
-                Component held = living.getMainHandItem().getHoverName().copy().withColor(0xC0C0FF);
-                RenderUtils.label(context, top, held, s * 0.85f, throughWalls.get());
-                top = top.add(0, 0.28 * Math.max(1, mc.player.distanceTo(e) / 8) * s, 0);
+    private Component name(Entity e) {
+        return switch (nameColor.get()) {
+            case TEAM -> Friends.isFriend(e) ? Component.literal(e.getName().getString()).withColor(0x55E6FF) : e.getDisplayName();
+            case RELATION -> Component.literal(e.getName().getString()).withColor(relationColor(e) & 0xFFFFFF);
+            case WHITE -> Component.literal(e.getName().getString());
+        };
+    }
+
+    private static int pingColor(int ms) {
+        return ms < 80 ? 0xFF66E07A : ms < 160 ? 0xFFFFD050 : 0xFFFF5A5A;
+    }
+
+    /** Small grey info: "42ms 7m" (ping coloured), plus totem pops in orange. */
+    private List<Object[]> info(Entity e) {
+        List<Object[]> out = new ArrayList<>();
+        if (e instanceof Player p) {
+            int popped = popCounts.getOrDefault(p.getUUID(), 0);
+            if (pops.get() && popped > 0) out.add(new Object[]{"-" + popped, 0xFFFFAA00});
+            if (ping.get() && mc.getConnection() != null) {
+                var pi = mc.getConnection().getPlayerInfo(p.getUUID());
+                if (pi != null) out.add(new Object[]{pi.getLatency() + "ms", pingColor(pi.getLatency())});
             }
-            RenderUtils.label(context, top, tagFor(e), s, throughWalls.get());
         }
+        if (distance.get()) out.add(new Object[]{Math.round(mc.player.distanceTo(e)) + "m", 0xFF9196A4});
+        return out;
+    }
+
+    private static int width(List<Object[]> parts) {
+        int w = 0;
+        for (Object[] p : parts) w += mc.font.width((String) p[0]) + 4;
+        return Math.max(0, w - 4);
+    }
+
+    private static void drawInfo(GuiGraphics g, List<Object[]> parts, int x, int y) {
+        for (Object[] p : parts) {
+            g.drawString(mc.font, (String) p[0], x, y, (int) p[1], true);
+            x += mc.font.width((String) p[0]) + 4;
+        }
+    }
+
+    @Override
+    public void onRenderHud(GuiGraphics g, float delta) {
+        if (mc.level == null || mc.player == null || !ScreenSpace.begin()) return;
+        float partial = delta;
+        List<Entity> list = new ArrayList<>();
+        for (Entity e : mc.level.entitiesForRendering()) if (wanted(e)) list.add(e);
+        // far first, so near tags end up on top
+        list.sort(Comparator.comparingDouble(e -> -mc.player.distanceToSqr(e)));
+
+        for (Entity e : list) {
+            Vec3 top = e.getPosition(partial).add(0, e.getBbHeight() + 0.35, 0);
+            double[] p = ScreenSpace.project(top);
+            if (p == null || p[0] < -150 || p[1] < -60 || p[0] > g.guiWidth() + 150 || p[1] > g.guiHeight() + 60) continue;
+            float dist = mc.player.distanceTo(e);
+            float s = (float) (scale.get() * (shrink.get() ? Math.max(0.5, Math.min(1.0, 9.0 / Math.max(1.0, dist))) : 1.0));
+
+            g.pose().pushPose();
+            g.pose().translate((float) p[0], (float) p[1], 0);
+            g.pose().scale(s, s, 1);
+            if (e instanceof ItemEntity item) drawItem(g, item);
+            else switch (style.get()) {
+                case CARD -> drawCard(g, e);
+                case CLASSIC -> drawClassic(g, e);
+                case MINIMAL -> drawMinimal(g, e);
+            }
+            g.pose().popPose();
+        }
+    }
+
+    private void drawItem(GuiGraphics g, ItemEntity item) {
+        ItemStack stack = item.getItem();
+        String t = stack.getHoverName().getString() + (stack.getCount() > 1 ? " x" + stack.getCount() : "");
+        int w = mc.font.width(t);
+        if (style.get() != Style.MINIMAL) Theme.rounded(g, -w / 2 - 3, -11, w + 6, 11, 3, Theme.alpha(0xFF101216, background.get().floatValue()));
+        g.drawString(mc.font, t, -w / 2, -9, 0xFFE8EAF0, true);
+    }
+
+    private String hpText(LivingEntity l) {
+        return String.format(Locale.ROOT, "%.1f", l.getHealth() + l.getAbsorptionAmount());
+    }
+
+    /** Card: [icon] name ........ info / health bar. Anchored with its bottom edge at 0. */
+    private void drawCard(GuiGraphics g, Entity e) {
+        LivingEntity l = e instanceof LivingEntity le ? le : null;
+        Component n = name(e);
+        List<Object[]> parts = info(e);
+        boolean bar = l != null && (health.get() == Health.BAR || health.get() == Health.BAR_AND_NUMBER);
+        boolean num = l != null && (health.get() == Health.NUMBER || health.get() == Health.BAR_AND_NUMBER);
+        if (num) parts.add(0, new Object[]{hpText(l) + "❤", HealthDisplay.color(l.getHealth() / Math.max(1f, l.getMaxHealth()))});
+        ItemStack held = heldItem.get() && l != null ? l.getMainHandItem() : ItemStack.EMPTY;
+
+        int icon = held.isEmpty() ? 0 : 12;
+        int nameW = mc.font.width(n), infoW = width(parts);
+        int w = Math.max(70, icon + nameW + (infoW > 0 ? infoW + 8 : 0) + 10);
+        int h = bar ? 19 : 14;
+        int x = -w / 2, y = -h;
+
+        float bg = background.get().floatValue();
+        Theme.softShadow(g, x, y, w, h, 4, 0.35f * bg);
+        Theme.rounded(g, x, y, w, h, 4, Theme.alpha(0xFF101216, bg));
+        Theme.rounded(g, x, y, 2, h, 1, relationColor(e));
+
+        int tx = x + 5;
+        if (!held.isEmpty()) {
+            g.pose().pushPose();
+            g.pose().translate(tx, y + 2, 0);
+            g.pose().scale(0.625f, 0.625f, 1);
+            g.renderItem(held, 0, 0);
+            g.pose().popPose();
+            tx += icon;
+        }
+        g.drawString(mc.font, n, tx, y + 3, 0xFFFFFFFF, true);
+        if (infoW > 0) drawInfo(g, parts, x + w - 5 - infoW, y + 3);
+        if (bar) HealthDisplay.bar(g, x + 5, y + h - 5, w - 10, 2, l, false, 1f);
+    }
+
+    /** Classic: one line on a strip, with a thin bar under it. */
+    private void drawClassic(GuiGraphics g, Entity e) {
+        LivingEntity l = e instanceof LivingEntity le ? le : null;
+        Component n = name(e);
+        List<Object[]> parts = info(e);
+        boolean num = l != null && health.get() != Health.BAR && health.get() != Health.OFF;
+        boolean bar = l != null && (health.get() == Health.BAR || health.get() == Health.BAR_AND_NUMBER);
+        if (num) parts.add(0, new Object[]{hpText(l), HealthDisplay.color(l.getHealth() / Math.max(1f, l.getMaxHealth()))});
+        int nameW = mc.font.width(n), infoW = width(parts);
+        int w = nameW + (infoW > 0 ? infoW + 4 : 0) + 6;
+        int x = -w / 2, y = -12;
+        g.fill(x, y, x + w, y + 11, Theme.alpha(0xFF000000, background.get().floatValue() * 0.75f));
+        g.drawString(mc.font, n, x + 3, y + 2, 0xFFFFFFFF, true);
+        if (infoW > 0) drawInfo(g, parts, x + 3 + nameW + 4, y + 2);
+        if (bar) HealthDisplay.bar(g, x, y + 11, w, 1, l, false, 1f);
+    }
+
+    private void drawMinimal(GuiGraphics g, Entity e) {
+        LivingEntity l = e instanceof LivingEntity le ? le : null;
+        Component n = name(e);
+        List<Object[]> parts = info(e);
+        if (l != null && health.get() != Health.OFF) parts.add(0, new Object[]{hpText(l), HealthDisplay.color(l.getHealth() / Math.max(1f, l.getMaxHealth()))});
+        int nameW = mc.font.width(n), infoW = width(parts);
+        int w = nameW + (infoW > 0 ? infoW + 4 : 0);
+        g.drawString(mc.font, n, -w / 2, -10, 0xFFFFFFFF, true);
+        if (infoW > 0) drawInfo(g, parts, -w / 2 + nameW + 4, -10);
     }
 }

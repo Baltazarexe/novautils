@@ -1064,6 +1064,25 @@ public class NovaClientGameTest implements FabricClientGameTest {
         shot(ctx, "41_gearview_full");
         check(ctx.computeOnClient(c -> c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10),
             x -> !x.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).getEnchantments().isEmpty()).size() == 1), "GearView test zombie wears enchanted gear");
+        // --- Nametags styles and the animated health bars (hit the zombie so the ghost bar shows)
+        ctx.runOnClient(c -> {
+            allOff();
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Nametags.class, "mobs")).set(true);
+            on(dev.novautils.modules.render.Nametags.class);
+            on(dev.novautils.modules.render.HealthBars.class);
+        });
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 0");
+        ctx.waitTicks(10);
+        cmd(sp, "/damage @e[type=minecraft:zombie,limit=1] 7");
+        ctx.waitTicks(4);
+        shot(ctx, "42_nametags_card_ghost");
+        ctx.runOnClient(c -> ((Setting<dev.novautils.modules.render.Nametags.Style>) setting(dev.novautils.modules.render.Nametags.class, "style")).set(dev.novautils.modules.render.Nametags.Style.CLASSIC));
+        ctx.waitTicks(30);
+        shot(ctx, "43_nametags_classic");
+        ctx.runOnClient(c -> ((Setting<dev.novautils.modules.render.Nametags.Style>) setting(dev.novautils.modules.render.Nametags.class, "style")).set(dev.novautils.modules.render.Nametags.Style.MINIMAL));
+        ctx.waitTicks(5);
+        shot(ctx, "44_nametags_minimal");
+
 
         ctx.runOnClient(c -> {
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("home");
