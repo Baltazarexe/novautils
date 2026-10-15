@@ -133,30 +133,9 @@ public final class RenderUtils {
      */
     public static void label(dev.novautils.render.RenderContext context, Vec3 pos,
                              net.minecraft.network.chat.Component text, float scale, boolean seeThrough) {
-        var mc = net.minecraft.client.Minecraft.getInstance();
-        if (ShaderCompat.shadersActive()) {
-            ScreenSpace.queueLabel(pos, text);
-            return;
-        }
-        Vec3 cam = context.cameraPos();
-        double dist = Math.max(4.0, cam.distanceTo(pos));
-        float s = (float) (0.004 * dist * scale);
-
-        var pose = context.poseStack();
-        pose.pushPose();
-        pose.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
-        pose.mulPose(PlatformCompat.camera(mc).rotation());
-        pose.scale(-s, -s, s);
-
-        var seq = text.getVisualOrderText();
-        float x = -mc.font.width(seq) / 2f;
-        var buffers = mc.renderBuffers().bufferSource();
-        var mode = seeThrough ? net.minecraft.client.gui.Font.DisplayMode.SEE_THROUGH
-            : net.minecraft.client.gui.Font.DisplayMode.NORMAL;
-        mc.font.drawInBatch(seq, x, 0, 0xFFFFFFFF, false, pose.last().pose(), buffers, mode,
-            0x90000000, net.minecraft.client.renderer.LightTexture.FULL_BRIGHT);
-        buffers.endBatch();
-        pose.popPose();
+        // Drawn on the HUD at the projected position: the in-world text pass came out invisible on
+        // this version (and HUD text also survives shaderpacks).
+        ScreenSpace.queueLabel(pos, text);
     }
 
     /** Thin two-plane ribbon between two world-space points (a stand-in for a line). */
