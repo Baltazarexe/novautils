@@ -1003,6 +1003,41 @@ public class NovaClientGameTest implements FabricClientGameTest {
         cmd(sp, "/setblock 5 201 -3 minecraft:air");
         cmd(sp, "/kill @e[type=minecraft:pig]");
 
+        // --- Search list editor from the menu: type, hover (preview), click to add; then the mobs tab
+        ctx.runOnClient(c -> ((Setting<Boolean>) setting(dev.novautils.modules.render.Search.class, "open-list-editor")).set(true));
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof dev.novautils.gui.screens.SearchEditorScreen), "open-list-editor opens the Search list editor");
+        int[] lay = ctx.computeOnClient(c -> {
+            var s = dev.novautils.utils.PlatformCompat.currentScreen(c);
+            int col = Math.min(210, (s.width - 60) / 3);
+            int lx = s.width / 2 - col * 3 / 2 - 10;
+            return new int[]{lx, col};
+        });
+        ctx.getInput().typeChars("diamond_ore");
+        ctx.waitTicks(5);
+        cursor(ctx, lay[0] + lay[1] / 2, 40 + 24 + 9);
+        ctx.waitTicks(5);
+        shot(ctx, "45_search_editor_blocks");
+        click(ctx, new int[]{lay[0] + lay[1] / 2, 40 + 24 + 9}, 1);
+        ctx.waitTicks(3);
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Search.class).customsView().size() == 1), "clicking a result adds it to the Search list");
+        // mobs tab
+        click(ctx, new int[]{lay[0] + lay[1] / 2 + 2 + (lay[1] / 2 - 2) / 2, 16 + 9}, 1);
+        ctx.waitTicks(3);
+        click(ctx, new int[]{lay[0] + 20, 40 + 9}, 1);
+        ctx.getInput().typeChars("creeper");
+        ctx.waitTicks(5);
+        click(ctx, new int[]{lay[0] + lay[1] / 2, 40 + 24 + 9}, 1);
+        ctx.waitTicks(10);
+        shot(ctx, "46_search_editor_mobs");
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.Search.class).customsView().stream().anyMatch(x -> x.entity)), "the mobs tab adds a mob");
+        ctx.runOnClient(c -> {
+            ModuleManager.get().get(dev.novautils.modules.render.Search.class).clearCustoms();
+            dev.novautils.utils.PlatformCompat.openScreen(c, null);
+            allOff();
+        });
+        ctx.waitTicks(3);
+
 
         // --- the new visuals (screenshots): block highlight, then target hud + compass + rainbow list
         cmd(sp, "/setblock 3 200 1 minecraft:oak_stairs");

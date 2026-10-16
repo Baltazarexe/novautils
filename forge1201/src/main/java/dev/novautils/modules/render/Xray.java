@@ -239,17 +239,40 @@ public class Xray extends Module {
 
         BlockPos center = mc.player.blockPosition();
         int r = radius.get(), h = height.get();
+        int minX = center.getX() - r, maxX = center.getX() + r;
+        int minZ = center.getZ() - r, maxZ = center.getZ() + r;
+        int lowY = center.getY() - h, highY = center.getY() + h;
+        int levelMinY = mc.level.getMinBuildHeight();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-        for (int x = -r; x <= r; x++) {
-            for (int z = -r; z <= r; z++) {
-                for (int y = -h; y <= h; y++) {
-                    BlockPos pos = center.offset(x, y, z);
-                    if (!mc.level.hasChunkAt(pos)) continue;
-
-                    Ore ore = oreOf(mc.level.getBlockState(pos));
-                    if (ore == null || !ore.shown().get()) continue;
-                    if (exposedOnly.get() && !exposed(pos)) continue;
-                    found.add(new Found(pos.immutable(), ore));
+        // chunk by chunk, 16x16x16 section by section: a section whose palette has no ore at all is
+        // skipped without reading a single block (most of them), so big radii don't stutter
+        for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
+            for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
+                if (!mc.level.hasChunk(cx, cz)) continue;
+                var sections = mc.level.getChunk(cx, cz).getSections();
+                for (int i = 0; i < sections.length; i++) {
+                    var section = sections[i];
+                    int sy = levelMinY + i * 16;
+                    if (section == null || section.hasOnlyAir() || sy + 15 < lowY || sy > highY) continue;
+                    if (!section.maybeHas(st -> { Ore o = oreOf(st); return o != null && o.shown().get(); })) continue;
+                    for (int y = 0; y < 16; y++) {
+                        int wy = sy + y;
+                        if (wy < lowY || wy > highY) continue;
+                        for (int z = 0; z < 16; z++) {
+                            int wz = (cz << 4) + z;
+                            if (wz < minZ || wz > maxZ) continue;
+                            for (int x = 0; x < 16; x++) {
+                                int wx = (cx << 4) + x;
+                                if (wx < minX || wx > maxX) continue;
+                                Ore ore = oreOf(section.getBlockState(x, y, z));
+                                if (ore == null || !ore.shown().get()) continue;
+                                pos.set(wx, wy, wz);
+                                if (exposedOnly.get() && !exposed(pos)) continue;
+                                found.add(new Found(pos.immutable(), ore));
+                            }
+                        }
+                    }
                 }
             }
         }

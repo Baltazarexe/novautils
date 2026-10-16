@@ -83,6 +83,8 @@ public class Nametags extends Module {
         .description("Don't tag things further than this.").defaultValue(128).range(16, 512).build());
 
     private final Map<UUID, Integer> popCounts = new HashMap<>();
+    /** Line of sight per entity, worked out once per tick instead of every frame. */
+    private final Map<Integer, Boolean> visible = new HashMap<>();
 
     public Nametags() {
         super("Nametags", "Better name tags: card style, animated health bar, ping, distance, totem pops.", Category.RENDER);
@@ -112,6 +114,7 @@ public class Nametags extends Module {
     @Override
     public void onTick() {
         if (mc.level == null) return;
+        visible.clear();
         // a player that died starts from zero again
         for (Player p : mc.level.players()) if (p.isDeadOrDying()) popCounts.remove(p.getUUID());
     }
@@ -124,7 +127,7 @@ public class Nametags extends Module {
     private boolean wanted(Entity e) {
         if (e == mc.player || e.isInvisible() || e instanceof ArmorStand) return false;
         if (mc.player.distanceTo(e) > maxDistance.get()) return false;
-        if (!throughWalls.get() && !mc.player.hasLineOfSight(e)) return false;
+        if (!throughWalls.get() && !visible.computeIfAbsent(e.getId(), id -> mc.player.hasLineOfSight(e))) return false;
         if (e instanceof Player) return players.get();
         if (e instanceof ItemEntity) return items.get();
         return e instanceof LivingEntity && mobs.get();

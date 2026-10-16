@@ -84,7 +84,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Xray | Hides everything but the ores you pick (see-through), or boxes them. |
 | Esp | Highlights entities through walls (chams / box). |
 | StorageEsp | Highlights chests, shulkers, barrels and more through walls. |
-| Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`. |
+| Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`.  Or open the list editor from the menu (search, icons, 3D mob preview). |
 | BlockHighlight | Outlines the block you are looking at (rainbow option). |
 | TargetHud | Name, health, armour and distance of the creature you look at (works past survival reach). |
 | GearView | Armour, held items and enchantments (short tags or full names) above other players, with durability. |

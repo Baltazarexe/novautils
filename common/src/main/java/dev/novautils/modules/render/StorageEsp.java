@@ -85,9 +85,19 @@ public class StorageEsp extends Module {
         found.clear();
     }
 
+    /** Name-based kind per block type (modpacks have thousands of block entities; match each name once). */
+    private final java.util.Map<net.minecraft.world.level.block.Block, java.util.Optional<Kind>> byName = new java.util.HashMap<>();
+
     /** Classifies a block entity, or null when it isn't storage we care about. */
     private Kind kindOf(BlockPos pos, BlockEntity be) {
-        Identifier key = BuiltInRegistries.BLOCK.getKey(mc.level.getBlockState(pos).getBlock());
+        var block = mc.level.getBlockState(pos).getBlock();
+        var named = byName.computeIfAbsent(block, b -> java.util.Optional.ofNullable(kindByName(b)));
+        if (named.isPresent()) return named.get();
+        return be instanceof BaseContainerBlockEntity ? other : null;
+    }
+
+    private Kind kindByName(net.minecraft.world.level.block.Block block) {
+        var key = BuiltInRegistries.BLOCK.getKey(block);
         String path = key == null ? "" : key.getPath();
 
         for (Kind k : kinds) {
@@ -97,7 +107,7 @@ public class StorageEsp extends Module {
             for (String ex : k.excludes()) if (path.contains(ex)) hit = false;
             if (hit) return k;
         }
-        return be instanceof BaseContainerBlockEntity ? other : null;
+        return null;
     }
 
     @Override

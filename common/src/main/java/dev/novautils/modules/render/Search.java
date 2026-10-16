@@ -45,6 +45,10 @@ public class Search extends Module {
     private final List<Kind> kinds = new ArrayList<>();
     private final Map<Block, Kind> byBlock = new HashMap<>();
 
+    private final Setting<Boolean> editor = register(Setting.builder(Boolean.class, "open-list-editor")
+        .description("Click to pick blocks and mobs from a list, with a preview (or use .search add).").defaultValue(false)
+        .onChange(v -> { if (Boolean.TRUE.equals(v)) openEditor(); }).build());
+
     private final Setting<Boolean> tracers = register(Setting.builder(Boolean.class, "tracers")
         .description("Also draw a line to each find.").defaultValue(false).build());
 
@@ -105,6 +109,12 @@ public class Search extends Module {
         Kind k = new Kind(ids, shown, c);
         kinds.add(k);
         names.put(k, name.replace('-', ' '));
+    }
+
+    private void openEditor() {
+        editor.set(false);
+        var screen = dev.novautils.utils.PlatformCompat.currentScreen(mc);
+        mc.execute(() -> dev.novautils.utils.PlatformCompat.openScreen(mc, new dev.novautils.gui.screens.SearchEditorScreen(screen)));
     }
 
     private Kind kindOf(BlockState state) {
@@ -464,6 +474,21 @@ public class Search extends Module {
         all.addAll(customKinds);
         all.addAll(entityKinds);
         return all;
+    }
+
+    /** The custom list, for the menu editor. */
+    public List<Custom> customsView() {
+        return java.util.Collections.unmodifiableList(customs);
+    }
+
+    /** Next colour of the palette for this entry (the square button in the editor). */
+    public void cycleColor(Custom c) {
+        int i = 0;
+        for (int k = 0; k < PALETTE.length; k++) if ((PALETTE[k] & 0xFFFFFF) == (c.color & 0xFFFFFF)) i = k + 1;
+        c.color = (c.color & 0xFF000000 | PALETTE[i % PALETTE.length] & 0xFFFFFF);
+        if ((c.color >>> 24) == 0) c.color |= 0xFF000000;
+        saveCustoms();
+        rebuildCustoms();
     }
 
     /** Custom mobs currently highlighted (for tests). */

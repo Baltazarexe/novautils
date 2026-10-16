@@ -62,7 +62,9 @@ public class GhostHand extends Module {
 
     private boolean usable(BlockState state, BlockPos pos) {
         Block b = state.getBlock();
-        if (blocks.get() && (b == Blocks.ENDER_CHEST || state.getMenuProvider(mc.level, pos) != null)) return true;
+        // containers and machines: vanilla ones say so (menu provider), modded ones (Mekanism, AE2,
+        // Sophisticated Storage...) usually only have a block entity on the client
+        if (blocks.get() && (b == Blocks.ENDER_CHEST || state.getMenuProvider(mc.level, pos) != null || mc.level.getBlockEntity(pos) != null)) return true;
         return usables.get() && (b instanceof LeverBlock || b instanceof ButtonBlock || b instanceof DoorBlock
             || b instanceof TrapDoorBlock || b instanceof FenceGateBlock || b instanceof NoteBlock || b instanceof BellBlock);
     }
@@ -81,6 +83,9 @@ public class GhostHand extends Module {
             if (state.isAir() || !usable(state, pos)) continue;
             BlockHitResult hit = state.getShape(mc.level, pos).clip(eye, end, pos);
             if (hit != null && hit.getType() == HitResult.Type.BLOCK) return hit;
+            // odd or empty outline (some modded blocks): aim at the centre, on the face looking at us
+            Vec3 centre = Vec3.atCenterOf(pos);
+            return new BlockHitResult(centre, net.minecraft.core.Direction.getApproximateNearest(eye.subtract(centre)), pos, false);
         }
         return null;
     }
