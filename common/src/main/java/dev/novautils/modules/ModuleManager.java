@@ -135,6 +135,11 @@ public class ModuleManager {
         register(new dev.novautils.modules.render.TargetHud());
         register(new dev.novautils.modules.render.Compass());
         register(new dev.novautils.modules.render.GearView());
+        register(new dev.novautils.modules.render.Crosshair());
+        register(new dev.novautils.modules.render.SkyFog());
+        register(new dev.novautils.modules.render.HitColor());
+        register(new dev.novautils.modules.render.PetOwner());
+        register(new dev.novautils.modules.render.Particles());
         register(new dev.novautils.modules.render.ChunkBorders());
         register(new StorageEsp());
         register(new Waypoints());

@@ -136,9 +136,8 @@ public class Minimap extends HudModule {
     protected int[] render(GuiGraphics g, int x, int y, boolean right) {
         int s = size.get(), r = radius.get();
         int cells = 2 * r + 1;
-        Theme.softShadow(g, x, y, s, s, 6, 0.5f);
-        Theme.rounded(g, x - 2, y - 2, s + 4, s + 4, 6, 0xE0101116);
-        g.fill(x, y, x + s, y + s, 0xFF1A1C22);
+        panel(g, x - 4, y - 4, s + 8, s + 8);
+        g.fill(x, y, x + s, y + s, 0xFF15171C);
 
         int px = mc.player.getBlockX(), pz = mc.player.getBlockZ();
         if (terrain.get() && mc.level != null) {
@@ -178,23 +177,39 @@ public class Minimap extends HudModule {
             }
         }
 
-        // you: a dot plus a short line toward where you're facing
+        // you: an arrow pointing where you face, with a dark rim so it reads on any terrain
         int cx = x + s / 2, cy = y + s / 2;
         double yaw = Math.toRadians(mc.player.getYRot());
-        for (int i = 2; i <= 6; i++) {
-            int lx = cx + (int) Math.round(-Math.sin(yaw) * i), ly = cy + (int) Math.round(Math.cos(yaw) * i);
-            g.fill(lx, ly, lx + 1, ly + 1, 0xFFFFFFFF);
-        }
-        g.fill(cx - 2, cy - 2, cx + 3, cy + 3, 0xFF000000);
-        g.fill(cx - 1, cy - 1, cx + 2, cy + 2, Theme.ACCENT);
-        g.drawString(mc.font, "N", cx - mc.font.width("N") / 2, y + 2, 0xC0FFFFFF, true);
+        double dx = -Math.sin(yaw), dz = Math.cos(yaw), qx = -dz, qz = dx;
+        triangle(g, cx + dx * 6.5, cy + dz * 6.5, cx - dx * 4 + qx * 4.5, cy - dz * 4 + qz * 4.5, cx - dx * 4 - qx * 4.5, cy - dz * 4 - qz * 4.5, 0xC0000000);
+        triangle(g, cx + dx * 5, cy + dz * 5, cx - dx * 3 + qx * 3.3, cy - dz * 3 + qz * 3.3, cx - dx * 3 - qx * 3.3, cy - dz * 3 - qz * 3.3, 0xFFFFFFFF);
+        // north marker: a small pill on the top edge
+        Theme.rounded(g, x + s / 2 - 5, y - 1, 10, 10, 3, 0xD00D0E12);
+        g.drawString(mc.font, "N", x + s / 2 - mc.font.width("N") / 2 + 1, y + 1, 0xFFFF6B6B, false);
 
         int h = s;
         if (coords.get()) {
             String t = px + ", " + pz;
-            g.drawString(mc.font, t, x + s / 2 - mc.font.width(t) / 2, y + s + 4, Theme.TEXT_DIM, true);
-            h += 4 + mc.font.lineHeight;
+            int tw = mc.font.width(t);
+            Theme.rounded(g, x + s / 2 - tw / 2 - 5, y + s + 6, tw + 10, 12, 4, HUD_BG);
+            g.drawString(mc.font, t, x + s / 2 - tw / 2, y + s + 8, HUD_LABEL, false);
+            h += 6 + 12;
         }
         return new int[]{s, h};
+    }
+    /** A filled triangle, one pixel row at a time. */
+    private static void triangle(GuiGraphics g, double ax, double ay, double bx, double by, double cx, double cy, int color) {
+        int top = (int) Math.floor(Math.min(ay, Math.min(by, cy))), bottom = (int) Math.ceil(Math.max(ay, Math.max(by, cy)));
+        double[][] edges = {{ax, ay, bx, by}, {bx, by, cx, cy}, {cx, cy, ax, ay}};
+        for (int y = top; y < bottom; y++) {
+            double sy = y + 0.5, lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+            for (double[] ed : edges) {
+                if ((sy < ed[1]) == (sy < ed[3])) continue;
+                double x = ed[0] + (sy - ed[1]) * (ed[2] - ed[0]) / (ed[3] - ed[1]);
+                lo = Math.min(lo, x);
+                hi = Math.max(hi, x);
+            }
+            if (hi > lo) g.fill((int) Math.round(lo), y, (int) Math.round(hi), y + 1, color);
+        }
     }
 }

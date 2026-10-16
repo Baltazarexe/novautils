@@ -27,36 +27,31 @@ public class ArmorHud extends HudModule {
 
     @Override
     protected int defaultY(int screenH, int h) {
-        return screenH - 58;
+        return screenH - 52 - h;
     }
 
     @Override
     protected int[] render(GuiGraphicsExtractor g, int x, int y, boolean right) {
+        // one card: each piece as its icon, a thin durability bar and the percentage under it
+        int cell = 22, w = PAD * 2 + SLOTS.length * cell - 6, h = PAD * 2 + 16 + 3 + 8;
+        panel(g, x, y, w, h);
         for (int i = 0; i < SLOTS.length; i++) {
             ItemStack stack = mc.player.getItemBySlot(SLOTS[i]);
-            int cx = x + i * (CELL_W + GAP);
-
-            Theme.roundRect(g, cx, y, CELL_W, CELL_H, 0xB0161620);
-            Theme.border(g, cx, y, CELL_W, CELL_H, 0x30FFFFFF);
-
+            int cx = x + PAD + i * cell, cy = y + PAD;
             if (stack.isEmpty()) {
-                g.text(mc.font, LABELS[i], cx + 4, y + 4, Theme.TEXT_OFF);
+                Theme.rounded(g, cx, cy, 16, 16, 3, 0x14FFFFFF);
+                g.text(mc.font, LABELS[i], cx + 8 - mc.font.width(LABELS[i]) / 2, cy + 4, 0xFF4C5160, false);
                 continue;
             }
-
-            float left = stack.isDamageableItem() ? 1f - stack.getDamageValue() / (float) stack.getMaxDamage() : 1f;
-            int color = left > 0.5f ? 0xFF55DD66 : left > 0.2f ? 0xFFFFC94A : 0xFFFF5555;
-
-            g.text(mc.font, LABELS[i], cx + 4, y + 3, Theme.TEXT);
-            if (stack.isDamageableItem()) {
-                String pct = Math.round(left * 100) + "%";
-                g.text(mc.font, pct, cx + CELL_W - 4 - mc.font.width(pct), y + 3, color);
-                g.fill(cx + 2, y + 12, cx + CELL_W - 2, y + 13, Theme.TRACK);
-                g.fill(cx + 2, y + 12, cx + 2 + (int) ((CELL_W - 4) * left), y + 13, color);
-            } else {
-                g.text(mc.font, "ok", cx + CELL_W - 4 - mc.font.width("ok"), y + 3, color);
-            }
+            g.item(stack, cx, cy);
+            if (!stack.isDamageableItem()) continue;
+            float left = 1f - stack.getDamageValue() / (float) stack.getMaxDamage();
+            int color = left > 0.5f ? 0xFF66E07A : left > 0.2f ? 0xFFFFD050 : 0xFFFF5A5A;
+            g.fill(cx, cy + 17, cx + 16, cy + 18, 0x40FFFFFF);
+            g.fill(cx, cy + 17, cx + Math.max(1, Math.round(16 * left)), cy + 18, color);
+            String pct = String.valueOf(Math.round(left * 100));
+            g.text(mc.font, pct, cx + 8 - mc.font.width(pct) / 2, cy + 20, color, false);
         }
-        return new int[]{SLOTS.length * CELL_W + (SLOTS.length - 1) * GAP, CELL_H};
+        return new int[]{w, h};
     }
 }

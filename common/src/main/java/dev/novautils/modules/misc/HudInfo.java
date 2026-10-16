@@ -65,6 +65,18 @@ public class HudInfo extends HudModule {
         return names[index];
     }
 
+    /** Green / yellow / red for FPS, ping and TPS; the rest stays plain. */
+    private static int statColor(String line) {
+        try {
+            String v = line.substring(line.indexOf(": ") + 2).replace("ms", "").trim();
+            if (line.startsWith("FPS")) { int n = Integer.parseInt(v); return n >= 60 ? 0xFF66E07A : n >= 30 ? 0xFFFFD050 : 0xFFFF5A5A; }
+            if (line.startsWith("Ping")) { int n = Integer.parseInt(v); return n < 80 ? 0xFF66E07A : n < 160 ? 0xFFFFD050 : 0xFFFF5A5A; }
+            if (line.startsWith("TPS")) { if (v.startsWith("server")) return 0xFFFF5A5A; float n = Float.parseFloat(v); return n >= 18 ? 0xFF66E07A : n >= 12 ? 0xFFFFD050 : 0xFFFF5A5A; }
+        } catch (RuntimeException ignored) {
+        }
+        return HUD_VALUE;
+    }
+
     @Override
     protected int[] render(GuiGraphicsExtractor g, int x, int y, boolean right) {
         List<String> lines = new ArrayList<>();
@@ -99,12 +111,8 @@ public class HudInfo extends HudModule {
             else if (t >= 0) lines.add(String.format("TPS: %.1f", t));
         }
 
-        int w = 0;
-        for (String l : lines) w = Math.max(w, mc.font.width(l));
-        int lineH = mc.font.lineHeight + 2;
-        for (int i = 0; i < lines.size(); i++) {
-            line(g, lines.get(i), x, y + i * lineH, w, right, CommonColors.WHITE);
-        }
-        return new int[]{w, lines.size() * lineH};
+        List<Integer> colors = new ArrayList<>();
+        for (String l : lines) colors.add(statColor(l));
+        return table(g, x, y, lines, colors);
     }
 }

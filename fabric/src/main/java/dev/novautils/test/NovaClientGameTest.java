@@ -1139,6 +1139,34 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(5);
         shot(ctx, "44_nametags_minimal");
 
+        // --- new visuals: custom crosshair on a mob, purple fog, cyan hit flash, pet owner tag, particle filter
+        ctx.runOnClient(c -> {
+            allOff();
+            on(dev.novautils.modules.render.Crosshair.class);
+            on(dev.novautils.modules.render.SkyFog.class);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.SkyFog.class, "fog-color")).set(true);
+            on(dev.novautils.modules.render.HitColor.class);
+            on(dev.novautils.modules.render.PetOwner.class);
+            on(dev.novautils.modules.render.Particles.class);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Particles.class, "smoke")).set(false);
+        });
+        int[] uuid = ctx.computeOnClient(c -> net.minecraft.core.UUIDUtil.uuidToIntArray(c.player.getUUID()));
+        cmd(sp, "/summon minecraft:wolf 3.5 200 -1.5 {NoAI:1b,PersistenceRequired:1b,Owner:[I;" + uuid[0] + "," + uuid[1] + "," + uuid[2] + "," + uuid[3] + "]}");
+        cmd(sp, "/tp @a 0.5 200 0.5 -90 0");
+        ctx.waitTicks(10);
+        cmd(sp, "/damage @e[type=minecraft:zombie,limit=1] 1");
+        ctx.waitTicks(2);
+        shot(ctx, "47_crosshair_fog_hitcolor_pet");
+        check(ctx.computeOnClient(c -> !dev.novautils.modules.render.Particles.allow(net.minecraft.core.particles.ParticleTypes.SMOKE)), "Particles drops smoke when it's off");
+        check(ctx.computeOnClient(c -> dev.novautils.modules.render.Particles.allow(net.minecraft.core.particles.ParticleTypes.CRIT)), "Particles keeps crits");
+        check(ctx.computeOnClient(c -> dev.novautils.modules.render.Crosshair.replacesVanilla()), "Crosshair replaces the vanilla one");
+        ctx.runOnClient(c -> {
+            for (Module m : ModuleManager.get().getModules()) for (Setting<?> s : m.getSettings()) if (!s.name.startsWith("hud-")) s.reset();
+            allOff();
+        });
+        cmd(sp, "/kill @e[type=minecraft:wolf]");
+
+
 
         ctx.runOnClient(c -> {
             ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class).remove("home");

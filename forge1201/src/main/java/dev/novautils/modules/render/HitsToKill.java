@@ -54,8 +54,11 @@ public class HitsToKill extends Module {
         int color = hits <= 1 ? 0xFF66DD77 : hits <= 3 ? 0xFFFFD84A : 0xFFFF7A7A;
         int cx = g.guiWidth() / 2, y = g.guiHeight() / 2 + 10;
         int w = mc.font.width(text);
-        Theme.rounded(g, cx - w / 2 - 4, y - 2, w + 8, mc.font.lineHeight + (bar.get() ? 6 : 3), 3, 0x90000000);
-        g.drawString(mc.font, text, cx - w / 2, y, color, true);
+        int ph = mc.font.lineHeight + (bar.get() ? 7 : 4);
+        Theme.softShadow(g, cx - w / 2 - 5, y - 3, w + 10, ph, 4, 0.25f);
+        Theme.rounded(g, cx - w / 2 - 5, y - 3, w + 10, ph, 4, 0xB80D0E12);
+        Theme.border(g, cx - w / 2 - 5, y - 3, w + 10, ph, 0x1EFFFFFF);
+        g.drawString(mc.font, text, cx - w / 2, y, color, false);
         if (bar.get()) {
             float f = Math.max(0f, Math.min(1f, target.getHealth() / target.getMaxHealth()));
             int by = y + mc.font.lineHeight + 1;

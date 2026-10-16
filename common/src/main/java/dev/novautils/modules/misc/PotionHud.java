@@ -47,12 +47,6 @@ public class PotionHud extends HudModule {
             colors.add(0x80E9E9F2);
         }
 
-        int w = 0;
-        for (String l : lines) w = Math.max(w, mc.font.width(l));
-        int lineH = mc.font.lineHeight + 1;
-        for (int i = 0; i < lines.size(); i++) {
-            line(g, lines.get(i), x, y + i * lineH, w, right, colors.get(i));
-        }
-        return new int[]{w, lines.size() * lineH};
+        return table(g, x, y, lines, colors);
     }
 }

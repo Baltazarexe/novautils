@@ -30,16 +30,13 @@ public class InventoryHud extends HudModule {
 
     @Override
     protected int[] render(GuiGraphics g, int x, int y, boolean right) {
-        int w = 9 * CELL + 4, h = 3 * CELL + 4;
-        if (background.get()) {
-            Theme.roundRect(g, x, y, w, h, 0x90101018);
-            Theme.border(g, x, y, w, h, 0x30FFFFFF);
-        }
+        int w = 9 * CELL + 6, h = 3 * CELL + 6;
+        if (background.get()) panel(g, x, y, w, h);
         var inv = mc.player.getInventory();
         for (int i = 0; i < 27; i++) {
             ItemStack stack = inv.getItem(9 + i);
-            int cx = x + 2 + (i % 9) * CELL, cy = y + 2 + (i / 9) * CELL;
-            g.fill(cx, cy, cx + CELL - 1, cy + CELL - 1, 0x30FFFFFF);
+            int cx = x + 3 + (i % 9) * CELL, cy = y + 3 + (i / 9) * CELL;
+            Theme.rounded(g, cx, cy, CELL - 1, CELL - 1, 2, 0x12FFFFFF);
             if (stack.isEmpty()) continue;
             g.renderItem(stack, cx + 1, cy + 1);
             g.renderItemDecorations(mc.font, stack, cx + 1, cy + 1);

@@ -59,6 +59,8 @@ public class NovaUtilsForge {
         MinecraftForge.EVENT_BUS.addListener(this::onClientTick);
         MinecraftForge.EVENT_BUS.addListener(this::onRenderLevel);
         MinecraftForge.EVENT_BUS.addListener(this::onComputeFov);
+        MinecraftForge.EVENT_BUS.addListener(this::onRenderFog);
+        MinecraftForge.EVENT_BUS.addListener(this::onFogColor);
         MinecraftForge.EVENT_BUS.addListener(this::onLoggingOut);
     }
 
@@ -125,6 +127,33 @@ public class NovaUtilsForge {
             }
         });
         RenderUtils.flush();
+    }
+
+    /** SkyFog: push back / remove the fog, clear water and lava. */
+    private void onRenderFog(ViewportEvent.RenderFog event) {
+        var s = dev.novautils.modules.render.SkyFog.active();
+        if (s == null) return;
+        var type = event.getType();
+        float scale = type == net.minecraft.world.level.material.FogType.WATER || type == net.minecraft.world.level.material.FogType.LAVA
+            ? s.fluidScale() : type == net.minecraft.world.level.material.FogType.NONE ? s.terrainScale() : 1f;
+        if (scale == 1f) return;
+        if (Float.isInfinite(scale)) {
+            event.setNearPlaneDistance(1_000_000f);
+            event.setFarPlaneDistance(1_000_001f);
+        } else {
+            event.setNearPlaneDistance(event.getNearPlaneDistance() * scale);
+            event.setFarPlaneDistance(event.getFarPlaneDistance() * scale);
+        }
+        event.setCanceled(true);
+    }
+
+    private void onFogColor(ViewportEvent.ComputeFogColor event) {
+        var s = dev.novautils.modules.render.SkyFog.active();
+        if (s == null || s.fogColor() == 0) return;
+        int c = s.fogColor();
+        event.setRed((c >> 16 & 255) / 255f);
+        event.setGreen((c >> 8 & 255) / 255f);
+        event.setBlue((c & 255) / 255f);
     }
 
     private void onComputeFov(ViewportEvent.ComputeFov event) {

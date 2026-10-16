@@ -79,6 +79,58 @@ public abstract class HudModule extends Module {
         return posX.get() >= 0;
     }
 
+    // ------------------------------------------------------------------ shared look
+    // Every HUD block uses the same card: translucent rounded panel, hairline border, soft shadow,
+    // a dim label column and bright values, no heavy text shadow.
+
+    protected static final int PAD = 5, ROW = 11;
+    protected static final int HUD_BG = 0xB80D0E12, HUD_BORDER = 0x1EFFFFFF;
+    protected static final int HUD_LABEL = 0xFF8A90A0, HUD_VALUE = 0xFFEDEFF5;
+
+    protected static void panel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
+        dev.novautils.gui.Theme.softShadow(g, x, y, w, h, 4, 0.25f);
+        dev.novautils.gui.Theme.rounded(g, x, y, w, h, 4, HUD_BG);
+        dev.novautils.gui.Theme.border(g, x, y, w, h, HUD_BORDER);
+    }
+
+    /** "Label: value" / "Name  42m" / "Speed II 1:23" split into {label, value}. */
+    protected static String[] splitRow(String line) {
+        int i = line.indexOf(": ");
+        if (i > 0) return new String[]{line.substring(0, i), line.substring(i + 2)};
+        i = line.lastIndexOf("  ");
+        if (i > 0) return new String[]{line.substring(0, i).trim(), line.substring(i + 2).trim()};
+        i = line.lastIndexOf(' ');
+        if (i > 0) return new String[]{line.substring(0, i), line.substring(i + 1)};
+        return new String[]{line, ""};
+    }
+
+    /**
+     * A card with one row per line: label on the left (dim), value on the right in the row's colour.
+     * Returns the card size. Draws nothing for an empty list.
+     */
+    protected int[] table(GuiGraphicsExtractor g, int x, int y, java.util.List<String> lines, java.util.List<Integer> colors) {
+        if (lines.isEmpty()) return new int[]{0, 0};
+        int lw = 0, vw = 0;
+        java.util.List<String[]> rows = new java.util.ArrayList<>();
+        for (String l : lines) {
+            String[] r = splitRow(l);
+            rows.add(r);
+            lw = Math.max(lw, mc.font.width(r[0]));
+            vw = Math.max(vw, mc.font.width(r[1]));
+        }
+        int w = PAD + lw + (vw > 0 ? 10 + vw : 0) + PAD, h = PAD * 2 + rows.size() * ROW - 2;
+        panel(g, x, y, w, h);
+        for (int i = 0; i < rows.size(); i++) {
+            int ry = y + PAD + i * ROW;
+            int c = colors.get(i);
+            boolean warn = (c & 0xFFFFFF) != (HUD_VALUE & 0xFFFFFF) && (c & 0xFFFFFF) != 0xE9E9F2 && (c & 0xFFFFFF) != 0xFFFFFF;
+            g.text(mc.font, rows.get(i)[0], x + PAD, ry, rows.get(i)[1].isEmpty() ? c | 0xFF000000 : HUD_LABEL, false);
+            String v = rows.get(i)[1];
+            if (!v.isEmpty()) g.text(mc.font, v, x + w - PAD - mc.font.width(v), ry, warn ? c | 0xFF000000 : HUD_VALUE, false);
+        }
+        return new int[]{w, h};
+    }
+
     /** Helper for list-style HUDs: draws a line left- or right-aligned inside a block of the given width. */
     protected void line(GuiGraphicsExtractor g, String text, int x, int y, int blockW, boolean right, int color) {
         int tx = right ? x + blockW - mc.font.width(text) : x;

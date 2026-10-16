@@ -88,6 +88,11 @@ Type them in chat; they never reach the server. `.help` lists them.
 | BlockHighlight | Outlines the block you are looking at (rainbow option). |
 | TargetHud | Name, health, armour and distance of the creature you look at (works past survival reach). |
 | GearView | Armour, held items and enchantments (short tags or full names) above other players, with durability. |
+| Crosshair | Custom crosshair: cross, dot, circle or T, any size and colour, changes colour on mobs. |
+| SkyFog | Push back or remove fog, tint it, clear water and lava. |
+| HitColor | Change or remove the red hit flash. |
+| PetOwner | Owner tag above tamed animals. |
+| Particles | Choose which particles show and how many (FPS in big bases). |
 | Compass | A heading bar with your waypoints on it. |
 | GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
 | Tracers | Lines from your crosshair to nearby entities. |
