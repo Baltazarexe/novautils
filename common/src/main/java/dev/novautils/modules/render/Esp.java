@@ -42,7 +42,7 @@ import java.util.Map;
  * style keeps working with a shaderpack on.
  */
 public class Esp extends Module {
-    public enum Mode { CORNERS, BOX_2D, BOX_3D, WIREFRAME, CHAMS, GLOW }
+    public enum Mode { CLEAN, CORNERS, BOX_2D, BOX_3D, WIREFRAME, CHAMS, GLOW }
     public enum ChamsStyle { SOLID, TEXTURED }
 
     /** The plain white texture SOLID chams are drawn with (tinted to the colour). */
@@ -52,8 +52,8 @@ public class Esp extends Module {
     private enum Kind { PLAYER, FRIEND, HOSTILE, PASSIVE }
 
     private final Setting<Mode> mode = register(Setting.builder(Mode.class, "mode")
-        .description("CORNERS / BOX_2D: flat on screen. BOX_3D / WIREFRAME: in the world. CHAMS: the model through walls. GLOW: game outline.")
-        .defaultValue(Mode.CORNERS).build());
+        .description("CLEAN: tidy 2D box with name and health. CORNERS / BOX_2D: flat on screen. BOX_3D / WIREFRAME: in the world. CHAMS: the model through walls. GLOW: game outline.")
+        .defaultValue(Mode.CLEAN).build());
 
     private final Setting<Boolean> players = register(Setting.builder(Boolean.class, "players")
         .description("Highlight other players.").defaultValue(true).build());
@@ -115,14 +115,14 @@ public class Esp extends Module {
 
     private final Setting<Double> fill = register(Setting.builder(Double.class, "fill")
         .description("How see-through the inside is (0 = no fill).").defaultValue(0.15).range(0.0, 0.8)
-        .visible(() -> mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D || mode.get() == Mode.BOX_3D).build());
+        .visible(() -> mode.get() == Mode.CLEAN || mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D || mode.get() == Mode.BOX_3D).build());
 
     private final Setting<Boolean> healthBar = register(Setting.builder(Boolean.class, "health-bar")
         .description("Health bar beside the box (flat styles).").defaultValue(true)
         .visible(() -> flat()).build());
 
     private final Setting<Boolean> info = register(Setting.builder(Boolean.class, "name-distance")
-        .description("Name and distance under the box (flat styles).").defaultValue(false)
+        .description("Name and distance under the box (flat styles).").defaultValue(true)
         .visible(() -> flat()).build());
 
     private final Setting<Integer> range = register(Setting.builder(Integer.class, "range")
@@ -195,7 +195,7 @@ public class Esp extends Module {
     }
 
     private boolean flat() {
-        return mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D;
+        return mode.get() == Mode.CLEAN || mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D;
     }
 
     private Kind kindOf(Entity e) {
@@ -396,6 +396,10 @@ public class Esp extends Module {
             if (r == null || r[2] < 0 || r[3] < 0 || r[0] > g.guiWidth() || r[1] > g.guiHeight()) continue;
             int x1 = r[0], y1 = r[1], x2 = Math.max(r[2], x1 + 3), y2 = Math.max(r[3], y1 + 3);
 
+            if (mode.get() == Mode.CLEAN) {
+                drawClean(g, e, x1, y1, x2, y2, c);
+                continue;
+            }
             if (fill.get() > 0) g.fill(x1, y1, x2, y2, Theme.alpha(c, fill.get().floatValue() * 0.6f));
             if (mode.get() == Mode.BOX_2D) {
                 line(g, x1, y1, x2, y1 + t, c);
@@ -434,6 +438,50 @@ public class Esp extends Module {
                 int tw = mc.font.width(text);
                 g.text(mc.font, text, (x1 + x2) / 2 - tw / 2, below, 0xFFFFFFFF, true);
             }
+        }
+    }
+    /** A 1px frame around the rectangle (inclusive edges). */
+    private static void frame(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int color) {
+        g.fill(x1, y1, x2, y1 + 1, color);
+        g.fill(x1, y2 - 1, x2, y2, color);
+        g.fill(x1, y1 + 1, x1 + 1, y2 - 1, color);
+        g.fill(x2 - 1, y1 + 1, x2, y2 - 1, color);
+    }
+
+    /**
+     * CLEAN: a thin coloured box between a dark outer and inner rim, a soft fill that fades
+     * towards the feet, an animated health bar on the left (with the hit "ghost") and the name in
+     * a small dark pill above, distance under it.
+     */
+    private void drawClean(GuiGraphicsExtractor g, Entity e, int x1, int y1, int x2, int y2, int c) {
+        float a = (c >>> 24) / 255f;
+        if (fill.get() > 0) g.fillGradient(x1, y1, x2, y2, Theme.alpha(c, Math.min(1f, fill.get().floatValue() * 1.4f)), Theme.alpha(c, 0.02f));
+        int dark = Theme.alpha(0xD0000000, a);
+        frame(g, x1 - 1, y1 - 1, x2 + 1, y2 + 1, dark);
+        frame(g, x1 + 1, y1 + 1, x2 - 1, y2 - 1, dark);
+        frame(g, x1, y1, x2, y2, c);
+
+        if (healthBar.get() && e instanceof LivingEntity l) {
+            float[] hp = dev.novautils.utils.HealthDisplay.animated(l);
+            float now = Math.max(0f, Math.min(1f, l.getHealth() / Math.max(1f, l.getMaxHealth())));
+            int bx = x1 - 6, h = y2 - y1;
+            g.fill(bx - 1, y1 - 1, bx + 3, y2 + 1, dark);
+            g.fill(bx, y1, bx + 2, y2, Theme.alpha(0xFF1C1E25, a));
+            int fillH = Math.round(h * hp[0]), ghost = Math.round(h * hp[1]);
+            if (ghost > fillH) g.fill(bx, y2 - ghost, bx + 2, y2 - fillH, Theme.alpha(0xFFF2F2F2, 0.85f * a));
+            int hc = dev.novautils.utils.HealthDisplay.color(now);
+            if (fillH > 0) g.fillGradient(bx, y2 - fillH, bx + 2, y2, Theme.alpha(Theme.mix(hc, 0xFFFFFFFF, 0.3f), a), Theme.alpha(hc, a));
+        }
+
+        if (info.get()) {
+            String name = e.getName().getString();
+            int tw = mc.font.width(name), cx = (x1 + x2) / 2;
+            int px = cx - tw / 2 - 4, py = y1 - 14;
+            Theme.rounded(g, px, py, tw + 8, 11, 3, Theme.alpha(0xC00D0E12, a));
+            g.fill(px + 2, py + 10, px + tw + 6, py + 11, Theme.alpha(c, 0.9f));
+            g.text(mc.font, name, px + 4, py + 2, Theme.alpha(0xFFFFFFFF, a), false);
+            String d = Math.round(mc.player.distanceTo(e)) + "m";
+            g.text(mc.font, d, cx - mc.font.width(d) / 2, y2 + 3, Theme.alpha(0xFFB4B8C4, a), true);
         }
     }
 }

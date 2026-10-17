@@ -1032,6 +1032,17 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(ctx.computeOnClient(c -> !dev.novautils.modules.render.Particles.allow(net.minecraft.core.particles.ParticleTypes.SMOKE)), "Particles drops smoke when it's off");
         check(ctx.computeOnClient(c -> dev.novautils.modules.render.Particles.allow(net.minecraft.core.particles.ParticleTypes.CRIT)), "Particles keeps crits");
         check(ctx.computeOnClient(c -> dev.novautils.modules.render.Crosshair.replacesVanilla()), "Crosshair replaces the vanilla one");
+        // the CLEAN Esp style on the hit zombie and the wolf
+        ctx.runOnClient(c -> {
+            ((Setting<dev.novautils.modules.render.Esp.Mode>) setting(dev.novautils.modules.render.Esp.class, "mode")).set(dev.novautils.modules.render.Esp.Mode.CLEAN);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "color-by-health")).set(false);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "two-tone")).set(false);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "passive-mobs")).set(true);
+            on(dev.novautils.modules.render.Esp.class);
+        });
+        cmd(sp, "/damage @e[type=minecraft:zombie,limit=1] 2");
+        ctx.waitTicks(4);
+        shot(ctx, "48_esp_clean");
         ctx.runOnClient(c -> {
             for (Module m : ModuleManager.get().getModules()) for (Setting<?> s : m.getSettings()) if (!s.name.startsWith("hud-")) s.reset();
             allOff();
