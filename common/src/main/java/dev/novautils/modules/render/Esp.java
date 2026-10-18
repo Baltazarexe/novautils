@@ -51,9 +51,29 @@ public class Esp extends Module {
 
     private enum Kind { PLAYER, FRIEND, HOSTILE, PASSIVE }
 
-    private final Setting<Mode> mode = register(Setting.builder(Mode.class, "mode")
-        .description("CLEAN: tidy 2D box with name and health. CORNERS / BOX_2D: flat on screen. BOX_3D / WIREFRAME: in the world. CHAMS: the model through walls. GLOW: game outline.")
-        .defaultValue(Mode.CLEAN).build());
+    // Each look is its own switch, so they can be combined (CLEAN box + textured chams, glow + 3D box...)
+    private final Setting<Boolean> showClean = look("clean-box", "Tidy 2D box with the name above and an animated health bar.", true);
+    private final Setting<Boolean> showCorners = look("corners", "Only the corners of a box, flat on screen.", false);
+    private final Setting<Boolean> show2d = look("box-2d", "A thin rectangle, flat on screen.", false);
+    private final Setting<Boolean> show3d = look("box-3d", "A soft filled box in the world.", false);
+    private final Setting<Boolean> showWire = look("wireframe", "Just the edges of the 3D box.", false);
+    private final Setting<Boolean> showChams = look("chams", "The model itself through walls, solid colour or its own texture.", false);
+    private final Setting<Boolean> showGlow = look("glow", "Soft glowing outline around the model.", false);
+
+    private Setting<Boolean> look(String name, String description, boolean on) {
+        return register(Setting.builder(Boolean.class, name).description(description).defaultValue(on).build());
+    }
+
+    /** Tests and the self-test: show just one look. */
+    public void showOnly(Mode m) {
+        showClean.set(m == Mode.CLEAN);
+        showCorners.set(m == Mode.CORNERS);
+        show2d.set(m == Mode.BOX_2D);
+        show3d.set(m == Mode.BOX_3D);
+        showWire.set(m == Mode.WIREFRAME);
+        showChams.set(m == Mode.CHAMS);
+        showGlow.set(m == Mode.GLOW);
+    }
 
     private final Setting<Boolean> players = register(Setting.builder(Boolean.class, "players")
         .description("Highlight other players.").defaultValue(true).build());
@@ -78,11 +98,11 @@ public class Esp extends Module {
 
     private final Setting<ChamsStyle> chamsStyle = register(Setting.builder(ChamsStyle.class, "chams-style")
         .description("SOLID: one flat colour. TEXTURED: the mob's own skin, tinted.").defaultValue(ChamsStyle.SOLID)
-        .visible(() -> mode.get() == Mode.CHAMS).build());
+        .visible(() -> showChams.get()).build());
 
     private final Setting<Double> chamsOpacity = register(Setting.builder(Double.class, "chams-opacity")
         .description("How solid the chams look.").defaultValue(0.55).range(0.15, 1.0)
-        .visible(() -> mode.get() == Mode.CHAMS).build());
+        .visible(() -> showChams.get()).build());
 
     private final Setting<Boolean> rainbow = register(Setting.builder(Boolean.class, "rainbow")
         .description("Cycle the colour through the rainbow (every style).").defaultValue(false).build());
@@ -111,11 +131,11 @@ public class Esp extends Module {
 
     private final Setting<Integer> thickness = register(Setting.builder(Integer.class, "thickness")
         .description("Line thickness.").defaultValue(1).range(1, 3)
-        .visible(() -> mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D || mode.get() == Mode.WIREFRAME).build());
+        .visible(() -> showCorners.get() || show2d.get() || showWire.get()).build());
 
     private final Setting<Double> fill = register(Setting.builder(Double.class, "fill")
         .description("How see-through the inside is (0 = no fill).").defaultValue(0.15).range(0.0, 0.8)
-        .visible(() -> mode.get() == Mode.CLEAN || mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D || mode.get() == Mode.BOX_3D).build());
+        .visible(() -> showClean.get() || showCorners.get() || show2d.get() || show3d.get()).build());
 
     private final Setting<Boolean> healthBar = register(Setting.builder(Boolean.class, "health-bar")
         .description("Health bar beside the box (flat styles).").defaultValue(true)
@@ -141,13 +161,13 @@ public class Esp extends Module {
 
     /** Shaderpacks replace entity rendering, so CHAMS shows as GLOW while one is on. */
     private boolean glowing() {
-        return mode.get() == Mode.GLOW || (mode.get() == Mode.CHAMS && dev.novautils.utils.ShaderCompat.shadersActive());
+        return showGlow.get() || (showChams.get() && dev.novautils.utils.ShaderCompat.shadersActive());
     }
 
     /** ChamsMixin: the chams colour for this entity (ARGB), or 0 for none. */
     public static int chamsColor(Entity e) {
         Esp esp = instance;
-        if (esp == null || !esp.isEnabled() || esp.mode.get() != Mode.CHAMS || dev.novautils.utils.ShaderCompat.shadersActive()) return 0;
+        if (esp == null || !esp.isEnabled() || !esp.showChams.get() || dev.novautils.utils.ShaderCompat.shadersActive()) return 0;
         if (mc.player == null) return 0;
         Kind kind = esp.kindOf(e);
         if (kind == null) return 0;
@@ -195,7 +215,7 @@ public class Esp extends Module {
     }
 
     private boolean flat() {
-        return mode.get() == Mode.CLEAN || mode.get() == Mode.CORNERS || mode.get() == Mode.BOX_2D;
+        return showClean.get() || showCorners.get() || show2d.get();
     }
 
     private Kind kindOf(Entity e) {
@@ -302,8 +322,7 @@ public class Esp extends Module {
     @Override
     public void onRenderWorld(RenderContext context) {
         if (mc.level == null || mc.player == null) return;
-        Mode m = mode.get();
-        if (m != Mode.BOX_3D && m != Mode.WIREFRAME) return;
+        if (!show3d.get() && !showWire.get()) return;
         float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         for (Entity e : mc.level.entitiesForRendering()) {
             Kind kind = kindOf(e);
@@ -311,11 +330,12 @@ public class Esp extends Module {
             int c = rgbFor(e, kind);
             float fa = alphaFor(e);
             AABB box = boxAt(e, partial);
-            if (m == Mode.BOX_3D) {
+            if (show3d.get()) {
                 int a = (int) ((40 + 215 * fill.get()) * fa);
                 int color = (Math.min(255, a) << 24) | c;
                 RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
-            } else {
+            }
+            if (showWire.get()) {
                 double w = 0.008 * thickness.get();
                 int color = Math.min(255, (int) (255 * fa)) << 24 | c;
                 RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawEdges(pose, buffer, box, color, w));
@@ -396,17 +416,16 @@ public class Esp extends Module {
             if (r == null || r[2] < 0 || r[3] < 0 || r[0] > g.guiWidth() || r[1] > g.guiHeight()) continue;
             int x1 = r[0], y1 = r[1], x2 = Math.max(r[2], x1 + 3), y2 = Math.max(r[3], y1 + 3);
 
-            if (mode.get() == Mode.CLEAN) {
-                drawClean(g, e, x1, y1, x2, y2, c);
-                continue;
-            }
-            if (fill.get() > 0) g.fill(x1, y1, x2, y2, Theme.alpha(c, fill.get().floatValue() * 0.6f));
-            if (mode.get() == Mode.BOX_2D) {
+            if (showClean.get()) drawClean(g, e, x1, y1, x2, y2, c);
+            if (!show2d.get() && !showCorners.get()) continue;
+            if (fill.get() > 0 && !showClean.get()) g.fill(x1, y1, x2, y2, Theme.alpha(c, fill.get().floatValue() * 0.6f));
+            if (show2d.get()) {
                 line(g, x1, y1, x2, y1 + t, c);
                 line(g, x1, y2 - t, x2, y2, c);
                 line(g, x1, y1, x1 + t, y2, c);
                 line(g, x2 - t, y1, x2, y2, c);
-            } else {
+            }
+            if (showCorners.get()) {
                 int lx = Math.max(2, (x2 - x1) / 4), ly = Math.max(2, (y2 - y1) / 5);
                 line(g, x1, y1, x1 + lx, y1 + t, c);
                 line(g, x1, y1, x1 + t, y1 + ly, c);
@@ -417,6 +436,8 @@ public class Esp extends Module {
                 line(g, x2 - lx, y2 - t, x2, y2, c);
                 line(g, x2 - t, y2 - ly, x2, y2, c);
             }
+            // CLEAN already drew its health bar and name
+            if (showClean.get()) continue;
 
             int below = y2 + 3;
             if (healthBar.get() && e instanceof LivingEntity l) {

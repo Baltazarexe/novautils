@@ -582,12 +582,12 @@ public final class SelfTest {
             on(dev.novautils.modules.render.Esp.class);
         });
         for (var espMode : dev.novautils.modules.render.Esp.Mode.values()) {
-            step(10, () -> set(dev.novautils.modules.render.Esp.class, "mode", espMode));
+            step(10, () -> dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.render.Esp.class).showOnly(espMode));
             step(10, () -> shot("08_esp_" + espMode.name().toLowerCase()));
         }
         step(2, () -> {
             cmd("/fill 3 100 -4 3 103 4 minecraft:stone");
-            set(dev.novautils.modules.render.Esp.class, "mode", dev.novautils.modules.render.Esp.Mode.CHAMS);
+            dev.novautils.modules.ModuleManager.get().get(dev.novautils.modules.render.Esp.class).showOnly(dev.novautils.modules.render.Esp.Mode.CHAMS);
         });
         step(10, () -> shot("09_chams_wall_solid"));
         step(2, () -> {
