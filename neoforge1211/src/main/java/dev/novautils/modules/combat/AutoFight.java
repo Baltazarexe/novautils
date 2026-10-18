@@ -3,6 +3,7 @@ package dev.novautils.modules.combat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.settings.Setting;
+import dev.novautils.utils.Friends;
 import dev.novautils.utils.InvUtils;
 import dev.novautils.utils.Rotations;
 import net.minecraft.tags.ItemTags;
@@ -16,8 +17,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Fights mobs for you while you farm or AFK in a grinder.
- * {@code Player} is hard-excluded below (not a setting) - this never attacks a real player.
+ * Fights mobs for you while you farm or AFK in a grinder, and other players when {@code players}
+ * is on. Friends are never targeted. There is no server lookup.
  *
  * <p>Waits for your weapon's own cooldown by default so every hit is a full-damage hit, looks at
  * the mob server-side before swinging (your camera stays put), won't hit through walls, and by
@@ -57,6 +58,10 @@ public class AutoFight extends Module {
     private final Setting<Boolean> throughWalls = register(Setting.builder(Boolean.class, "through-walls")
         .description("Hit mobs you can't see.")
         .defaultValue(false).build());
+
+    private final Setting<Boolean> players = register(Setting.builder(Boolean.class, "players")
+        .description("Attack other players. Friends are never targeted.")
+        .defaultValue(true).build());
 
     private final Setting<Boolean> hostiles = register(Setting.builder(Boolean.class, "hostile-mobs")
         .description("Attack hostile mobs (zombies, skeletons, ...).")
@@ -99,7 +104,7 @@ public class AutoFight extends Module {
     private static java.lang.reflect.Method isCreepy;
 
     public AutoFight() {
-        super("AutoFight", "Automatically attacks nearby mobs. Never targets other players.", Category.COMBAT);
+        super("AutoFight", "Attacks nearby mobs and, when Players is on, other players. Never friends.", Category.COMBAT);
     }
 
     @Override
@@ -113,8 +118,7 @@ public class AutoFight extends Module {
     }
 
     private boolean valid(Entity entity) {
-        // Hard exclusion: never a real player, regardless of settings.
-        if (entity instanceof Player) return false;
+        if (entity instanceof Player player) return validPlayer(player);
         if (isProjectile(entity)) {
             return projectiles.get() && entity.isAlive() && inReach(entity)
                 && (throughWalls.get() || mc.player.hasLineOfSight(entity));
@@ -142,6 +146,16 @@ public class AutoFight extends Module {
 
         if (!inReach(living)) return false;
         return throughWalls.get() || mc.player.hasLineOfSight(entity);
+    }
+
+    /** Other players. No server lookup: the Players setting is the only switch. */
+    private boolean validPlayer(Player player) {
+        if (!players.get()) return false;
+        if (player == mc.player || player.isPassengerOfSameVehicle(mc.player)) return false;
+        if (!player.isAlive() || player.isSpectator() || player.isInvulnerable()) return false;
+        if (Friends.isFriend(player)) return false;
+        if (!inReach(player)) return false;
+        return throughWalls.get() || mc.player.hasLineOfSight(player);
     }
 
     /**

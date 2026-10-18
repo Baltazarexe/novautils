@@ -128,10 +128,10 @@ Type them in chat; they never reach the server. `.help` lists them.
 | NoFall, NoSlow, Velocity, AntiVoid | Fall damage, item slowdown, knockback, void. |
 | InventoryMove | Walk around with menus open. |
 
-### Combat (mobs only)
+### Combat
 | Module | What it does |
 |---|---|
-| AutoFight | Attacks nearby hostile mobs (and neutral ones only when they're angry at you). |
+| AutoFight | Attacks nearby hostile mobs (and neutral ones only when they're angry at you). With Players on, also other players. Friends are skipped. |
 | Criticals | Every hit on a mob is a critical hit. |
 | AutoTotem, AutoArmor, Surround, AutoLog | Defensive helpers. |
 
@@ -176,9 +176,9 @@ Type them in chat; they never reach the server. `.help` lists them.
 
 ## Fair play
 
-NovaUtils deliberately has **no automation that targets other players**: AutoFight and Criticals
-only ever work on mobs, and there is no reach or PvP aura. Movement and automation modules can
-still get you kicked or banned on servers with anti-cheat; use them where they're allowed.
+AutoFight targets other players only while its Players setting is on (friends are never targeted).
+Criticals still only crits mobs. Movement and automation modules can still get you kicked or banned
+on servers with anti-cheat; use them where they're allowed.
 
 ## Building
 
