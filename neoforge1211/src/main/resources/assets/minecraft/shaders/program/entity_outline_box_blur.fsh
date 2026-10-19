@@ -7,10 +7,13 @@ uniform sampler2D DiffuseSampler;
 in vec2 texCoord;
 in vec2 sampleStep;
 
+uniform float Spread;
+uniform float Strength;
+
 out vec4 fragColor;
 
 void main() {
-    vec2 stepDir = sampleStep;
+    vec2 stepDir = sampleStep * Spread;
     const float R = 11.0;
     const float SIGMA = 4.2;
     vec4 sum = vec4(0.0);
@@ -24,5 +27,5 @@ void main() {
     vec4 avg = sum / weights;
     vec3 color = avg.a > 0.0001 ? avg.rgb / avg.a : vec3(0.0);
     // soft curve: full strength at the edge, a long fade outwards
-    fragColor = vec4(color, 1.0 - exp(-avg.a * 2.6));
+    fragColor = vec4(color, 1.0 - exp(-avg.a * 2.6 * Strength));
 }

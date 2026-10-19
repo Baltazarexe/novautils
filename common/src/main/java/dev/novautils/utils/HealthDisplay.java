@@ -48,40 +48,43 @@ public final class HealthDisplay {
         return new float[]{(float) a[0], (float) a[1]};
     }
 
+    /** Fill colour of the pill bars: a deep green when healthy, easing to red as health drops. */
+    public static int pillColor(float f) {
+        f = Math.max(0f, Math.min(1f, f));
+        return dev.novautils.gui.Theme.mix(0xFFE5484D, 0xFF058669, Math.min(1f, f * 1.6f));
+    }
+
     /**
-     * Draws the bar. {@code ticks} adds a mark every two hearts (when there's room), {@code number}
-     * writes the health in the middle (needs h >= 8).
+     * The shared look: a rounded pill on a dark translucent track, the fill a rounded pill too, with
+     * the pale "ghost" of health that was just lost sitting behind it. {@code shown} and
+     * {@code ghost} are fractions (see {@link #animated}), {@code now} the real fraction (colour).
+     */
+    public static void pill(GuiGraphicsExtractor g, int x, int y, int w, int h, float shown, float ghost, float now, float alpha) {
+        int r = h / 2;
+        if (h < 3) {
+            g.fill(x, y, x + w, y + h, dev.novautils.gui.Theme.alpha(0x64000000, alpha));
+            g.fill(x, y, x + Math.round(w * shown), y + h, dev.novautils.gui.Theme.alpha(pillColor(now), alpha));
+            return;
+        }
+        dev.novautils.gui.Theme.rounded(g, x, y, w, h, r, dev.novautils.gui.Theme.alpha(0x64000000, alpha));
+        int ghostW = Math.round(w * ghost), fill = Math.round(w * shown);
+        if (ghostW > fill) dev.novautils.gui.Theme.rounded(g, x, y, ghostW, h, r, dev.novautils.gui.Theme.alpha(0xFFF2F2F2, 0.8f * alpha));
+        if (fill > 0) dev.novautils.gui.Theme.rounded(g, x, y, Math.max(fill, h), h, r, dev.novautils.gui.Theme.alpha(pillColor(now), alpha));
+    }
+
+    /**
+     * Draws the bar for an entity. {@code ticks} is kept for older callers (the pill look has none);
+     * absorption is a thin gold pill along the top.
      */
     public static void bar(GuiGraphicsExtractor g, int x, int y, int w, int h, LivingEntity e, boolean ticks, float alpha) {
         float[] f = animated(e);
         float now = Math.max(0f, Math.min(1f, e.getHealth() / Math.max(1f, e.getMaxHealth())));
-        int c = color(now);
-        int a = Math.max(0, Math.min(255, (int) (255 * alpha)));
-
-        g.fill(x - 1, y - 1, x + w + 1, y + h + 1, Math.min(255, (int) (0xC0 * alpha)) << 24 | 0x0B0C10);
-        g.fill(x, y, x + w, y + h, Math.min(255, (int) (0xFF * alpha)) << 24 | 0x23262E);
-
-        int ghost = Math.round(w * f[1]), fill = Math.round(w * f[0]);
-        if (ghost > fill) g.fill(x + fill, y, x + ghost, y + h, Math.min(255, (int) (0xD0 * alpha)) << 24 | 0xF2F2F2);
-        if (fill > 0) {
-            int top = lighten(c, 0.35f) & 0xFFFFFF | a << 24, bottom = c & 0xFFFFFF | a << 24;
-            if (h >= 3) g.fillGradient(x, y, x + fill, y + h, top, bottom);
-            else g.fill(x, y, x + fill, y + h, bottom);
-        }
+        pill(g, x, y, w, h, f[0], f[1], now, alpha);
 
         float absorb = e.getAbsorptionAmount();
-        if (absorb > 0) {
+        if (absorb > 0 && h >= 3) {
             int aw = Math.min(w, Math.round(w * absorb / Math.max(1f, e.getMaxHealth())));
-            g.fill(x, y, x + aw, y + Math.max(1, h / 3), a << 24 | 0xFFD84A);
-        }
-
-        // a tick every 4 health (two hearts) if they'd be at least 4 px apart
-        float max = e.getMaxHealth();
-        if (ticks && max >= 8 && w / (max / 4f) >= 4) {
-            for (float hp = 4; hp < max - 0.1f; hp += 4) {
-                int tx = x + Math.round(w * hp / max);
-                g.fill(tx, y, tx + 1, y + h, Math.min(255, (int) (0x70 * alpha)) << 24);
-            }
+            dev.novautils.gui.Theme.rounded(g, x, y, Math.max(aw, 2), Math.max(1, h / 3), 1, dev.novautils.gui.Theme.alpha(0xFFFFD84A, alpha));
         }
     }
 }

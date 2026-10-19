@@ -30,8 +30,10 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 - **Right Shift** opens the menu. **Delete** turns every module off (panic key).
 - Click a module (or its switch) to toggle it, right-click it to open its settings,
   middle-click it to add it to the **Favorites** tab.
-- Two menu styles: the single **Nova** window, or **Classic**, draggable panels per
-  category. The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
+- Two menu styles: the single **Nova** window, or **Classic**, flat graphite panels (one orange
+  accent, enabled modules as a solid row in that colour), draggable, one per category. Drag the
+  colour strip at the top to pick any menu colour (middle-click it to go back to orange); it is remembered.
+  The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
 - Any module can be bound to a key or a mouse button (side buttons too) from its settings.
 - **Edit HUD** in the menu lets you drag the HUD elements (coords, armour, minimap, ...) anywhere.
 - Settings are saved to `config/novautils.json`.
@@ -82,11 +84,11 @@ Type them in chat; they never reach the server. `.help` lists them.
 |---|---|
 | Fullbright | Makes everything fully lit, no more caves or night. |
 | Xray | Hides everything but the ores you pick (see-through), or boxes them. |
-| Esp | Highlights entities through walls (chams / box). |
+| Esp | Highlights entities through walls (box, chams, textured chams, glow), every look a toggle. |
 | StorageEsp | Highlights chests, shulkers, barrels and more through walls. |
 | Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`.  Or open the list editor from the menu (search, icons, 3D mob preview). |
 | BlockHighlight | Outlines the block you are looking at (rainbow option). |
-| TargetHud | Name, health, armour and distance of the creature you look at (works past survival reach). |
+| TargetHud | Name, animated health pill, armour and distance of the creature you look at (works past survival reach). |
 | GearView | Armour, held items and enchantments (short tags or full names) above other players, with durability. |
 | Crosshair | Custom crosshair: cross, dot, circle or T, any size and colour, changes colour on mobs. |
 | SkyFog | Push back or remove fog, tint it, clear water and lava. |
@@ -96,14 +98,14 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Compass | A heading bar with your waypoints on it. |
 | GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
 | Tracers | Lines from your crosshair to nearby entities. |
-| Nametags | Name tags in three styles (card with an animated health bar, classic, minimal): health, ping, distance, totem pops, held item. |
+| Nametags | Name tags in three styles (card with an animated health pill, classic, minimal): health, ping, distance, totem pops, held item. |
 | Waypoints | Named markers with distance, visible through walls. |
 | Minimap | A small map with you, mobs, players and waypoints. |
 | ShulkerPeek | Hover a shulker box to see what's inside. |
 | BreakIndicator | Shows the progress of blocks being broken, yours and other players'. |
 | HitsToKill | A mob's health and how many hits it still needs. |
-| HealthBars | Health bars over mobs and/or players (filter: mobs, players or both; hostile only). |
-| Esp styles | CLEAN (tidy 2D box, name pill, animated health bar), soft wide GLOW halo, CORNERS, 2D box, 3D box, wireframe, CHAMS (through-wall model, solid/textured/rainbow) or glow. Plus colour by health, rainbow, two-tone (another colour behind walls), distance fade, pulse, glow in the exact colour, and arrows pointing at what is off screen. |
+| HealthBars | Rounded health pills over mobs and/or players, with a pale ghost of the health just lost (filter: mobs, players or both; hostile only). |
+| Esp looks | Every look is its own on/off toggle, so they can be combined: CLEAN box (tidy 2D box, name pill, animated health pill), CORNERS, 2D box, 3D box, wireframe, CHAMS (flat colour through walls), CHAMS TEXTURED (the mob's real skin, 100% opaque, visible through walls) and a soft wide GLOW. GLOW has its own sliders for how far it spreads and how strong it is. Also toggles for the fill, colour by health, rainbow, two-tone (another colour behind walls), distance fade, pulse, and arrows pointing at what is off screen. |
 | FallPredict | Where you'll land and how much fall damage it will do. |
 | ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |

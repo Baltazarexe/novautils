@@ -1093,6 +1093,22 @@ public class NovaClientGameTest implements FabricClientGameTest {
             var h = c.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, c.player.getBoundingBox().inflate(10), x -> "husk".equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(x.getType()).getPath())).stream().findFirst().orElse(null);
             return h != null && (h.getTeamColor() >> 16 & 0xFF) == 255 && (h.getTeamColor() >> 8 & 0xFF) < 200;
         }), "glow takes the exact health colour (low health = red)");
+        ctx.runOnClient(c -> {
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-spread")).set(3.0);
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-strength")).set(3.0);
+        });
+        ctx.waitTicks(15);
+        shot(ctx, "39b_esp_glow_wide_strong");
+        ctx.runOnClient(c -> {
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-spread")).set(0.4);
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-strength")).set(0.4);
+        });
+        ctx.waitTicks(15);
+        shot(ctx, "39c_esp_glow_tight_faint");
+        ctx.runOnClient(c -> {
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-spread")).set(1.0);
+            ((Setting<Double>) setting(dev.novautils.modules.render.Esp.class, "glow-strength")).set(1.0);
+        });
         // --- GearView: armour, held items and enchantments above a zombie dressed in enchanted gear
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/kill @e[type=!minecraft:player]");
@@ -1405,6 +1421,11 @@ public class NovaClientGameTest implements FabricClientGameTest {
         click(ctx, classicRow, 0);
         check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.Zoom.class).isEnabled()), "left-click in the classic menu toggles a module");
         shot(ctx, "30_classic_menu");
+        ctx.runOnClient(c -> dev.novautils.gui.GuiState.get().setMenuColor(0x3B82F6));
+        ctx.waitTicks(3);
+        shot(ctx, "30b_classic_menu_blue");
+        check(ctx.computeOnClient(c -> dev.novautils.gui.GuiState.get().menuColor() == 0xFF3B82F6), "the classic menu colour can be changed");
+        ctx.runOnClient(c -> dev.novautils.gui.GuiState.get().setMenuColor(dev.novautils.gui.GuiState.DEFAULT_MENU_COLOR));
         click(ctx, new int[]{252, 15}, 0);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen

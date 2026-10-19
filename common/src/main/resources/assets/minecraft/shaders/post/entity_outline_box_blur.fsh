@@ -9,9 +9,11 @@ layout(std140) uniform SamplerInfo {
     vec2 InSize;
 };
 
-layout(std140) uniform BlurConfig {
+// Spread and Strength come from the ESP glow sliders (see PostPassMixin)
+layout(std140) uniform GlowConfig {
     vec2 BlurDir;
-    float Radius;
+    float Spread;
+    float Strength;
 };
 
 uniform sampler2D InSampler;
@@ -21,7 +23,7 @@ layout(location = 0) in vec2 texCoord;
 layout(location = 0) out vec4 fragColor;
 
 void main() {
-    vec2 sampleStep = BlurDir / InSize;
+    vec2 sampleStep = BlurDir / InSize * Spread;
     const float R = 11.0;
     const float SIGMA = 4.2;
     vec4 sum = vec4(0.0);
@@ -35,5 +37,5 @@ void main() {
     vec4 avg = sum / weights;
     vec3 color = avg.a > 0.0001 ? avg.rgb / avg.a : vec3(0.0);
     // soft curve: full strength at the edge, a long fade outwards
-    fragColor = vec4(color, 1.0 - exp(-avg.a * 2.6));
+    fragColor = vec4(color, 1.0 - exp(-avg.a * 2.6 * Strength));
 }

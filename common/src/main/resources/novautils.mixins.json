@@ -46,6 +46,7 @@
     "ParticleEngineMixin",
     "NametagHideMixin",
     "EspGlowColorMixin",
+    "PostPassMixin",
     "MinecraftUserAccessor",
     "MultiplayerScreenMixin",
     "ContainerScreenMixin",

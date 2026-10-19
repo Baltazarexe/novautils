@@ -81,9 +81,8 @@ public class TargetHud extends HudModule {
 
         float f = Math.max(0f, Math.min(1f, hp / Math.max(1f, max)));
         int by = y + 17, bw = w - 12;
-        int hc = 0xFF000000 | (int) (255 * Math.min(1f, 2f * (1f - f))) << 16 | (int) (220 * Math.min(1f, 2f * f)) << 8 | 0x40;
-        g.fill(x + 6, by, x + 6 + bw, by + 5, Theme.TRACK);
-        if (f > 0) g.fill(x + 6, by, x + 6 + Math.max(1, Math.round(bw * f)), by + 5, hc);
+        float[] anim = target != null ? dev.novautils.utils.HealthDisplay.animated(target) : new float[]{f, f};
+        dev.novautils.utils.HealthDisplay.pill(g, x + 6, by, bw, 6, anim[0], anim[1], f, 1f);
 
         String left = String.format(java.util.Locale.ROOT, "%.1f / %.0f", hp, max);
         g.drawString(mc.font, left, x + 6, y + 24, Theme.TEXT, false);

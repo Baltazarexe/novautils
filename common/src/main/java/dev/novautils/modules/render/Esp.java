@@ -57,7 +57,7 @@ public class Esp extends Module {
     private final Setting<Boolean> show3d = look("box-3d", "A soft filled box in the world.", false);
     private final Setting<Boolean> showWire = look("wireframe", "Just the edges of the 3D box.", false);
     private final Setting<Boolean> showChams = look("chams", "The model itself through walls in one flat colour.", false);
-    private final Setting<Boolean> showChamsTex = look("chams-textured", "The model itself through walls with its own skin, tinted. Can be on together with the others.", false);
+    private final Setting<Boolean> showChamsTex = look("chams-textured", "The mob's real skin, 100% opaque and untinted, visible through walls. Can be on together with the others.", false);
     private final Setting<Boolean> showGlow = look("glow", "Soft glowing outline around the model.", false);
 
     private Setting<Boolean> look(String name, String description, boolean on) {
@@ -100,6 +100,14 @@ public class Esp extends Module {
     private final Setting<Double> chamsOpacity = register(Setting.builder(Double.class, "chams-opacity")
         .description("How solid the chams look.").defaultValue(0.55).range(0.15, 1.0)
         .visible(this::chamsOn).build());
+
+    private final Setting<Double> glowSpread = register(Setting.builder(Double.class, "glow-spread")
+        .description("How far the glow spreads around the model.").defaultValue(1.0).range(0.4, 3.0)
+        .visible(() -> showGlow.get()).build());
+
+    private final Setting<Double> glowStrength = register(Setting.builder(Double.class, "glow-strength")
+        .description("How intense the glow is.").defaultValue(1.0).range(0.4, 3.0)
+        .visible(() -> showGlow.get()).build());
 
     private final Setting<Boolean> rainbow = register(Setting.builder(Boolean.class, "rainbow")
         .description("Cycle the colour through the rainbow (every style).").defaultValue(false).build());
@@ -172,8 +180,19 @@ public class Esp extends Module {
         if (mc.player == null) return 0;
         Kind kind = esp.kindOf(e);
         if (kind == null) return 0;
+        // textured: the mob exactly as it looks, fully opaque and untinted, just visible through walls
+        if (esp.showChamsTex.get()) return 0xFFFFFFFF;
         int a = Math.max(26, Math.min(255, (int) (esp.chamsOpacity.get() * 255 * esp.alphaFor(e))));
         return a << 24 | esp.rgbFor(e, kind);
+    }
+
+    /** The glow sliders, read by the outline shader setup (1 while Esp is off). */
+    public static float glowSpread() {
+        return instance != null && instance.isEnabled() ? instance.glowSpread.get().floatValue() : 1f;
+    }
+
+    public static float glowStrength() {
+        return instance != null && instance.isEnabled() ? instance.glowStrength.get().floatValue() : 1f;
     }
 
     /** EspGlowColorMixin: the exact outline colour for GLOW (RGB), or 0 to leave the game's. */
@@ -284,12 +303,14 @@ public class Esp extends Module {
     @Override
     public void onDisable() {
         clearGlow();
+        dev.novautils.utils.GlowTuning.update(1f, 1f);
     }
 
     @Override
     public void onTick() {
         if (mc.level == null || mc.player == null) return;
         visible.clear();
+        dev.novautils.utils.GlowTuning.update(glowSpread(), glowStrength());
         if (twoTone.get()) {
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (kindOf(e) != null) visible.put(e.getId(), mc.player.hasLineOfSight(e));
@@ -490,13 +511,13 @@ public class Esp extends Module {
         if (healthBar.get() && e instanceof LivingEntity l) {
             float[] hp = dev.novautils.utils.HealthDisplay.animated(l);
             float now = Math.max(0f, Math.min(1f, l.getHealth() / Math.max(1f, l.getMaxHealth())));
-            int bx = x1 - 6, h = y2 - y1;
-            g.fill(bx - 1, y1 - 1, bx + 3, y2 + 1, dark);
-            g.fill(bx, y1, bx + 2, y2, Theme.alpha(0xFF1C1E25, a));
+            int bx = x1 - 7, h = y2 - y1;
+            // the same pill look as the other bars, standing up: dark translucent track, rounded fill, pale ghost of lost health
+            int bw = 4, r = 2;
+            Theme.rounded(g, bx, y1, bw, h, r, Theme.alpha(0x64000000, a));
             int fillH = Math.round(h * hp[0]), ghost = Math.round(h * hp[1]);
-            if (ghost > fillH) g.fill(bx, y2 - ghost, bx + 2, y2 - fillH, Theme.alpha(0xFFF2F2F2, 0.85f * a));
-            int hc = dev.novautils.utils.HealthDisplay.color(now);
-            if (fillH > 0) g.fillGradient(bx, y2 - fillH, bx + 2, y2, Theme.alpha(Theme.mix(hc, 0xFFFFFFFF, 0.3f), a), Theme.alpha(hc, a));
+            if (ghost > fillH) Theme.rounded(g, bx, y2 - ghost, bw, ghost, r, Theme.alpha(0xFFF2F2F2, 0.8f * a));
+            if (fillH > 0) Theme.rounded(g, bx, y2 - Math.max(fillH, bw), bw, Math.max(fillH, bw), r, Theme.alpha(dev.novautils.utils.HealthDisplay.pillColor(now), a));
         }
 
         if (info.get()) {

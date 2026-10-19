@@ -12,6 +12,7 @@
     "ParticleEngineMixin",
     "NametagHideMixin",
     "EspGlowColorMixin",
+    "PostPassMixin",
     "ChatComponentAccessor",
     "ChatComponentMixin",
     "ChatSendMixin",
