@@ -1173,7 +1173,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         shot(ctx, "48_esp_clean");
         ctx.runOnClient(c -> {
             ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "chams")).set(true);
-            ((Setting<dev.novautils.modules.render.Esp.ChamsStyle>) setting(dev.novautils.modules.render.Esp.class, "chams-style")).set(dev.novautils.modules.render.Esp.ChamsStyle.TEXTURED);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "chams-textured")).set(true);
         });
         ctx.waitTicks(3);
         shot(ctx, "49_esp_clean_plus_chams");

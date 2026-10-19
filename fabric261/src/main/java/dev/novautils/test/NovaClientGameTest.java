@@ -1045,7 +1045,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         shot(ctx, "48_esp_clean");
         ctx.runOnClient(c -> {
             ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "chams")).set(true);
-            ((Setting<dev.novautils.modules.render.Esp.ChamsStyle>) setting(dev.novautils.modules.render.Esp.class, "chams-style")).set(dev.novautils.modules.render.Esp.ChamsStyle.TEXTURED);
+            ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "chams-textured")).set(true);
         });
         ctx.waitTicks(3);
         shot(ctx, "49_esp_clean_plus_chams");
@@ -1316,7 +1316,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(10);
         shot(ctx, "33_chams_wall_solid");
         ctx.runOnClient(c -> {
-            ((Setting<Esp.ChamsStyle>) setting(Esp.class, "chams-style")).set(Esp.ChamsStyle.TEXTURED);
+            ((Setting<Boolean>) setting(Esp.class, "chams-textured")).set(true);
             ((Setting<Boolean>) setting(Esp.class, "rainbow")).set(true);
         });
         ctx.waitTicks(10);

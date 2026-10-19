@@ -42,7 +42,6 @@ import java.util.Map;
  */
 public class Esp extends Module {
     public enum Mode { CLEAN, CORNERS, BOX_2D, BOX_3D, WIREFRAME, CHAMS, GLOW }
-    public enum ChamsStyle { SOLID, TEXTURED }
 
     /** The plain white texture SOLID chams are drawn with (tinted to the colour). */
     public static final net.minecraft.resources.ResourceLocation WHITE = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("novautils", "textures/white.png");
@@ -56,7 +55,8 @@ public class Esp extends Module {
     private final Setting<Boolean> show2d = look("box-2d", "A thin rectangle, flat on screen.", false);
     private final Setting<Boolean> show3d = look("box-3d", "A soft filled box in the world.", false);
     private final Setting<Boolean> showWire = look("wireframe", "Just the edges of the 3D box.", false);
-    private final Setting<Boolean> showChams = look("chams", "The model itself through walls, solid colour or its own texture.", false);
+    private final Setting<Boolean> showChams = look("chams", "The model itself through walls in one flat colour.", false);
+    private final Setting<Boolean> showChamsTex = look("chams-textured", "The model itself through walls with its own skin, tinted. Can be on together with the others.", false);
     private final Setting<Boolean> showGlow = look("glow", "Soft glowing outline around the model.", false);
 
     private Setting<Boolean> look(String name, String description, boolean on) {
@@ -71,6 +71,7 @@ public class Esp extends Module {
         show3d.set(m == Mode.BOX_3D);
         showWire.set(m == Mode.WIREFRAME);
         showChams.set(m == Mode.CHAMS);
+        showChamsTex.set(false);
         showGlow.set(m == Mode.GLOW);
     }
 
@@ -95,13 +96,9 @@ public class Esp extends Module {
     private final Setting<Integer> passiveColor = register(Setting.builder(Integer.class, "passive-mobs-color")
         .description("Colour for animals and neutral mobs.").defaultValue(0xFF66E07A).asColor().visible(passives::get).build());
 
-    private final Setting<ChamsStyle> chamsStyle = register(Setting.builder(ChamsStyle.class, "chams-style")
-        .description("SOLID: one flat colour. TEXTURED: the mob's own skin, tinted.").defaultValue(ChamsStyle.SOLID)
-        .visible(() -> showChams.get()).build());
-
     private final Setting<Double> chamsOpacity = register(Setting.builder(Double.class, "chams-opacity")
         .description("How solid the chams look.").defaultValue(0.55).range(0.15, 1.0)
-        .visible(() -> showChams.get()).build());
+        .visible(this::chamsOn).build());
 
     private final Setting<Boolean> rainbow = register(Setting.builder(Boolean.class, "rainbow")
         .description("Cycle the colour through the rainbow (every style).").defaultValue(false).build());
@@ -132,9 +129,13 @@ public class Esp extends Module {
         .description("Line thickness.").defaultValue(1).range(1, 3)
         .visible(() -> showCorners.get() || show2d.get() || showWire.get()).build());
 
-    private final Setting<Double> fill = register(Setting.builder(Double.class, "fill")
-        .description("How see-through the inside is (0 = no fill).").defaultValue(0.15).range(0.0, 0.8)
+    private final Setting<Boolean> fillOn = register(Setting.builder(Boolean.class, "fill")
+        .description("Tint the inside of the boxes.").defaultValue(true)
         .visible(() -> showClean.get() || showCorners.get() || show2d.get() || show3d.get()).build());
+
+    private final Setting<Double> fillAmount = register(Setting.builder(Double.class, "fill-amount")
+        .description("How strong the tint inside the boxes is.").defaultValue(0.15).range(0.05, 0.8)
+        .visible(() -> fillOn.get() && (showClean.get() || showCorners.get() || show2d.get() || show3d.get())).build());
 
     private final Setting<Boolean> healthBar = register(Setting.builder(Boolean.class, "health-bar")
         .description("Health bar beside the box (flat styles).").defaultValue(true)
@@ -160,13 +161,13 @@ public class Esp extends Module {
 
     /** Shaderpacks replace entity rendering, so CHAMS shows as GLOW while one is on. */
     private boolean glowing() {
-        return showGlow.get() || (showChams.get() && dev.novautils.utils.ShaderCompat.shadersActive());
+        return showGlow.get() || (chamsOn() && dev.novautils.utils.ShaderCompat.shadersActive());
     }
 
     /** ChamsMixin: the chams colour for this entity (ARGB), or 0 for none. */
     public static int chamsColor(Entity e) {
         Esp esp = instance;
-        if (esp == null || !esp.isEnabled() || !esp.showChams.get() || dev.novautils.utils.ShaderCompat.shadersActive()) return 0;
+        if (esp == null || !esp.isEnabled() || !esp.chamsOn() || dev.novautils.utils.ShaderCompat.shadersActive()) return 0;
         if (mc.player == null) return 0;
         Kind kind = esp.kindOf(e);
         if (kind == null) return 0;
@@ -210,7 +211,11 @@ public class Esp extends Module {
     }
 
     public static boolean chamsTextured() {
-        return instance != null && instance.chamsStyle.get() == ChamsStyle.TEXTURED;
+        return instance != null && instance.showChamsTex.get();
+    }
+
+    private boolean chamsOn() {
+        return showChams.get() || showChamsTex.get();
     }
 
     private boolean flat() {
@@ -330,7 +335,7 @@ public class Esp extends Module {
             float fa = alphaFor(e);
             AABB box = boxAt(e, partial);
             if (show3d.get()) {
-                int a = (int) ((40 + 215 * fill.get()) * fa);
+                int a = (int) ((40 + 215 * (fillOn.get() ? fillAmount.get() : 0.0)) * fa);
                 int color = (Math.min(255, a) << 24) | c;
                 RenderUtils.world(context, (pose, buffer) -> RenderUtils.drawBox(pose, buffer, box, color));
             }
@@ -417,7 +422,7 @@ public class Esp extends Module {
 
             if (showClean.get()) drawClean(g, e, x1, y1, x2, y2, c);
             if (!show2d.get() && !showCorners.get()) continue;
-            if (fill.get() > 0 && !showClean.get()) g.fill(x1, y1, x2, y2, Theme.alpha(c, fill.get().floatValue() * 0.6f));
+            if (fillOn.get() && !showClean.get()) g.fill(x1, y1, x2, y2, Theme.alpha(c, fillAmount.get().floatValue() * 0.6f));
             if (show2d.get()) {
                 line(g, x1, y1, x2, y1 + t, c);
                 line(g, x1, y2 - t, x2, y2, c);
@@ -475,7 +480,7 @@ public class Esp extends Module {
      */
     private void drawClean(GuiGraphics g, Entity e, int x1, int y1, int x2, int y2, int c) {
         float a = (c >>> 24) / 255f;
-        if (fill.get() > 0) g.fillGradient(x1, y1, x2, y2, Theme.alpha(c, Math.min(1f, fill.get().floatValue() * 1.4f)), Theme.alpha(c, 0.02f));
+        if (fillOn.get()) g.fillGradient(x1, y1, x2, y2, Theme.alpha(c, Math.min(1f, fillAmount.get().floatValue() * 1.4f)), Theme.alpha(c, 0.02f));
         int dark = Theme.alpha(0xD0000000, a);
         frame(g, x1 - 1, y1 - 1, x2 + 1, y2 + 1, dark);
         frame(g, x1 + 1, y1 + 1, x2 - 1, y2 - 1, dark);

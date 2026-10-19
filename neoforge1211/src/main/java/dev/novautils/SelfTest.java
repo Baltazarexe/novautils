@@ -591,7 +591,7 @@ public final class SelfTest {
         });
         step(10, () -> shot("09_chams_wall_solid"));
         step(2, () -> {
-            set(dev.novautils.modules.render.Esp.class, "chams-style", dev.novautils.modules.render.Esp.ChamsStyle.TEXTURED);
+            set(dev.novautils.modules.render.Esp.class, "chams-textured", true);
             set(dev.novautils.modules.render.Esp.class, "rainbow", true);
         });
         step(10, () -> {
