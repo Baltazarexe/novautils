@@ -69,7 +69,7 @@ public class Compass extends HudModule {
             }
         }
         // the heading mark
-        g.fill(cx - 1, y + h - 8, cx + 2, y + h - 3, Theme.ACCENT);
+        g.fill(cx - 1, y + h - 8, cx + 2, y + h - 3, Theme.accent());
         if (degrees.get()) {
             String t = Math.round(heading) + "°";
             g.drawString(mc.font, t, cx - mc.font.width(t) / 2, y + h - 11, Theme.TEXT_DIM, false);
@@ -83,7 +83,7 @@ public class Compass extends HudModule {
                 float delta = ((target - heading + 540f) % 360f) - 180f;
                 if (Math.abs(delta) > range - 4) continue;
                 int px = cx + Math.round(delta * ppd);
-                g.fill(px - 2, y + 11, px + 3, y + 16, Theme.ACCENT2);
+                g.fill(px - 2, y + 11, px + 3, y + 16, Theme.accent2());
                 String dist = Math.round(Math.sqrt(dx * dx + dz * dz)) + "m";
                 g.drawString(mc.font, dist, px - mc.font.width(dist) / 2, y + h - 2, Theme.TEXT_DIM, false);
             }

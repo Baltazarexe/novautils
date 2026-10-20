@@ -30,7 +30,7 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
 - **Right Shift** opens the menu. **Delete** turns every module off (panic key).
 - Click a module (or its switch) to toggle it, right-click it to open its settings,
   middle-click it to add it to the **Favorites** tab.
-- Two menu styles: the single **Nova** window, or **Classic**, flat graphite panels (one orange
+- Two menu styles: the single **Nova** window (smooth: a pill glides between tabs, rows fade in one by one, it opens and closes with a soft zoom, accent line on top), or **Classic**, flat graphite panels (one orange
   accent, enabled modules as a solid row in that colour), draggable, one per category. Drag the
   colour strip at the top to pick any menu colour (middle-click it to go back to orange); it is remembered.
   The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
@@ -165,6 +165,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Module | What it does |
 |---|---|
 | HudInfo, ArmorHud, PotionHud, InventoryHUD, KeyStrokes, TotemCounter, ActiveModules | HUD elements. |
+| Theme | One colour for both menus and the HUD: 10 presets (Orange, Nova, Red, Pink, Purple, Blue, Cyan, Green, Yellow, White), your own colour, or a rainbow that cycles. The Classic menu's colour strip sets it too. |
 | Notifier | Alerts for players in view, totem pops, joins, full inventory, low food. |
 | DurabilityAlert | Warns before armour, elytra or tools break. |
 | PlayerRadar | Nearby players and their distance. |

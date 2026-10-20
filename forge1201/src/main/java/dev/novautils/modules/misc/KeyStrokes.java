@@ -27,7 +27,7 @@ public class KeyStrokes extends HudModule {
     private void key(GuiGraphics g, KeyMapping mapping, String label, int px, int py, int w, int h) {
         boolean down = mapping.isDown();
         Theme.softShadow(g, px, py, w, h, 3, 0.2f);
-        Theme.rounded(g, px, py, w, h, 3, down ? Theme.alpha(Theme.ACCENT, 0.9f) : HUD_BG);
+        Theme.rounded(g, px, py, w, h, 3, down ? Theme.alpha(Theme.accent(), 0.9f) : HUD_BG);
         Theme.border(g, px, py, w, h, down ? 0x50FFFFFF : HUD_BORDER);
         int c = down ? 0xFFFFFFFF : HUD_LABEL;
         if (label.isEmpty()) {

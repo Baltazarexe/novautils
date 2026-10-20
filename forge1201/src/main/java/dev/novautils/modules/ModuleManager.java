@@ -226,6 +226,7 @@ public class ModuleManager {
         register(new KeyStrokes());
         register(new TotemCounter());
         register(new Notifications());
+        register(new dev.novautils.modules.misc.ThemeSettings());
         register(new FriendsModule());
         register(new InventoryHud());
         register(new BetterChat());
@@ -330,7 +331,7 @@ public class ModuleManager {
             module.toggle();
             markDirty();
             dev.novautils.gui.Toasts.push(module.name + (module.isEnabled() ? " ON" : " OFF"),
-                module.isEnabled() ? dev.novautils.gui.Theme.ACCENT : 0xFF6E6E82);
+                module.isEnabled() ? dev.novautils.gui.Theme.accent() : 0xFF6E6E82);
         }
     }
 

@@ -10,10 +10,18 @@ import net.minecraft.util.ARGB;
  * works the same on every loader and version.
  */
 public final class Theme {
-    /** Main accent (neon cyan) and the second end of every gradient (violet). */
-    public static final int ACCENT = 0xFF8B9CFF;
-    public static final int ACCENT2 = 0xFFC49BFF;
-    public static final int ACCENT_DIM = 0xFF5D6BCC;
+    /** Main accent and the second end of every gradient: they follow the Theme module (preset, custom or rainbow). */
+    public static int accent() {
+        return dev.novautils.modules.misc.ThemeSettings.accent();
+    }
+
+    public static int accent2() {
+        return dev.novautils.modules.misc.ThemeSettings.accent2();
+    }
+
+    public static int accentDim() {
+        return mix(accent(), 0xFF000000, 0.33f);
+    }
 
     public static final int PANEL_BG = 0xF2121419;
     public static final int PANEL_BORDER = 0xFF262A33;
@@ -21,7 +29,10 @@ public final class Theme {
     public static final int HEADER_BOTTOM = 0xFF131519;
 
     public static final int ROW_HOVER = 0x1AFFFFFF;
-    public static final int ROW_ACTIVE = 0x228B9CFF;
+
+    public static int rowActive() {
+        return alpha(accent(), 0.133f);
+    }
 
     public static final int TEXT = 0xFFE8EAF0;
     public static final int TEXT_DIM = 0xFF9196A4;
@@ -76,7 +87,7 @@ public final class Theme {
 
     /** iOS-style switch, {@code t} = 0 (off) .. 1 (on) so it can slide. 16x9. */
     public static void toggle(GuiGraphicsExtractor g, int x, int y, float t) {
-        rounded(g, x, y, 16, 9, 4, mix(0xFF343844, ACCENT, t));
+        rounded(g, x, y, 16, 9, 4, mix(0xFF343844, accent(), t));
         int kx = x + 1 + Math.round(t * 7);
         rounded(g, kx, y + 1, 7, 7, 3, mix(0xFFB8BCC8, 0xFFFFFFFF, t));
     }
@@ -108,8 +119,8 @@ public final class Theme {
 
     /** The signature accent line: cyan to violet, with a faint glow under it. */
     public static void accentLine(GuiGraphicsExtractor g, int x1, int y, int x2, float alpha) {
-        hGradient(g, x1, y, x2, y + 1, Theme.alpha(ACCENT, alpha), Theme.alpha(ACCENT2, alpha));
-        hGradient(g, x1, y + 1, x2, y + 2, Theme.alpha(ACCENT, alpha * 0.25f), Theme.alpha(ACCENT2, alpha * 0.25f));
+        hGradient(g, x1, y, x2, y + 1, Theme.alpha(accent(), alpha), Theme.alpha(accent2(), alpha));
+        hGradient(g, x1, y + 1, x2, y + 2, Theme.alpha(accent(), alpha * 0.25f), Theme.alpha(accent2(), alpha * 0.25f));
     }
 
     /** Little L-shaped brackets on the four corners - the "HUD" look. */
@@ -126,7 +137,7 @@ public final class Theme {
 
     /** Accent colour at a position along a gradient (0 = cyan, 1 = violet). */
     public static int accentAt(float t) {
-        return mix(ACCENT, ACCENT2, t);
+        return mix(accent(), accent2(), t);
     }
 
     /** 0..1..0 wave, for pulsing glows. */

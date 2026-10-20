@@ -83,6 +83,11 @@ public final class ScreenSpace {
         return setup();
     }
 
+    /** The camera's right vector (world space) after begin(): for placing things beside an entity. */
+    public static Vec3 rightVector() {
+        return right;
+    }
+
     /** Screen position (gui pixels) of a world point after begin(), or null when it is behind you. */
     public static double[] project(Vec3 world) {
         Vec3 c = toCamera(world);

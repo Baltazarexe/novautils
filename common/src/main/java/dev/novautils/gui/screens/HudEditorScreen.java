@@ -1,6 +1,7 @@
 package dev.novautils.gui.screens;
 
 import dev.novautils.gui.Theme;
+import dev.novautils.gui.UiFont;
 import dev.novautils.modules.HudModule;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
@@ -68,7 +69,7 @@ public class HudEditorScreen extends Screen {
         chips.clear();
         int x = 8, y = CHIP_Y;
         for (HudModule m : hudModules()) {
-            int w = this.font.width(m.name) + 12;
+            int w = UiFont.width(m.name) + 12;
             if (x + w > this.width - 8) {
                 x = 8;
                 y += CHIP_H + 3;
@@ -90,16 +91,16 @@ public class HudEditorScreen extends Screen {
 
         // header
         g.fill(0, 0, this.width, 18, 0xC0101018);
-        g.text(this.font, "HUD Editor", 8, 5, Theme.TEXT);
-        g.text(this.font, "drag to move · right-click resets · ESC back",
-            8 + this.font.width("HUD Editor") + 10, 5, Theme.TEXT_DIM);
+        UiFont.text(g, "HUD Editor", 8, 5, Theme.TEXT);
+        UiFont.text(g, "drag to move · right-click resets · ESC back",
+            8 + UiFont.width("HUD Editor") + 10, 5, Theme.TEXT_DIM);
 
         for (Chip c : chips) {
             boolean on = c.module().isEnabled();
             boolean hover = mouseX >= c.x() && mouseX < c.x() + c.w() && mouseY >= c.y() && mouseY < c.y() + CHIP_H;
-            Theme.roundRect(g, c.x(), c.y(), c.w(), CHIP_H, on ? Theme.ACCENT_DIM : (hover ? 0xE0303040 : 0xE01B1B26));
-            Theme.border(g, c.x(), c.y(), c.w(), CHIP_H, on ? Theme.ACCENT : Theme.PANEL_BORDER);
-            g.text(this.font, c.module().name, c.x() + 6, c.y() + 3, on ? 0xFFFFFFFF : Theme.TEXT_DIM);
+            Theme.roundRect(g, c.x(), c.y(), c.w(), CHIP_H, on ? Theme.accentDim() : (hover ? 0xE0303040 : 0xE01B1B26));
+            Theme.border(g, c.x(), c.y(), c.w(), CHIP_H, on ? Theme.accent() : Theme.PANEL_BORDER);
+            UiFont.text(g, c.module().name, c.x() + 6, c.y() + 3, on ? 0xFFFFFFFF : Theme.TEXT_DIM);
         }
 
         // boxes around enabled HUD elements
@@ -109,11 +110,11 @@ public class HudEditorScreen extends Screen {
             boolean hover = m == dragging || (mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h);
 
             g.fill(x, y, x + w, y + h, hover ? 0x2622D3EE : 0x14FFFFFF);
-            Theme.border(g, x, y, w, h, hover ? Theme.ACCENT : 0x80FFFFFF);
+            Theme.border(g, x, y, w, h, hover ? Theme.accent() : 0x80FFFFFF);
 
             String label = m.name + (m.isMoved() ? "" : " (default)");
             int ly = y - 10 < 18 ? y + h + 2 : y - 10;
-            g.text(this.font, label, x, ly, hover ? Theme.ACCENT : Theme.TEXT_DIM);
+            UiFont.text(g, label, x, ly, hover ? Theme.accent() : Theme.TEXT_DIM);
         }
 
         super.extractRenderState(g, mouseX, mouseY, delta);

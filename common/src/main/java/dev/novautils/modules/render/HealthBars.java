@@ -25,6 +25,12 @@ import java.util.List;
 public class HealthBars extends Module {
     public enum Target { MOBS, PLAYERS, BOTH }
 
+    public enum Position { TOP, LEFT, RIGHT }
+
+    private final Setting<Position> position = register(Setting.builder(Position.class, "position")
+        .description("TOP: over the head. LEFT / RIGHT: a tall bar down the side of the mob.")
+        .defaultValue(Position.TOP).build());
+
     private final Setting<Target> target = register(Setting.builder(Target.class, "show-on")
         .description("Mobs, players, or both.").defaultValue(Target.MOBS).build());
 
@@ -71,6 +77,33 @@ public class HealthBars extends Module {
         return 0xFF000000 | r << 16 | g << 8 | 0x40;
     }
 
+    /** A vertical bar beside the mob, as tall as the mob looks on screen. */
+    private void drawSide(GuiGraphicsExtractor g, LivingEntity e, float partial, float size) {
+        Vec3 base = e.getPosition(partial);
+        Vec3 right = ScreenSpace.rightVector();
+        if (right == null) return;
+        double half = e.getBbWidth() / 2.0 + 0.12;
+        double sign = position.get() == Position.LEFT ? -1 : 1;
+        double[] foot = ScreenSpace.project(base.add(right.scale(sign * half)));
+        double[] head = ScreenSpace.project(base.add(0, e.getBbHeight(), 0).add(right.scale(sign * half)));
+        if (foot == null || head == null) return;
+
+        int bw = Math.max(2, Math.round(thickness.get() * size));
+        int h = (int) Math.round(foot[1] - head[1]);
+        if (h < 12) return;
+        // the bar sits just outside the mob: its far edge touches the box edge
+        int x = (int) Math.round(sign < 0 ? head[0] - bw - 2 : head[0] + 2);
+        int y = (int) Math.round(head[1]);
+
+        HealthDisplay.barVertical(g, x, y, bw, h, e, 1f);
+        if (numbers.get() && size > 0.6f) {
+            float hp = e.getHealth() + e.getAbsorptionAmount();
+            String t = String.format(java.util.Locale.ROOT, "%.1f", hp);
+            int c = HealthDisplay.color(e.getHealth() / Math.max(1f, e.getMaxHealth()));
+            g.text(mc.font, t, x + bw / 2 - mc.font.width(t) / 2, y - 10, c, true);
+        }
+    }
+
     @Override
     public void onRenderHud(GuiGraphicsExtractor g, DeltaTracker delta) {
         if (mc.player == null || mc.level == null || !ScreenSpace.begin()) return;
@@ -81,11 +114,16 @@ public class HealthBars extends Module {
         list.sort(Comparator.comparingDouble(e -> -mc.player.distanceToSqr(e)));
 
         for (LivingEntity e : list) {
+            double dist = mc.player.distanceTo(e);
+            float size = (float) (scale.get() * Math.max(0.55, Math.min(1.0, 8.0 / Math.max(1.0, dist))));
+
+            if (position.get() != Position.TOP) {
+                drawSide(g, e, partial, size);
+                continue;
+            }
             Vec3 top = e.getPosition(partial).add(0, e.getBbHeight() + 0.45, 0);
             double[] p = ScreenSpace.project(top);
             if (p == null) continue;
-            double dist = mc.player.distanceTo(e);
-            float size = (float) (scale.get() * Math.max(0.55, Math.min(1.0, 8.0 / Math.max(1.0, dist))));
             int w = Math.round(44 * size), h = Math.max(2, Math.round(thickness.get() * size));
             int x = (int) p[0] - w / 2, y = (int) p[1];
 

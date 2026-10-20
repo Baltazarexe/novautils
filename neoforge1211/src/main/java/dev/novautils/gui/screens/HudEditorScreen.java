@@ -96,8 +96,8 @@ public class HudEditorScreen extends Screen {
         for (Chip c : chips) {
             boolean on = c.module().isEnabled();
             boolean hover = mouseX >= c.x && mouseX < c.x + c.w() && mouseY >= c.y() && mouseY < c.y() + CHIP_H;
-            Theme.roundRect(g, c.x, c.y(), c.w(), CHIP_H, on ? Theme.ACCENT_DIM : (hover ? 0xE0303040 : 0xE01B1B26));
-            Theme.border(g, c.x, c.y(), c.w(), CHIP_H, on ? Theme.ACCENT : Theme.PANEL_BORDER);
+            Theme.roundRect(g, c.x, c.y(), c.w(), CHIP_H, on ? Theme.accentDim() : (hover ? 0xE0303040 : 0xE01B1B26));
+            Theme.border(g, c.x, c.y(), c.w(), CHIP_H, on ? Theme.accent() : Theme.PANEL_BORDER);
             g.drawString(this.font, c.module().name, c.x + 6, c.y() + 3, on ? 0xFFFFFFFF : Theme.TEXT_DIM);
         }
 
@@ -108,11 +108,11 @@ public class HudEditorScreen extends Screen {
             boolean hover = m == dragging || (mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h);
 
             g.fill(x, y, x + w, y + h, hover ? 0x2622D3EE : 0x14FFFFFF);
-            Theme.border(g, x, y, w, h, hover ? Theme.ACCENT : 0x80FFFFFF);
+            Theme.border(g, x, y, w, h, hover ? Theme.accent() : 0x80FFFFFF);
 
             String label = m.name + (m.isMoved() ? "" : " (default)");
             int ly = y - 10 < 18 ? y + h + 2 : y - 10;
-            g.drawString(this.font, label, x, ly, hover ? Theme.ACCENT : Theme.TEXT_DIM);
+            g.drawString(this.font, label, x, ly, hover ? Theme.accent() : Theme.TEXT_DIM);
         }
 
         super.render(g, mouseX, mouseY, delta);

@@ -348,7 +348,7 @@ public class ClickGuiScreen extends Screen {
     private void drawSidebar(GuiGraphics g, int mx, int my, float dt) {
         // logo
         int lx = wx + 12, ly = wy + 12;
-        Theme.rounded(g, lx, ly - 1, 10, 10, 3, Theme.ACCENT);
+        Theme.rounded(g, lx, ly - 1, 10, 10, 3, Theme.accent());
         g.drawString(this.font, "N", lx + 2, ly, 0xFF15171C, false);
         g.drawString(this.font, "Nova", lx + 15, ly, Theme.TEXT, false);
         g.drawString(this.font, "Utils", lx + 15 + this.font.width("Nova") + 2, ly, Theme.TEXT_OFF, false);
@@ -358,9 +358,9 @@ public class ClickGuiScreen extends Screen {
         boolean typing = !search.isEmpty();
         Theme.rounded(g, sx, sy, sw, 16, 5, typing ? 0xFF1E2129 : 0xFF181A20);
         if (typing) {
-            Theme.rounded(g, sx, sy + 15, sw, 1, 0, Theme.alpha(Theme.ACCENT, 0.7f));
+            Theme.rounded(g, sx, sy + 15, sw, 1, 0, Theme.alpha(Theme.accent(), 0.7f));
         }
-        g.drawString(this.font, "⌕", sx + 5, sy + 4, typing ? Theme.ACCENT : Theme.TEXT_OFF, false);
+        g.drawString(this.font, "⌕", sx + 5, sy + 4, typing ? Theme.accent() : Theme.TEXT_OFF, false);
         String shown = typing ? search : "Search";
         if (typing && (Theme.time() % 1f) < 0.5f) shown += "|";
         String clipped = this.font.plainSubstrByWidth(shown, sw - 20);
@@ -375,15 +375,15 @@ public class ClickGuiScreen extends Screen {
             float s = animate("catsel" + c.ordinal(), sel ? 1f : 0f, 12f, dt);
             if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
             else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.accent(), s));
             int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
-            g.drawString(this.font, icon(c), wx + 14, y + 4, Theme.mix(Theme.TEXT_OFF, Theme.ACCENT, Math.max(s, h * 0.5f)), false);
+            g.drawString(this.font, icon(c), wx + 14, y + 4, Theme.mix(Theme.TEXT_OFF, Theme.accent(), Math.max(s, h * 0.5f)), false);
             g.drawString(this.font, title(c), wx + 27, y + 4, textColor, false);
             int on = 0;
             for (Module m : ModuleManager.get().getModules()) if (m.category == c && m.isEnabled()) on++;
             if (on > 0) {
                 String n = String.valueOf(on);
-                g.drawString(this.font, n, wx + SIDEBAR - 12 - this.font.width(n), y + 4, Theme.alpha(Theme.ACCENT, 0.8f), false);
+                g.drawString(this.font, n, wx + SIDEBAR - 12 - this.font.width(n), y + 4, Theme.alpha(Theme.accent(), 0.8f), false);
             }
         }
 
@@ -395,7 +395,7 @@ public class ClickGuiScreen extends Screen {
             float s = animate("catselfav", sel ? 1f : 0f, 12f, dt);
             if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
             else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.accent(), s));
             int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
             g.drawString(this.font, "\u2605", wx + 14, y + 4, Theme.mix(0xFFB89A4A, 0xFFFFD84A, Math.max(s, h * 0.5f)), false);
             g.drawString(this.font, "Favorites", wx + 27, y + 4, textColor, false);
@@ -452,7 +452,7 @@ public class ClickGuiScreen extends Screen {
             boolean isSel = m == selected;
             int bg = isSel ? 0xFF22252E : Theme.alpha(0x10FFFFFF, h);
             if (isSel || h > 0.01f) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, bg);
-            if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.ACCENT);
+            if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.accent());
 
             int nameColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.5f), Theme.TEXT, sw);
             // name on top, a one-line description (or the category, when searching) under it
@@ -555,7 +555,7 @@ public class ClickGuiScreen extends Screen {
             int[] sw = swatch(r);
             int color = (Integer) r.pair().get();
             boolean open = OPEN_COLORS.contains(r.pair());
-            Theme.rounded(g, sw[0] - 1, sw[1] - 1, sw[2] + 2, sw[3] + 2, 4, open ? Theme.ACCENT : 0xFF2A2D36);
+            Theme.rounded(g, sw[0] - 1, sw[1] - 1, sw[2] + 2, sw[3] + 2, 4, open ? Theme.accent() : 0xFF2A2D36);
             Theme.rounded(g, sw[0], sw[1], sw[2], sw[3], 3, 0xFF777777);
             g.fill(sw[0] + 2, sw[1] + 2, sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, 0xFF555555);
             g.fill(sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, sw[0] + sw[2] - 2, sw[1] + sw[3] - 2, 0xFF555555);
@@ -584,7 +584,7 @@ public class ClickGuiScreen extends Screen {
         int[] t = track(r);
         Theme.rounded(g, t[0], t[1] - 2, t[2], 4, 2, Theme.TRACK);
         int fill = Math.round(t[2] * frac);
-        if (fill > 0) Theme.rounded(g, t[0], t[1] - 2, Math.max(4, fill), 4, 2, Theme.ACCENT);
+        if (fill > 0) Theme.rounded(g, t[0], t[1] - 2, Math.max(4, fill), 4, 2, Theme.accent());
         int kx = t[0] + fill;
         Theme.rounded(g, kx - 5, t[1] - 5, 11, 11, 5, 0x50000000);
         Theme.rounded(g, kx - 4, t[1] - 4, 9, 9, 4, 0xFFFFFFFF);
@@ -632,7 +632,7 @@ public class ClickGuiScreen extends Screen {
                 if (sel) Theme.rounded(g, segs[i][0] + 1, r.y() + 4, segs[i][1] - 2, 12, 4, 0xFF2D3242);
                 String label = enumLabel(options[i]);
                 g.drawString(this.font, label, segs[i][0] + segs[i][1] / 2 - this.font.width(label) / 2, r.y() + 6,
-                    sel ? Theme.ACCENT : Theme.TEXT_OFF, false);
+                    sel ? Theme.accent() : Theme.TEXT_OFF, false);
             }
             return;
         }
@@ -640,7 +640,7 @@ public class ClickGuiScreen extends Screen {
         int vw = this.font.width(value) + 12;
         int vx = r.x() + r.w() - 8 - vw;
         Theme.rounded(g, vx, r.y() + 3, vw, 14, 5, Theme.mix(0xFF1E2128, 0xFF272B36, hover));
-        g.drawString(this.font, value, vx + 6, r.y() + 6, Theme.ACCENT, false);
+        g.drawString(this.font, value, vx + 6, r.y() + 6, Theme.accent(), false);
     }
 
     private void drawColor(GuiGraphics g, Row r) {
@@ -677,9 +677,9 @@ public class ClickGuiScreen extends Screen {
         String key = binding ? "Press a key or mouse button…" : keyName(r.module().getKeyBind());
         int kw = this.font.width(key) + 12;
         int kx = r.x() + r.w() - 8 - kw;
-        int bg = binding ? Theme.alpha(Theme.ACCENT, 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
+        int bg = binding ? Theme.alpha(Theme.accent(), 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
         Theme.rounded(g, kx, r.y() + 3, kw, 12, 4, bg);
-        g.drawString(this.font, key, kx + 6, r.y() + 5, binding ? Theme.ACCENT : Theme.TEXT_DIM, false);
+        g.drawString(this.font, key, kx + 6, r.y() + 5, binding ? Theme.accent() : Theme.TEXT_DIM, false);
     }
 
     private static int channelValue(int color, int channel) {

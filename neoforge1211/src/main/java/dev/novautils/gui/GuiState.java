@@ -25,20 +25,6 @@ public class GuiState {
     /** Menu style: the classic draggable panels instead of the single Nova window. */
     private boolean classic;
     private boolean loaded;
-    /** Accent colour of the classic menu (ARGB), chosen with the colour strip at the top. */
-    public static final int DEFAULT_MENU_COLOR = 0xFFEC812C;
-    private int menuColor = DEFAULT_MENU_COLOR;
-
-    public int menuColor() {
-        if (!loaded) load();
-        return menuColor;
-    }
-
-    public void setMenuColor(int argb) {
-        if (!loaded) load();
-        menuColor = 0xFF000000 | argb;
-    }
-
     public boolean isClassic() {
         if (!loaded) load();
         return classic;
@@ -80,7 +66,6 @@ public class GuiState {
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
             if (root == null) return;
             if (root.has("_classic")) classic = root.get("_classic").getAsBoolean();
-            if (root.has("_menuColor")) menuColor = 0xFF000000 | root.get("_menuColor").getAsInt();
             for (Category category : Category.values()) {
                 if (!root.has(category.name())) continue;
                 JsonObject obj = root.getAsJsonObject(category.name());
@@ -95,7 +80,6 @@ public class GuiState {
     public void save() {
         JsonObject root = new JsonObject();
         root.addProperty("_classic", classic);
-        root.addProperty("_menuColor", menuColor & 0xFFFFFF);
         positions.forEach((category, pos) -> {
             JsonObject obj = new JsonObject();
             obj.addProperty("x", pos[0]);

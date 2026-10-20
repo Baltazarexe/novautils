@@ -1,6 +1,7 @@
 package dev.novautils.gui.screens;
 
 import dev.novautils.gui.Theme;
+import dev.novautils.gui.UiFont;
 import dev.novautils.modules.ModuleManager;
 import dev.novautils.modules.render.Search;
 import dev.novautils.utils.PlatformCompat;
@@ -212,7 +213,7 @@ public class SearchEditorScreen extends Screen {
     private void icon(GuiGraphicsExtractor g, String id, boolean mob, int x, int y) {
         ItemStack s = mob ? eggIcon(id) : blockIcon(id);
         if (!s.isEmpty()) g.item(s, x, y);
-        else g.text(this.font, id.startsWith("#") ? "#" : "?", x + 5, y + 4, Theme.TEXT_DIM, false);
+        else UiFont.text(g, id.startsWith("#") ? "#" : "?", x + 5, y + 4, Theme.TEXT_DIM, false);
     }
 
     @Override
@@ -222,10 +223,10 @@ public class SearchEditorScreen extends Screen {
         int lx = this.width / 2 - col * 3 / 2 - 10, rx = lx + col + 10, px = rx + col + 10;
         int top = 40;
 
-        g.text(this.font, "Search list", rx, 16, Theme.TEXT, true);
-        if (!message.isEmpty()) g.text(this.font, this.font.plainSubstrByWidth(message, col * 2), rx, 27, messageColor, false);
-        else g.text(this.font, mobs ? "Mobs: box + tracer through walls" : "Blocks: highlighted in loaded chunks", rx, 27, Theme.TEXT_DIM, false);
-        g.text(this.font, "Your list", rx, top + 5, Theme.ACCENT, true);
+        UiFont.text(g, "Search list", rx, 16, Theme.TEXT, true);
+        if (!message.isEmpty()) UiFont.text(g, this.font.plainSubstrByWidth(message, col * 2), rx, 27, messageColor, false);
+        else UiFont.text(g, mobs ? "Mobs: box + tracer through walls" : "Blocks: highlighted in loaded chunks", rx, 27, Theme.TEXT_DIM, false);
+        UiFont.text(g, "Your list", rx, top + 5, Theme.accent(), true);
 
         String hoverId = null;
         boolean hoverMob = mobs;
@@ -253,10 +254,10 @@ public class SearchEditorScreen extends Screen {
         // preview box
         int pw = col, ph = rows * ROW_H + 20;
         Theme.rounded(g, px, top, pw, ph, 6, 0xC0101216);
-        g.text(this.font, "Preview", px + 8, top + 6, Theme.ACCENT, true);
+        UiFont.text(g, "Preview", px + 8, top + 6, Theme.accent(), true);
         if (hoverId != null) {
             String name = shortName(hoverId);
-            g.text(this.font, this.font.plainSubstrByWidth(name, pw - 16), px + 8, top + ph - 14, Theme.TEXT, false);
+            UiFont.text(g, this.font.plainSubstrByWidth(name, pw - 16), px + 8, top + ph - 14, Theme.TEXT, false);
             int cx = px + pw / 2, cy = top + ph / 2;
             if (hoverMob) {
                 LivingEntity e = hoverId.startsWith("#") ? null : previewEntity(hoverId);
@@ -275,11 +276,11 @@ public class SearchEditorScreen extends Screen {
                     g.item(s, 0, 0);
                     g.pose().popMatrix();
                 } else {
-                    g.text(this.font, hoverId.startsWith("#") ? "tag: every block in it" : "no item for this block", px + 8, cy, Theme.TEXT_DIM, false);
+                    UiFont.text(g, hoverId.startsWith("#") ? "tag: every block in it" : "no item for this block", px + 8, cy, Theme.TEXT_DIM, false);
                 }
             }
         } else {
-            g.text(this.font, "hover a block or mob", px + 8, top + ph / 2, Theme.TEXT_DIM, false);
+            UiFont.text(g, "hover a block or mob", px + 8, top + ph / 2, Theme.TEXT_DIM, false);
         }
 
     }

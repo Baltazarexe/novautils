@@ -94,7 +94,7 @@ public class AccountScreen extends Screen {
         String title = "Accounts";
         g.text(this.font, title, this.width / 2 - this.font.width(title) / 2, 14, Theme.TEXT, true);
         String now = "Playing as " + Accounts.current();
-        g.text(this.font, now, this.width / 2 - this.font.width(now) / 2, 28, Theme.ACCENT, true);
+        g.text(this.font, now, this.width / 2 - this.font.width(now) / 2, 28, Theme.accent(), true);
         if (!message.isEmpty()) {
             g.text(this.font, message, this.width / 2 - this.font.width(message) / 2, this.height - 74, messageColor, true);
         }

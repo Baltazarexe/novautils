@@ -1421,11 +1421,11 @@ public class NovaClientGameTest implements FabricClientGameTest {
         click(ctx, classicRow, 0);
         check(ctx.computeOnClient(c -> mod(dev.novautils.modules.render.Zoom.class).isEnabled()), "left-click in the classic menu toggles a module");
         shot(ctx, "30_classic_menu");
-        ctx.runOnClient(c -> dev.novautils.gui.GuiState.get().setMenuColor(0x3B82F6));
+        ctx.runOnClient(c -> dev.novautils.modules.misc.ThemeSettings.setCustom(0x3B82F6));
         ctx.waitTicks(3);
         shot(ctx, "30b_classic_menu_blue");
-        check(ctx.computeOnClient(c -> dev.novautils.gui.GuiState.get().menuColor() == 0xFF3B82F6), "the classic menu colour can be changed");
-        ctx.runOnClient(c -> dev.novautils.gui.GuiState.get().setMenuColor(dev.novautils.gui.GuiState.DEFAULT_MENU_COLOR));
+        check(ctx.computeOnClient(c -> dev.novautils.gui.Theme.accent() == 0xFF3B82F6), "the classic menu colour can be changed");
+        ctx.runOnClient(c -> dev.novautils.modules.misc.ThemeSettings.reset());
         click(ctx, new int[]{252, 15}, 0);
         ctx.waitTicks(5);
         check(ctx.computeOnClient(c -> dev.novautils.utils.PlatformCompat.currentScreen(c) instanceof ClickGuiScreen
@@ -1673,7 +1673,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 on(ActiveModules.class);
                 on(TotemCounter.class);
                 on(Notifications.class);
-                Toasts.push("Esp ON", Theme.ACCENT);
+                Toasts.push("Esp ON", Theme.accent());
             });
             context.waitTicks(20);
             shot(context, "04_hud_default");

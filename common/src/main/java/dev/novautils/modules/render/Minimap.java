@@ -172,7 +172,7 @@ public class Minimap extends HudModule {
             }
             var wps = dev.novautils.modules.ModuleManager.get().get(Waypoints.class);
             if (wps.isEnabled()) {
-                for (double[] w : wps.positionsHere()) dot(g, x, y, s, w[0], w[2], r, Theme.ACCENT2, 2);
+                for (double[] w : wps.positionsHere()) dot(g, x, y, s, w[0], w[2], r, Theme.accent2(), 2);
             }
         }
 

@@ -72,6 +72,36 @@ public final class HealthDisplay {
         if (fill > 0) dev.novautils.gui.Theme.rounded(g, x, y, Math.max(fill, h), h, r, dev.novautils.gui.Theme.alpha(pillColor(now), alpha));
     }
 
+    /** Same look as {@link #pill} standing up: the fill rises from the bottom, the ghost sits above it. */
+    public static void verticalPill(GuiGraphicsExtractor g, int x, int y, int w, int h, float shown, float ghost, float now, float alpha) {
+        int r = w / 2;
+        if (w < 3) {
+            g.fill(x, y, x + w, y + h, dev.novautils.gui.Theme.alpha(0x64000000, alpha));
+            int f = Math.round(h * shown);
+            g.fill(x, y + h - f, x + w, y + h, dev.novautils.gui.Theme.alpha(pillColor(now), alpha));
+            return;
+        }
+        dev.novautils.gui.Theme.rounded(g, x, y, w, h, r, dev.novautils.gui.Theme.alpha(0x64000000, alpha));
+        int ghostH = Math.round(h * ghost), fill = Math.round(h * shown);
+        if (ghostH > fill) dev.novautils.gui.Theme.rounded(g, x, y + h - ghostH, w, ghostH, r, dev.novautils.gui.Theme.alpha(0xFFF2F2F2, 0.8f * alpha));
+        if (fill > 0) {
+            int fh = Math.max(fill, w);
+            dev.novautils.gui.Theme.rounded(g, x, y + h - fh, w, fh, r, dev.novautils.gui.Theme.alpha(pillColor(now), alpha));
+        }
+    }
+
+    /** Vertical bar for an entity (the side-of-the-mob placement). */
+    public static void barVertical(GuiGraphicsExtractor g, int x, int y, int w, int h, LivingEntity e, float alpha) {
+        float[] f = animated(e);
+        float now = Math.max(0f, Math.min(1f, e.getHealth() / Math.max(1f, e.getMaxHealth())));
+        verticalPill(g, x, y, w, h, f[0], f[1], now, alpha);
+        float absorb = e.getAbsorptionAmount();
+        if (absorb > 0 && w >= 3) {
+            int ah = Math.min(h, Math.round(h * absorb / Math.max(1f, e.getMaxHealth())));
+            dev.novautils.gui.Theme.rounded(g, x, y + h - Math.max(ah, 2), Math.max(1, w / 3), Math.max(ah, 2), 1, dev.novautils.gui.Theme.alpha(0xFFFFD84A, alpha));
+        }
+    }
+
     /**
      * Draws the bar for an entity. {@code ticks} is kept for older callers (the pill look has none);
      * absorption is a thin gold pill along the top.

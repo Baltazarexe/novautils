@@ -2,6 +2,7 @@ package dev.novautils.gui.screens;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.gui.Theme;
+import dev.novautils.gui.UiFont;
 import dev.novautils.utils.PlatformCompat;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
@@ -13,7 +14,6 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,6 +65,12 @@ public class ClickGuiScreen extends Screen {
     private Setting<?> hoveredSetting;
     private final long openedAt = System.nanoTime();
     private long lastFrame = System.nanoTime();
+    /** Fade-in of the module list / settings pane after switching tab or module (rows stagger in). */
+    private float listFade, setFade;
+    private int lastTabKey = Integer.MIN_VALUE;
+    private Module lastSelected;
+    private boolean closing;
+    private long closeStart;
 
     // window geometry, recomputed every frame
     private int wx, wy, ww, wh, listX, listW, setX, setW, bodyTop, bodyBottom, setRowsTop;
@@ -244,9 +250,9 @@ public class ClickGuiScreen extends Screen {
         return null;
     }
 
-    private List<FormattedCharSequence> descriptionLines() {
+    private List<String> descriptionLines() {
         if (selected == null || selected.description.isEmpty()) return List.of();
-        List<FormattedCharSequence> lines = this.font.split(Component.literal(selected.description), setW - 24);
+        List<String> lines = UiFont.split(selected.description, setW - 24);
         return lines.size() > 2 ? lines.subList(0, 2) : lines;
     }
 
@@ -315,15 +321,32 @@ public class ClickGuiScreen extends Screen {
         computeGeometry();
         layout();
 
-        float t = Math.min(1f, (now - openedAt) / 220_000_000f);
-        float ease = 1f - (1f - t) * (1f - t) * (1f - t);
+        int tabKey = !search.isEmpty() ? 5000 : favoritesTab ? 1000 : selectedCategory.ordinal();
+        if (tabKey != lastTabKey) {
+            lastTabKey = tabKey;
+            if (search.isEmpty() || listFade >= 1f) listFade = 0f;
+        }
+        if (selected != lastSelected) {
+            lastSelected = selected;
+            setFade = 0f;
+        }
+        listFade = Math.min(1f, listFade + dt * 4.5f);
+        setFade = Math.min(1f, setFade + dt * 4.2f);
+
+        float t = closing ? 1f - Math.min(1f, (now - closeStart) / 150_000_000f) : Math.min(1f, (now - openedAt) / 240_000_000f);
+        float ease = closing ? t * t : 1f - (1f - t) * (1f - t) * (1f - t);
+        if (closing && t <= 0f) {
+            ModuleManager.get().saveConfig();
+            super.onClose();
+            return;
+        }
 
         // dim the world softly
         g.fill(0, 0, this.width, this.height, Theme.alpha(0x99000000, ease));
 
         g.pose().pushMatrix();
-        float scale = 0.96f + 0.04f * ease;
-        g.pose().translate(this.width / 2f, this.height / 2f + (1f - ease) * 6f);
+        float scale = 0.94f + 0.06f * ease;
+        g.pose().translate(this.width / 2f, this.height / 2f + (1f - ease) * 10f);
         g.pose().scale(scale, scale);
         g.pose().translate(-this.width / 2f, -this.height / 2f);
 
@@ -347,29 +370,42 @@ public class ClickGuiScreen extends Screen {
         g.fill(wx + SIDEBAR, wy, wx + SIDEBAR + RADIUS, wy + wh, 0xFF15171C);
         g.fill(wx + SIDEBAR, wy + 10, wx + SIDEBAR + 1, wy + wh - 10, 0x10FFFFFF);
         g.fill(setX, wy + 10, setX + 1, wy + wh - 10, 0x10FFFFFF);
+        // the signature accent hairline along the top edge
+        Theme.accentLine(g, wx + RADIUS + 6, wy, wx + ww - RADIUS - 6, 0.85f);
     }
 
     private void drawSidebar(GuiGraphicsExtractor g, int mx, int my, float dt) {
         // logo
         int lx = wx + 12, ly = wy + 12;
-        Theme.rounded(g, lx, ly - 1, 10, 10, 3, Theme.ACCENT);
-        g.text(this.font, "N", lx + 2, ly, 0xFF15171C, false);
-        g.text(this.font, "Nova", lx + 15, ly, Theme.TEXT, false);
-        g.text(this.font, "Utils", lx + 15 + this.font.width("Nova") + 2, ly, Theme.TEXT_OFF, false);
+        Theme.rounded(g, lx, ly - 1, 10, 10, 3, Theme.accent());
+        UiFont.text(g, "N", lx + 2, ly, 0xFF15171C, false);
+        UiFont.text(g, "Nova", lx + 15, ly, Theme.TEXT, false);
+        UiFont.text(g, "Utils", lx + 15 + UiFont.width("Nova") + 2, ly, Theme.TEXT_OFF, false);
 
         // search box
         int sx = wx + 8, sy = wy + 30, sw = SIDEBAR - 16;
         boolean typing = !search.isEmpty();
         Theme.rounded(g, sx, sy, sw, 16, 5, typing ? 0xFF1E2129 : 0xFF181A20);
         if (typing) {
-            Theme.rounded(g, sx, sy + 15, sw, 1, 0, Theme.alpha(Theme.ACCENT, 0.7f));
+            Theme.rounded(g, sx, sy + 15, sw, 1, 0, Theme.alpha(Theme.accent(), 0.7f));
         }
-        g.text(this.font, "⌕", sx + 5, sy + 4, typing ? Theme.ACCENT : Theme.TEXT_OFF, false);
+        UiFont.text(g, "⌕", sx + 5, sy + 4, typing ? Theme.accent() : Theme.TEXT_OFF, false);
         String shown = typing ? search : "Search";
         if (typing && (Theme.time() % 1f) < 0.5f) shown += "|";
-        String clipped = this.font.plainSubstrByWidth(shown, sw - 20);
-        g.text(this.font, clipped, sx + 15, sy + 4, typing ? Theme.TEXT : Theme.TEXT_OFF, false);
+        String clipped = UiFont.plainSubstrByWidth(shown, sw - 20);
+        UiFont.text(g, clipped, sx + 15, sy + 4, typing ? Theme.TEXT : Theme.TEXT_OFF, false);
 
+        // categories: one pill glides to the selected tab
+        {
+            boolean none = !search.isEmpty();
+            int target = categoryY(favoritesTab ? FAVORITES_INDEX : selectedCategory.ordinal());
+            float py = animate("selY", target, 15f, dt);
+            float pv = animate("selV", none ? 0f : 1f, 12f, dt);
+            if (pv > 0.01f) {
+                Theme.rounded(g, wx + 6, Math.round(py), SIDEBAR - 12, 16, 5, Theme.alpha(Theme.accent(), 0.17f * pv));
+                Theme.rounded(g, wx + 6, Math.round(py) + 4, 2, 8, 1, Theme.alpha(Theme.accent(), pv));
+            }
+        }
         // categories
         for (Category c : Category.values()) {
             int y = categoryY(c.ordinal());
@@ -377,17 +413,15 @@ public class ClickGuiScreen extends Screen {
             boolean hover = mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16;
             float h = animate("cat" + c.ordinal(), hover ? 1f : 0f, 14f, dt);
             float s = animate("catsel" + c.ordinal(), sel ? 1f : 0f, 12f, dt);
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
-            else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h * (1f - s)));
             int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
-            g.text(this.font, icon(c), wx + 14, y + 4, Theme.mix(Theme.TEXT_OFF, Theme.ACCENT, Math.max(s, h * 0.5f)), false);
-            g.text(this.font, title(c), wx + 27, y + 4, textColor, false);
+            UiFont.text(g, icon(c), wx + 14, y + 4, Theme.mix(Theme.TEXT_OFF, Theme.accent(), Math.max(s, h * 0.5f)), false);
+            UiFont.text(g, title(c), wx + 27, y + 4, textColor, false);
             int on = 0;
             for (Module m : ModuleManager.get().getModules()) if (m.category == c && m.isEnabled()) on++;
             if (on > 0) {
                 String n = String.valueOf(on);
-                g.text(this.font, n, wx + SIDEBAR - 12 - this.font.width(n), y + 4, Theme.alpha(Theme.ACCENT, 0.8f), false);
+                UiFont.text(g, n, wx + SIDEBAR - 12 - UiFont.width(n), y + 4, Theme.alpha(Theme.accent(), 0.8f), false);
             }
         }
 
@@ -397,12 +431,10 @@ public class ClickGuiScreen extends Screen {
             boolean hover = mx >= wx + 6 && mx < wx + SIDEBAR - 6 && my >= y && my < y + 16;
             float h = animate("catfav", hover ? 1f : 0f, 14f, dt);
             float s = animate("catselfav", sel ? 1f : 0f, 12f, dt);
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x2A8B9CFF, s));
-            else if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h));
-            if (s > 0.01f) Theme.rounded(g, wx + 6, y + 4, 2, 8, 1, Theme.alpha(Theme.ACCENT, s));
+            if (h > 0.01f) Theme.rounded(g, wx + 6, y, SIDEBAR - 12, 16, 5, Theme.alpha(0x10FFFFFF, h * (1f - s)));
             int textColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.6f), Theme.TEXT, s);
-            g.text(this.font, "\u2605", wx + 14, y + 4, Theme.mix(0xFFB89A4A, 0xFFFFD84A, Math.max(s, h * 0.5f)), false);
-            g.text(this.font, "Favorites", wx + 27, y + 4, textColor, false);
+            UiFont.text(g, "\u2605", wx + 14, y + 4, Theme.mix(0xFFB89A4A, 0xFFFFD84A, Math.max(s, h * 0.5f)), false);
+            UiFont.text(g, "Favorites", wx + 27, y + 4, textColor, false);
         }
 
         {
@@ -411,7 +443,7 @@ public class ClickGuiScreen extends Screen {
             float a = animate("stylebtn", sh ? 1f : 0f, 14f, dt);
             Theme.rounded(g, wx + 8, styY, SIDEBAR - 16, 15, 5, Theme.mix(0xFF181B21, 0xFF262A36, a));
             String sl = "Classic menu";
-            g.text(this.font, sl, wx + SIDEBAR / 2 - this.font.width(sl) / 2, styY + 4, Theme.mix(Theme.TEXT_OFF, Theme.TEXT, a), false);
+            UiFont.text(g, sl, wx + SIDEBAR / 2 - UiFont.width(sl) / 2, styY + 4, Theme.mix(Theme.TEXT_OFF, Theme.TEXT, a), false);
         }
 
         // Edit HUD + footer
@@ -420,7 +452,7 @@ public class ClickGuiScreen extends Screen {
         float hb = animate("hudbtn", hover ? 1f : 0f, 14f, dt);
         Theme.rounded(g, wx + 8, by, SIDEBAR - 16, 15, 5, Theme.mix(0xFF1C1F26, 0xFF262A36, hb));
         String label = "Edit HUD";
-        g.text(this.font, label, wx + SIDEBAR / 2 - this.font.width(label) / 2, by + 4, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, hb), false);
+        UiFont.text(g, label, wx + SIDEBAR / 2 - UiFont.width(label) / 2, by + 4, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, hb), false);
 
         int total = 0, on = 0;
         for (Module m : ModuleManager.get().getModules()) {
@@ -428,54 +460,59 @@ public class ClickGuiScreen extends Screen {
             if (m.isEnabled()) on++;
         }
         String footer = on + " of " + total + " on";
-        g.text(this.font, footer, wx + SIDEBAR / 2 - this.font.width(footer) / 2, wy + wh - 20, Theme.TEXT_OFF, false);
+        UiFont.text(g, footer, wx + SIDEBAR / 2 - UiFont.width(footer) / 2, wy + wh - 20, Theme.TEXT_OFF, false);
     }
 
     private void drawList(GuiGraphicsExtractor g, int mx, int my, float dt) {
         String header = !search.isEmpty() ? "Results" : favoritesTab ? "Favorites" : title(selectedCategory);
-        g.text(this.font, header, listX + 10, wy + 12, Theme.TEXT, false);
+        UiFont.text(g, header, listX + 10, wy + 12, Theme.TEXT, false);
         List<Module> mods = listedModules();
         int on = 0;
         for (Module m : mods) if (m.isEnabled()) on++;
         String count = on + "/" + mods.size();
-        g.text(this.font, count, listX + listW - 10 - this.font.width(count), wy + 12, Theme.TEXT_OFF, false);
+        UiFont.text(g, count, listX + listW - 10 - UiFont.width(count), wy + 12, Theme.TEXT_OFF, false);
 
         if (mods.isEmpty() && favoritesTab && search.isEmpty()) {
             String hint1 = "Middle-click a module", hint2 = "to add it here";
-            g.text(this.font, hint1, listX + listW / 2 - this.font.width(hint1) / 2, bodyTop + 40, Theme.TEXT_OFF, false);
-            g.text(this.font, hint2, listX + listW / 2 - this.font.width(hint2) / 2, bodyTop + 52, Theme.TEXT_OFF, false);
+            UiFont.text(g, hint1, listX + listW / 2 - UiFont.width(hint1) / 2, bodyTop + 40, Theme.TEXT_OFF, false);
+            UiFont.text(g, hint2, listX + listW / 2 - UiFont.width(hint2) / 2, bodyTop + 52, Theme.TEXT_OFF, false);
         }
         g.enableScissor(listX, bodyTop, listX + listW, bodyBottom);
+        int rowIndex = 0;
         for (Row r : rows) {
             if (r.pane() != Pane.LIST) continue;
+            rowIndex++;
             if (r.y() + r.h() < bodyTop || r.y() > bodyBottom) continue;
             Module m = r.module();
             boolean hover = over(r, mx, my);
             float h = animate(m, hover ? 1f : 0f, 14f, dt);
             float sw = animate("sw" + m.name, m.isEnabled() ? 1f : 0f, 16f, dt);
             boolean isSel = m == selected;
-            int bg = isSel ? 0xFF22252E : Theme.alpha(0x10FFFFFF, h);
+            int bg = isSel ? Theme.mix(0xFF22252E, Theme.accent(), 0.10f) : Theme.alpha(0x10FFFFFF, h);
             if (isSel || h > 0.01f) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, bg);
-            if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.ACCENT);
+            if (isSel) Theme.rounded(g, r.x(), r.y() + 5, 2, r.h() - 10, 1, Theme.accent());
 
             int nameColor = Theme.mix(Theme.mix(Theme.TEXT_DIM, Theme.TEXT, h * 0.5f), Theme.TEXT, sw);
             // name on top, a one-line description (or the category, when searching) under it
-            g.text(this.font, m.name, r.x() + 8, r.y() + 4, nameColor, false);
-            if (m.isFavorite()) g.text(this.font, "\u2605", r.x() + 11 + this.font.width(m.name), r.y() + 4, 0xFFFFD84A, false);
+            UiFont.text(g, m.name, r.x() + 8, r.y() + 4, nameColor, false);
+            if (m.isFavorite()) UiFont.text(g, "\u2605", r.x() + 11 + UiFont.width(m.name), r.y() + 4, 0xFFFFD84A, false);
             String sub = search.isEmpty() ? m.description : title(m.category) + "  ·  " + m.description;
-            int subW = r.w() - 40 - (m.getKeyBind() != -1 ? this.font.width(keyName(m.getKeyBind())) + 8 : 0);
-            String shortSub = this.font.plainSubstrByWidth(sub, subW);
-            if (shortSub.length() < sub.length()) shortSub = this.font.plainSubstrByWidth(sub, subW - this.font.width("…")) + "…";
-            g.text(this.font, shortSub, r.x() + 8, r.y() + 14, Theme.alpha(Theme.TEXT_OFF, 0.9f), false);
+            int subW = r.w() - 40 - (m.getKeyBind() != -1 ? UiFont.width(keyName(m.getKeyBind())) + 8 : 0);
+            String shortSub = UiFont.plainSubstrByWidth(sub, subW);
+            if (shortSub.length() < sub.length()) shortSub = UiFont.plainSubstrByWidth(sub, subW - UiFont.width("…")) + "…";
+            UiFont.text(g, shortSub, r.x() + 8, r.y() + 14, Theme.alpha(Theme.TEXT_OFF, 0.9f), false);
             if (m.getKeyBind() != -1) {
                 String key = keyName(m.getKeyBind());
                 if (key.length() > 4) key = key.substring(0, 4);
-                int kw = this.font.width(key);
+                int kw = UiFont.width(key);
                 int kx = r.x() + r.w() - 26 - kw;
                 Theme.rounded(g, kx - 3, r.y() + 3, kw + 6, 10, 3, 0xFF1C1E25);
-                g.text(this.font, key, kx, r.y() + 4, Theme.TEXT_OFF, false);
+                UiFont.text(g, key, kx, r.y() + 4, Theme.TEXT_OFF, false);
             }
             Theme.toggle(g, r.x() + r.w() - 22, r.y() + 8, sw);
+            // rows fade in one after the other when the tab changes
+            float rf = Math.max(0f, Math.min(1f, listFade * 1.9f - Math.min(rowIndex, 8) * 0.1f));
+            if (rf < 1f) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, Theme.alpha(0xFF15171C, 1f - rf * rf));
         }
         g.disableScissor();
         drawScrollbar(g, listX + listW - 4, bodyTop, bodyBottom, listScroll, mods.size() * (MODULE_H + 2));
@@ -493,20 +530,20 @@ public class ClickGuiScreen extends Screen {
         if (selected == null) {
             String a = "No module selected", b = "Right-click a module", c = "to see its settings";
             int cy = (wy + wy + wh) / 2;
-            g.text(this.font, a, setX + setW / 2 - this.font.width(a) / 2, cy - 14, Theme.TEXT_DIM, false);
-            g.text(this.font, b, setX + setW / 2 - this.font.width(b) / 2, cy, Theme.TEXT_OFF, false);
-            g.text(this.font, c, setX + setW / 2 - this.font.width(c) / 2, cy + 10, Theme.TEXT_OFF, false);
+            UiFont.text(g, a, setX + setW / 2 - UiFont.width(a) / 2, cy - 14, Theme.TEXT_DIM, false);
+            UiFont.text(g, b, setX + setW / 2 - UiFont.width(b) / 2, cy, Theme.TEXT_OFF, false);
+            UiFont.text(g, c, setX + setW / 2 - UiFont.width(c) / 2, cy + 10, Theme.TEXT_OFF, false);
             return;
         }
 
         // header: name and its on/off switch (clickable), then the description
-        g.text(this.font, selected.name, setX + 12, wy + 12, Theme.TEXT, false);
+        UiFont.text(g, selected.name, setX + 12, wy + 12, Theme.TEXT, false);
         float on = animate("hdr", selected.isEnabled() ? 1f : 0f, 16f, dt);
         int[] hs = headerSwitch();
         Theme.toggle(g, hs[0], hs[1], on);
         int dy = wy + 26;
-        for (FormattedCharSequence line : descriptionLines()) {
-            g.text(this.font, line, setX + 12, dy, Theme.TEXT_OFF, false);
+        for (String line : descriptionLines()) {
+            UiFont.text(g, line, setX + 12, dy, Theme.TEXT_OFF, false);
             dy += 10;
         }
         g.fill(setX + 10, setRowsTop - 4, setX + setW - 10, setRowsTop - 3, 0x0CFFFFFF);
@@ -535,11 +572,14 @@ public class ClickGuiScreen extends Screen {
         g.disableScissor();
         drawScrollbar(g, setX + setW - 5, setRowsTop, bodyBottom, setScroll, content);
 
+        // fade the pane in when another module is selected
+        if (setFade < 1f) g.fill(setX + 1, wy + 1, setX + setW - 1, bodyBottom, Theme.alpha(0xFF15171C, 1f - setFade * setFade));
+
         // hovered setting's description along the bottom edge
         if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
-            String d = this.font.plainSubstrByWidth(hoveredSetting.description, setW - 20);
+            String d = UiFont.plainSubstrByWidth(hoveredSetting.description, setW - 20);
             Theme.rounded(g, setX + 6, bodyBottom - 14, setW - 12, 13, 4, 0xF01B1D24);
-            g.text(this.font, d, setX + 10, bodyBottom - 11, Theme.TEXT_DIM, false);
+            UiFont.text(g, d, setX + 10, bodyBottom - 11, Theme.TEXT_DIM, false);
         }
     }
 
@@ -552,14 +592,14 @@ public class ClickGuiScreen extends Screen {
         @SuppressWarnings("unchecked")
         Setting<Boolean> s = (Setting<Boolean>) r.setting();
         float t = animate("b" + s.hashCode(), s.get() ? 1f : 0f, 16f, dt);
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 6, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, t), false);
+        UiFont.text(g, pretty(s.name), r.x() + 8, r.y() + 6, Theme.mix(Theme.TEXT_DIM, Theme.TEXT, t), false);
         Theme.toggle(g, r.x() + r.w() - 22, r.y() + 5, t);
         if (r.pair() != null) {
             // its colour sits right next to the switch; click it for the R/G/B/A sliders
             int[] sw = swatch(r);
             int color = (Integer) r.pair().get();
             boolean open = OPEN_COLORS.contains(r.pair());
-            Theme.rounded(g, sw[0] - 1, sw[1] - 1, sw[2] + 2, sw[3] + 2, 4, open ? Theme.ACCENT : 0xFF2A2D36);
+            Theme.rounded(g, sw[0] - 1, sw[1] - 1, sw[2] + 2, sw[3] + 2, 4, open ? Theme.accent() : 0xFF2A2D36);
             Theme.rounded(g, sw[0], sw[1], sw[2], sw[3], 3, 0xFF777777);
             g.fill(sw[0] + 2, sw[1] + 2, sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, 0xFF555555);
             g.fill(sw[0] + sw[2] / 2, sw[1] + sw[3] / 2, sw[0] + sw[2] - 2, sw[1] + sw[3] - 2, 0xFF555555);
@@ -583,14 +623,14 @@ public class ClickGuiScreen extends Screen {
         double min = Double.isFinite(s.min) ? s.min : 0, max = Double.isFinite(s.max) ? s.max : 1;
         float frac = max > min ? (float) ((value - min) / (max - min)) : 0f;
         String shown = s.get() instanceof Integer ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value);
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 4, Theme.TEXT_DIM, false);
-        g.text(this.font, shown, r.x() + r.w() - 8 - this.font.width(shown), r.y() + 4, Theme.TEXT, false);
+        UiFont.text(g, pretty(s.name), r.x() + 8, r.y() + 4, Theme.TEXT_DIM, false);
+        UiFont.text(g, shown, r.x() + r.w() - 8 - UiFont.width(shown), r.y() + 4, Theme.TEXT, false);
         int[] t = track(r);
         Theme.rounded(g, t[0], t[1] - 2, t[2], 4, 2, Theme.TRACK);
         int fill = Math.round(t[2] * frac);
-        if (fill > 0) Theme.rounded(g, t[0], t[1] - 2, Math.max(4, fill), 4, 2, Theme.ACCENT);
+        if (fill > 0) Theme.rounded(g, t[0], t[1] - 2, Math.max(4, fill), 4, 2, Theme.accent());
         int kx = t[0] + fill;
-        Theme.rounded(g, kx - 5, t[1] - 5, 11, 11, 5, 0x50000000);
+        Theme.rounded(g, kx - 5, t[1] - 5, 11, 11, 5, Theme.alpha(Theme.accent(), 0.45f));
         Theme.rounded(g, kx - 4, t[1] - 4, 9, 9, 4, 0xFFFFFFFF);
     }
 
@@ -609,11 +649,11 @@ public class ClickGuiScreen extends Screen {
         int[][] segs = new int[options.length][];
         int total = 0;
         for (int i = 0; i < options.length; i++) {
-            int w = this.font.width(enumLabel(options[i])) + 10;
+            int w = UiFont.width(enumLabel(options[i])) + 10;
             segs[i] = new int[]{0, w};
             total += w;
         }
-        int labelW = this.font.width(pretty(r.setting().name)) + 16;
+        int labelW = UiFont.width(pretty(r.setting().name)) + 16;
         if (total + labelW > r.w() - 8) return null;
         int x = r.x() + r.w() - 6 - total;
         for (int[] s : segs) {
@@ -625,7 +665,7 @@ public class ClickGuiScreen extends Screen {
 
     private void drawEnum(GuiGraphicsExtractor g, Row r, float hover) {
         Setting<?> s = r.setting();
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 6, Theme.TEXT_DIM, false);
+        UiFont.text(g, pretty(s.name), r.x() + 8, r.y() + 6, Theme.TEXT_DIM, false);
         int[][] segs = segments(r);
         if (segs != null) {
             Object[] options = s.type.getEnumConstants();
@@ -635,21 +675,21 @@ public class ClickGuiScreen extends Screen {
                 boolean sel = options[i] == s.get();
                 if (sel) Theme.rounded(g, segs[i][0] + 1, r.y() + 4, segs[i][1] - 2, 12, 4, 0xFF2D3242);
                 String label = enumLabel(options[i]);
-                g.text(this.font, label, segs[i][0] + segs[i][1] / 2 - this.font.width(label) / 2, r.y() + 6,
-                    sel ? Theme.ACCENT : Theme.TEXT_OFF, false);
+                UiFont.text(g, label, segs[i][0] + segs[i][1] / 2 - UiFont.width(label) / 2, r.y() + 6,
+                    sel ? Theme.accent() : Theme.TEXT_OFF, false);
             }
             return;
         }
         String value = "‹  " + enumLabel(s.get()) + "  ›";
-        int vw = this.font.width(value) + 12;
+        int vw = UiFont.width(value) + 12;
         int vx = r.x() + r.w() - 8 - vw;
         Theme.rounded(g, vx, r.y() + 3, vw, 14, 5, Theme.mix(0xFF1E2128, 0xFF272B36, hover));
-        g.text(this.font, value, vx + 6, r.y() + 6, Theme.ACCENT, false);
+        UiFont.text(g, value, vx + 6, r.y() + 6, Theme.accent(), false);
     }
 
     private void drawColor(GuiGraphicsExtractor g, Row r) {
         Setting<?> s = r.setting();
-        g.text(this.font, pretty(s.name), r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
+        UiFont.text(g, pretty(s.name), r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
         int color = (Integer) s.get();
         int sx = r.x() + r.w() - 26, sy = r.y() + 3;
         Theme.rounded(g, sx - 1, sy - 1, 20, 14, 4, 0xFF2A2D36);
@@ -665,25 +705,25 @@ public class ClickGuiScreen extends Screen {
         int value = channelValue(color, ch);
         String name = switch (ch) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
         int bar = switch (ch) { case 0 -> 0xFFFF6B81; case 1 -> 0xFF6BE09A; case 2 -> 0xFF6BA6FF; default -> 0xFFC8CCD6; };
-        g.text(this.font, name, r.x() + 16, r.y() + 4, Theme.TEXT_OFF, false);
+        UiFont.text(g, name, r.x() + 16, r.y() + 4, Theme.TEXT_OFF, false);
         int[] t = track(r);
         Theme.rounded(g, t[0], t[1] - 1, t[2], 3, 1, Theme.TRACK);
         int fill = Math.round(t[2] * value / 255f);
         if (fill > 0) Theme.rounded(g, t[0], t[1] - 1, fill, 3, 1, bar);
         Theme.rounded(g, t[0] + fill - 3, t[1] - 3, 6, 6, 3, 0xFFFFFFFF);
         String v = String.valueOf(value);
-        g.text(this.font, v, r.x() + r.w() - 6 - this.font.width(v), r.y() + 4, Theme.TEXT_OFF, false);
+        UiFont.text(g, v, r.x() + r.w() - 6 - UiFont.width(v), r.y() + 4, Theme.TEXT_OFF, false);
     }
 
     private void drawKeybind(GuiGraphicsExtractor g, Row r) {
-        g.text(this.font, "Keybind", r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
+        UiFont.text(g, "Keybind", r.x() + 8, r.y() + 5, Theme.TEXT_DIM, false);
         boolean binding = bindingFor == r.module();
         String key = binding ? "Press a key or mouse button…" : keyName(r.module().getKeyBind());
-        int kw = this.font.width(key) + 12;
+        int kw = UiFont.width(key) + 12;
         int kx = r.x() + r.w() - 8 - kw;
-        int bg = binding ? Theme.alpha(Theme.ACCENT, 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
+        int bg = binding ? Theme.alpha(Theme.accent(), 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
         Theme.rounded(g, kx, r.y() + 3, kw, 12, 4, bg);
-        g.text(this.font, key, kx + 6, r.y() + 5, binding ? Theme.ACCENT : Theme.TEXT_DIM, false);
+        UiFont.text(g, key, kx + 6, r.y() + 5, binding ? Theme.accent() : Theme.TEXT_DIM, false);
     }
 
     private static int channelValue(int color, int channel) {
@@ -729,6 +769,7 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (closing) return true;
         int mx = (int) event.x(), my = (int) event.y();
         int button = event.button();
 
@@ -922,6 +963,7 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (closing) return true;
         if (bindingFor != null) {
             bindingFor.setKeyBind(event.key() == InputConstants.KEY_ESCAPE ? -1 : event.key());
             bindingFor = null;
@@ -944,6 +986,7 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        if (closing) return true;
         if (bindingFor == null && event.isAllowedChatCharacter()) {
             search += event.codepointAsString();
             listScroll = listScrollTarget = 0;
@@ -968,8 +1011,10 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public void onClose() {
-        ModuleManager.get().saveConfig();
-        super.onClose();
+        // glide out first; extractRenderState finishes the close
+        if (closing) return;
+        closing = true;
+        closeStart = System.nanoTime();
     }
 
     @Override

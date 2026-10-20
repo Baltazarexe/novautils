@@ -1674,7 +1674,7 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 on(ActiveModules.class);
                 on(TotemCounter.class);
                 on(Notifications.class);
-                Toasts.push("Esp ON", Theme.ACCENT);
+                Toasts.push("Esp ON", Theme.accent());
             });
             context.waitTicks(20);
             shot(context, "04_hud_default");

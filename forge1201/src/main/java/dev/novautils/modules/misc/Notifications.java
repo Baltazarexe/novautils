@@ -34,7 +34,7 @@ public class Notifications extends HudModule {
     protected int[] render(GuiGraphics g, int x, int y, boolean right) {
         List<Toasts.Toast> toasts = Toasts.active();
         if (toasts.isEmpty() && editing) {
-            toasts = List.of(new Toasts.Toast("Esp ON", Theme.ACCENT, System.currentTimeMillis()));
+            toasts = List.of(new Toasts.Toast("Esp ON", Theme.accent(), System.currentTimeMillis()));
         }
 
         long now = System.currentTimeMillis();

@@ -7,6 +7,7 @@ import dev.novautils.utils.InvUtils;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -51,6 +52,14 @@ public class Criticals extends Module {
     private int stage = IDLE;
     private boolean movedThisTick;
     private boolean sendingOwn;
+    /**
+     * A position packet already went out THIS client tick (seen even while idle). The server
+     * kicks ("Invalid move player packet received") for a second one before the tick-end packet,
+     * so a crit that starts after the vanilla packet of the tick must not add its own.
+     */
+    private boolean sawPosThisTick;
+    /** The crit started after this tick's position packet: wait out the tick before UP. */
+    private boolean defer;
     private double baseY;
     private int stageAge;
 
@@ -62,6 +71,7 @@ public class Criticals extends Module {
     public void onDisable() {
         pending = null;
         stage = IDLE;
+        defer = false;
     }
 
     private boolean canCrit(Entity target) {
@@ -83,14 +93,15 @@ public class Criticals extends Module {
     public boolean beforeAttack(Entity target) {
         if (bypass || pending != null || stage != IDLE || !canCrit(target)) return false;
         var p = mc.player;
-        if (p.isSprinting()) p.setSprinting(false);
+        dropSprint(p);
         pending = target;
         pendingTicks = 0;
 
         if (mode.get() == Mode.PACKET) {
             stage = UP;
             stageAge = 0;
-            movedThisTick = false;
+            movedThisTick = sawPosThisTick;
+            defer = sawPosThisTick;
             baseY = p.getY();
             return true;
         }
@@ -101,12 +112,24 @@ public class Criticals extends Module {
         return true;
     }
 
+    /**
+     * Sprinting blocks crits, and what counts is what the SERVER believes. setSprinting(false)
+     * only changes the client; the "stopped sprinting" packet normally goes out next tick, after
+     * the attack, and with the sprint key held the game turns sprint back on anyway. Tested live
+     * (26.3): while running, Criticals did nothing in both modes. So tell the server right now.
+     */
+    private void dropSprint(net.minecraft.client.player.LocalPlayer p) {
+        if (!p.isSprinting() && !mc.options.keySprint.isDown()) return;
+        p.setSprinting(false);
+        mc.getConnection().send(new ServerboundPlayerCommandPacket(p, ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
+    }
+
     private void hit() {
         var p = mc.player;
         Entity target = pending;
         pending = null;
         if (p == null || target == null || !target.isAlive() || p.distanceToSqr(target) > 36) return;
-        if (p.isSprinting()) p.setSprinting(false);
+        dropSprint(p);
         bypass = true;
         try {
             mc.gameMode.attack(p, target);
@@ -133,12 +156,18 @@ public class Criticals extends Module {
 
     @Override
     public boolean onSendPacket(Packet<?> packet) {
+        if (!sendingOwn) {
+            if (packet instanceof ServerboundMovePlayerPacket m && m.hasPosition()) sawPosThisTick = true;
+            else if (packet instanceof ServerboundClientTickEndPacket && stage == IDLE) sawPosThisTick = false;
+        }
         if (stage == IDLE || sendingOwn || mc.player == null || mc.getConnection() == null) return false;
         var p = mc.player;
 
         if (packet instanceof ServerboundMovePlayerPacket move) {
             switch (stage) {
                 case UP, DOWN -> {
+                    // never two position packets in one tick: drop a duplicate outright
+                    if (movedThisTick) return move.hasPosition();
                     // this tick's position packet becomes ours
                     sendOwn(spoof(move.getX(p.getX()), move.getZ(p.getZ()), move.getYRot(p.getYRot()), move.getXRot(p.getXRot())));
                     movedThisTick = true;
@@ -162,8 +191,13 @@ public class Criticals extends Module {
         if (packet instanceof ServerboundClientTickEndPacket) {
             switch (stage) {
                 case UP, DOWN -> {
-                    if (!movedThisTick) sendOwn(spoof(p.getX(), p.getZ(), p.getYRot(), p.getXRot()));
-                    stage = stage == UP ? DOWN : HIT;
+                    if (defer) {
+                        // the vanilla position packet of this tick is already out: start next tick
+                        defer = false;
+                    } else {
+                        if (!movedThisTick) sendOwn(spoof(p.getX(), p.getZ(), p.getYRot(), p.getXRot()));
+                        stage = stage == UP ? DOWN : HIT;
+                    }
                 }
                 case HIT -> {
                     // a tick without movement: the hit goes out now, the fall was counted last tick
@@ -177,6 +211,7 @@ public class Criticals extends Module {
                 default -> { }
             }
             movedThisTick = false;
+            sawPosThisTick = false;
             stageAge = 0;
         }
         return false;
@@ -189,6 +224,7 @@ public class Criticals extends Module {
             if (++stageAge > 10) {
                 stage = IDLE;
                 pending = null;
+                defer = false;
             }
             return;
         }

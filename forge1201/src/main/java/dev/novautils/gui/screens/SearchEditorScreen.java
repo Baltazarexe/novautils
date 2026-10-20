@@ -226,7 +226,7 @@ public class SearchEditorScreen extends Screen {
         g.drawString(this.font, "Search list", rx, 16, Theme.TEXT, true);
         if (!message.isEmpty()) g.drawString(this.font, this.font.plainSubstrByWidth(message, col * 2), rx, 27, messageColor, false);
         else g.drawString(this.font, mobs ? "Mobs: box + tracer through walls" : "Blocks: highlighted in loaded chunks", rx, 27, Theme.TEXT_DIM, false);
-        g.drawString(this.font, "Your list", rx, top + 5, Theme.ACCENT, true);
+        g.drawString(this.font, "Your list", rx, top + 5, Theme.accent(), true);
 
         String hoverId = null;
         boolean hoverMob = mobs;
@@ -254,7 +254,7 @@ public class SearchEditorScreen extends Screen {
         // preview box
         int pw = col, ph = rows * ROW_H + 20;
         Theme.rounded(g, px, top, pw, ph, 6, 0xC0101216);
-        g.drawString(this.font, "Preview", px + 8, top + 6, Theme.ACCENT, true);
+        g.drawString(this.font, "Preview", px + 8, top + 6, Theme.accent(), true);
         if (hoverId != null) {
             String name = shortName(hoverId);
             g.drawString(this.font, this.font.plainSubstrByWidth(name, pw - 16), px + 8, top + ph - 14, Theme.TEXT, false);
