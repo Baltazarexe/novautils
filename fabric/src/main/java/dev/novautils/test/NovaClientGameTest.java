@@ -1918,6 +1918,13 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 System.out.println("[novautils-test] NewChunks in " + d[0] + ": new=" + fresh + " old=" + stale);
                 check(fresh >= 60 && stale <= fresh / 10, "NewChunks marks freshly generated chunks in " + d[0] + " as new");
                 shot(ctx, "44e_newchunks_" + d[0]);
+                if (d[0].equals("the_nether")) {
+                    cmd(sp, "/execute as @a at @s run tp @s ~ ~ ~ 45 20");
+                    ctx.runOnClient(c -> ((Setting<Boolean>) setting(dev.novautils.modules.render.NewChunks.class, "map-rotate")).set(true));
+                    ctx.waitTicks(5);
+                    shot(ctx, "44f_newchunks_rotated");
+                    ctx.runOnClient(c -> ((Setting<Boolean>) setting(dev.novautils.modules.render.NewChunks.class, "map-rotate")).set(false));
+                }
             }
             ctx.runOnClient(c -> allOff());
 

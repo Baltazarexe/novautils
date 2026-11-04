@@ -88,6 +88,15 @@ public class NewChunks extends Module {
     private final Setting<Integer> mapSize = register(Setting.builder(Integer.class, "map-size")
         .description("Chunk map size on screen.").defaultValue(96).range(48, 200).visible(map::get).build());
 
+    private final Setting<Integer> mapRange = register(Setting.builder(Integer.class, "map-range")
+        .description("How many chunks the map shows each way. Beyond your render distance it still shows the chunks you already passed, so the trail stays visible.").defaultValue(12).range(4, 32).visible(map::get).build());
+
+    private final Setting<Boolean> mapRotate = register(Setting.builder(Boolean.class, "map-rotate")
+        .description("Turn the map with your view, so ahead is always up (off: north is up).").defaultValue(false).visible(map::get).build());
+
+    private final Setting<Boolean> mapPlayers = register(Setting.builder(Boolean.class, "map-players")
+        .description("Show other players as dots on the map (friends in green).").defaultValue(true).visible(map::get).build());
+
     private final Set<Long> newChunks = new HashSet<>();
     private final Set<Long> oldChunks = new HashSet<>();
     private final Set<Long> seen = new HashSet<>();
@@ -276,23 +285,34 @@ public class NewChunks extends Module {
         int x0 = px + 4, y0 = py + head + 2;
         Theme.rounded(g, x0, y0, size, size, 3, 0xFF08090C);
 
-        // the map scrolls smoothly with you: you are always the exact centre
-        int r = Math.min(mc.options.getEffectiveRenderDistance(), 16);
+        // you are always the exact centre; the map scrolls smoothly (and turns with you if map-rotate)
+        int r = mapRange.get();
         float cell = size / (float) (2 * r + 1);
-        double fx = mc.player.getX() / 16.0, fz = mc.player.getZ() / 16.0;
+        float ptick = delta;
+        double fx = net.minecraft.util.Mth.lerp(ptick, mc.player.xo, mc.player.getX()) / 16.0;
+        double fz = net.minecraft.util.Mth.lerp(ptick, mc.player.zo, mc.player.getZ()) / 16.0;
         float cxm = x0 + size / 2f, cym = y0 + size / 2f;
+        float yawDeg = mc.player.getViewYRot(ptick);
+        float theta = mapRotate.get() ? (float) (Math.PI - Math.toRadians(yawDeg)) : 0f;
         int newC = newColor.get() | 0xFF000000, oldC = oldColor.get() | 0xFF000000;
         int gap = cell >= 5 ? 1 : 0;
+        int reach = mapRotate.get() ? (int) Math.ceil(r * 1.42) + 1 : r + 1;
+
         g.enableScissor(x0, y0, x0 + size, y0 + size);
-        for (int dx = -r - 1; dx <= r + 1; dx++) {
-            for (int dz = -r - 1; dz <= r + 1; dz++) {
+        g.pose().pushPose();
+        g.pose().translate(cxm, cym, 0);
+        g.pose().mulPose(com.mojang.math.Axis.ZP.rotation(theta));
+        g.pose().translate(-cxm, -cym, 0);
+        for (int dx = -reach; dx <= reach; dx++) {
+            for (int dz = -reach; dz <= reach; dz++) {
                 int ccx = me.x + dx, ccz = me.z + dz;
+                int k = kindOf(ccx, ccz);
+                boolean loaded = k == 0 && mc.level.hasChunk(ccx, ccz);
+                if (k == 0 && !loaded) continue; // empty: the dark background shows through
                 int ax = Math.round(cxm + (float) ((ccx - fx) * cell)), ay = Math.round(cym + (float) ((ccz - fz) * cell));
                 int bx = Math.round(cxm + (float) ((ccx + 1 - fx) * cell)), by = Math.round(cym + (float) ((ccz + 1 - fz) * cell));
-                int k = kindOf(ccx, ccz);
                 if (k == 0) {
-                    int c = mc.level.hasChunk(ccx, ccz) ? 0x1CFFFFFF : 0x08FFFFFF;
-                    g.fill(ax, ay, Math.max(ax + 1, bx - gap), Math.max(ay + 1, by - gap), c);
+                    g.fill(ax, ay, Math.max(ax + 1, bx - gap), Math.max(ay + 1, by - gap), 0x1CFFFFFF);
                     continue;
                 }
                 int col = k == 1 ? newC : oldC;
@@ -305,14 +325,31 @@ public class NewChunks extends Module {
                 if (kindOf(ccx + 1, ccz) != k) g.fill(bx - 1, ay, bx, by, edge);
             }
         }
+        // other players nearby: small dots (friends in their own colour)
+        if (mapPlayers.get()) {
+            for (var p : mc.level.players()) {
+                if (p == mc.player) continue;
+                float ox = cxm + (float) ((p.getX() / 16.0 - fx) * cell), oy = cym + (float) ((p.getZ() / 16.0 - fz) * cell);
+                boolean friend = dev.novautils.utils.Friends.isFriend(p);
+                Theme.rounded(g, Math.round(ox) - 2, Math.round(oy) - 2, 5, 5, 2, 0xFF000000);
+                Theme.rounded(g, Math.round(ox) - 1, Math.round(oy) - 1, 3, 3, 1, friend ? 0xFF4ADE80 : 0xFFFFFFFF);
+            }
+        }
+        g.pose().popPose();
         g.disableScissor();
 
-        // north marker
-        UiFont.text(g, "N", Math.round(cxm) - UiFont.width("N") / 2, y0 + 2, 0xB0FFFFFF, false);
+        // north marker on the edge of the map (it moves round when the map turns)
+        float nx = (float) Math.sin(theta), ny = (float) -Math.cos(theta);
+        float edgeR = size / 2f - 6;
+        int nxp = Math.round(cxm + nx * edgeR), nyp = Math.round(cym + ny * edgeR);
+        Theme.rounded(g, nxp - 5, nyp - 5, 10, 10, 5, 0xC0000000);
+        UiFont.text(g, "N", nxp - UiFont.width("N") / 2, nyp - 4, 0xFFFF6A6A, false);
 
-        // you: an arrow pointing where you look (north is up)
-        double yaw = Math.toRadians(mc.player.getYRot());
-        float sx = (float) -Math.sin(yaw), sy = (float) Math.cos(yaw); // forward on the map
+        // you: an arrow pointing where you look
+        double yaw = Math.toRadians(yawDeg);
+        float sx0 = (float) -Math.sin(yaw), sy0 = (float) Math.cos(yaw);
+        float cos = (float) Math.cos(theta), sin = (float) Math.sin(theta);
+        float sx = sx0 * cos - sy0 * sin, sy = sx0 * sin + sy0 * cos; // forward on the (turned) map
         float ox = -sy, oy = sx;                                       // sideways
         float tipX = cxm + sx * 6, tipY = cym + sy * 6;
         float lX = cxm - sx * 4 + ox * 4, lY = cym - sy * 4 + oy * 4;

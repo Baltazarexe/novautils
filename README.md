@@ -118,7 +118,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | FallPredict | Where you'll land and how much fall damage it will do. |
 | ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |
-| NewChunks | New vs already-loaded chunks (find trails), in the Overworld, the Nether and the End: freshly generated chunks still carry a leftover entry in their biome palette that a saved-and-reloaded chunk does not; flowing liquid is the fallback. Each region is one shape: a soft tint plus a low border wall only where it ends, readable from any angle; a top-down chunk map on the HUD (corner and size adjustable) shows new and old chunks around you. |
+| NewChunks | New vs already-loaded chunks (find trails), in the Overworld, the Nether and the End: freshly generated chunks still carry a leftover entry in their biome palette that a saved-and-reloaded chunk does not; flowing liquid is the fallback. Each region is one shape: a soft tint plus a low border wall only where it ends, readable from any angle; a chunk map on the HUD shows new and old chunks around you: it scrolls smoothly, keeps the trail you passed beyond your render distance (`map-range`), can turn with your view (`map-rotate`) and shows nearby players as dots (friends in green). |
 | LightOverlay | Where mobs can spawn, and the best spots for torches. |
 | Freecam | Fly the camera freely while your body stays put. |
 | Zoom | Zoom in, scroll to zoom further. |
