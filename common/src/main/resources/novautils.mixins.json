@@ -47,6 +47,7 @@
     "NametagHideMixin",
     "EspGlowColorMixin",
     "PostPassMixin",
+    "PlayerTabOverlayMixin",
     "MinecraftUserAccessor",
     "MultiplayerScreenMixin",
     "ContainerScreenMixin",

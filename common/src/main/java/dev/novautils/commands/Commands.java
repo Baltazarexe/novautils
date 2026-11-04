@@ -382,7 +382,23 @@ public final class Commands {
         boolean inNether = here.equals("the_nether");
         if (dim == dev.novautils.utils.StructureFinder.Dim.NETHER && !inNether) { x /= 8; z /= 8; }
         if (dim == dev.novautils.utils.StructureFinder.Dim.OVERWORLD && inNether) { x *= 8; z *= 8; }
-        var results = dev.novautils.utils.StructureFinder.nearest(seed, kind, (int) x, (int) z, count, 160);
+        boolean end = dim == dev.novautils.utils.StructureFinder.Dim.END;
+        List<dev.novautils.utils.StructureFinder.Result> results = new ArrayList<>(dev.novautils.utils.StructureFinder.nearest(seed, kind, (int) x, (int) z, end ? count + 12 : count, 160));
+        int ruledOut = 0;
+        if (end && here.equals("the_end")) {
+            // an end city also needs a high enough island: check the candidates whose chunks are loaded
+            List<dev.novautils.utils.StructureFinder.Result> kept = new ArrayList<>();
+            for (var r : results) {
+                int check = dev.novautils.utils.StructureFinder.endCityCheck(mc.level, seed, r.x(), r.z());
+                if (check == 0) {
+                    ruledOut++;
+                    continue;
+                }
+                kept.add(new dev.novautils.utils.StructureFinder.Result(r.name(), r.x(), r.z(), r.distance(), check == 1 ? "island checked" : "not loaded yet"));
+            }
+            results = kept;
+        }
+        if (results.size() > count) results = new ArrayList<>(results.subList(0, count));
         if (results.isEmpty()) {
             say("None within range.");
             return;
@@ -393,6 +409,8 @@ public final class Commands {
             say("  " + r.x() + ", " + r.z() + "  (" + Math.round(r.distance()) + "m)" + (r.note().isEmpty() ? "" : "  " + r.note()), 0xFFD84A);
         }
         say("Candidate spots from the seed - the game also needs the right biome/terrain, so one may be empty.", 0x9196A4);
+        if (ruledOut > 0) say(ruledOut + " closer spot(s) skipped: the island there is too low for an end city.", 0x9196A4);
+        if (end) say("End cities need the island at Y " + dev.novautils.utils.StructureFinder.END_CITY_MIN_Y + "+; get close and run it again to check one that is not loaded yet.", 0x9196A4);
         boolean sameDim = switch (dim) { case NETHER -> inNether; case END -> here.equals("the_end"); default -> here.equals("overworld"); };
         if (sameDim) {
             var wps = ModuleManager.get().get(dev.novautils.modules.render.Waypoints.class);

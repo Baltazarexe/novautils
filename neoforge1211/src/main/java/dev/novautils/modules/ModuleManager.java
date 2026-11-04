@@ -119,6 +119,9 @@ public class ModuleManager {
         register(new Esp());
         register(new Nametags());
         register(new Search());
+        register(new dev.novautils.modules.render.BaseFinder());
+        register(new dev.novautils.modules.render.StashFinder());
+        register(new dev.novautils.modules.render.DigEsp());
         register(new NewChunks());
         register(new NoRender());
         register(new Trajectories());
@@ -227,6 +230,7 @@ public class ModuleManager {
         register(new TotemCounter());
         register(new Notifications());
         register(new dev.novautils.modules.misc.ThemeSettings());
+        register(new dev.novautils.modules.misc.BetterTab());
         register(new FriendsModule());
         register(new InventoryHud());
         register(new BetterChat());
@@ -239,6 +243,7 @@ public class ModuleManager {
         register(new AntiAfk());
         register(new AutoRespawn());
         register(new AutoReconnect());
+        register(new dev.novautils.modules.misc.DebugBridge());
 
         Config.get().load(modules);
         dev.novautils.NovaUtils.modulesReady = true;

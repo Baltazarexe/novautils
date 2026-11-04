@@ -57,6 +57,20 @@ public class NovaClientGameTest implements FabricClientGameTest {
     }
 
     /** Screenshot; with Sodium the framework's own one crashes, so press F2 instead. */
+    /** GET a URL; "" when nothing answers. */
+    private static String httpGet(String url) {
+        try {
+            var conn = (java.net.HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(3000);
+            try (var in = conn.getInputStream()) {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private static void shot(ClientGameTestContext ctx, String name) {
         if (FabricLoader.getInstance().isModLoaded("sodium")) {
             System.out.println("[novautils-test] screenshot (F2): " + name);
@@ -182,6 +196,25 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         check(ctx.computeOnClient(c -> c.gui.screen() instanceof ClickGuiScreen s && s.searchText().isEmpty()),
             "first ESC clears search, menu stays open");
+
+        // search also finds settings: "two-tone" lists Esp, whose settings then open on that row
+        ctx.getInput().typeChars("two-tone");
+        ctx.waitTicks(3);
+        check(row(ctx, dev.novautils.modules.render.Esp.class, null) != null, "search 'two-tone' finds Esp through its two-tone setting");
+        click(ctx, row(ctx, dev.novautils.modules.render.Esp.class, null), 1);
+        ctx.waitTicks(5);
+        shot(ctx, "09b_menu_search_setting");
+        // Reset: once a setting differs from its default, two clicks on Reset put the module back
+        ctx.runOnClient(c -> ((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "two-tone")).set(true));
+        ctx.waitTicks(2);
+        int[] reset = ctx.computeOnClient(c -> ((ClickGuiScreen) dev.novautils.utils.PlatformCompat.currentScreen(c)).resetButtonCenter());
+        check(reset != null, "Reset shows once a setting differs from its default");
+        click(ctx, reset, 0);
+        click(ctx, reset, 0);
+        check(ctx.computeOnClient(c -> !((Setting<Boolean>) setting(dev.novautils.modules.render.Esp.class, "two-tone")).get()),
+            "Reset (clicked twice) puts the module's settings back to default");
+        ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
+        ctx.waitTicks(3);
 
         // bind AutoSprint to K through the bind row
         clickCategory(ctx, dev.novautils.modules.Category.MOVEMENT);
@@ -927,6 +960,23 @@ public class NovaClientGameTest implements FabricClientGameTest {
         check(ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu), "GhostHand opens a chest through a wall");
         ctx.runOnClient(c -> c.player.closeContainer());
         ctx.waitTicks(3);
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.world.GhostHand.class).reachableCount() >= 1), "GhostHand lists the hidden chest as reachable (outlined)");
+
+        // --- GhostHand: a sign on the wall in front of the chest doesn't take the click
+        cmd(sp, "/setblock 2 201 3 minecraft:air");
+        cmd(sp, "/setblock 3 201 3 minecraft:chest");
+        cmd(sp, "/setblock 2 201 3 minecraft:oak_wall_sign[facing=east]");
+        waitForBlock(ctx, 3, 201, 3, "chest");
+        waitForBlock(ctx, 2, 201, 3, "sign");
+        ctx.waitTicks(3);
+        ctx.getInput().pressKey(o -> o.keyUse);
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(c -> c.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu), "GhostHand skips a sign in the way and opens the chest behind it");
+        ctx.runOnClient(c -> {
+            c.player.closeContainer();
+            if (dev.novautils.utils.PlatformCompat.currentScreen(c) != null) dev.novautils.utils.PlatformCompat.openScreen(c, null);
+        });
+        ctx.waitTicks(3);
 
         // --- GhostHand: a lever behind the wall
         cmd(sp, "/setblock 2 201 3 minecraft:air");
@@ -968,6 +1018,96 @@ public class NovaClientGameTest implements FabricClientGameTest {
         ctx.getInput().releaseKey(o -> o.keyShift);
         ctx.runOnClient(c -> allOff());
         cmd(sp, "/fill 1 201 3 3 201 3 minecraft:air");
+
+        // --- BaseFinder: furnaces, redstone lamps and a chest together make a discovery, with its card
+        cmd(sp, "/fill 6 200 1 6 200 5 minecraft:furnace");
+        cmd(sp, "/fill 7 200 1 7 200 5 minecraft:redstone_lamp");
+        cmd(sp, "/setblock 8 200 3 minecraft:chest");
+        cmd(sp, "/tp @a 0.5 200 3.5 -90 10");
+        waitForBlock(ctx, 8, 200, 3, "chest");
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.BaseFinder.class));
+        for (int i = 0; i < 200 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.BaseFinder.class).discoveryCount() == 0); i++) ctx.waitTick();
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.BaseFinder.class).discoveryCount() >= 1), "BaseFinder finds the machines + redstone + storage spot");
+        ctx.waitTicks(10);
+        shot(ctx, "44b_basefinder_card");
+        // a trial chamber has storage + machines too: a vault next to it marks it as a structure, so it is dropped
+        cmd(sp, "/setblock 9 200 3 minecraft:vault");
+        for (int i = 0; i < 300 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.BaseFinder.class).discoveryCount() > 0); i++) ctx.waitTick();
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.BaseFinder.class).discoveryCount() == 0), "BaseFinder skips a spot next to a structure block (trial chamber vault)");
+        cmd(sp, "/setblock 9 200 3 minecraft:air");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill 6 200 1 8 200 5 minecraft:air");
+
+        // --- BetterTab: the tab list's name hook colours you, the limit goes past vanilla's 80
+        ctx.runOnClient(c -> on(dev.novautils.modules.misc.BetterTab.class));
+        check(ctx.computeOnClient(c -> {
+            var info = c.getConnection().getPlayerInfo(c.player.getUUID());
+            var name = info == null ? null : dev.novautils.modules.misc.BetterTab.name(info, net.minecraft.network.chat.Component.literal("me"));
+            return name != null && name.getStyle().getColor() != null
+                && dev.novautils.modules.misc.BetterTab.maxPlayers(80L) == 200L;
+        }), "BetterTab highlights your name and lifts the 80-player limit");
+        ctx.runOnClient(c -> allOff());
+
+        // --- Tracers through an ice wall (drawn on the HUD now: smooth, never hidden by ice or water)
+        cmd(sp, "/fill 3 200 -1 3 202 5 minecraft:ice");
+        cmd(sp, "/summon minecraft:zombie 7.5 200 1.5 {NoAI:1b,PersistenceRequired:1b,Silent:1b}");
+        cmd(sp, "/summon minecraft:zombie 9.5 200 6.5 {NoAI:1b,PersistenceRequired:1b,Silent:1b}");
+        cmd(sp, "/tp @a 0.5 200 3.5 -90 10");
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.Tracers.class));
+        ctx.waitTicks(15);
+        shot(ctx, "44c_tracers_through_ice");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/kill @e[type=minecraft:zombie]");
+        cmd(sp, "/fill 3 200 -1 3 202 5 minecraft:air");
+
+        // --- StashFinder: seven chests in one chunk are a stash
+        cmd(sp, "/fill 2 200 -5 8 200 -5 minecraft:chest");
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.StashFinder.class));
+        for (int i = 0; i < 80 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.StashFinder.class).stashCount() == 0); i++) ctx.waitTick();
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.StashFinder.class).stashCount() >= 1), "StashFinder marks a chunk with seven chests");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill 2 200 -5 8 200 -5 minecraft:air");
+
+        // --- DigEsp: a 1x1 shaft dug down a stone pillar
+        cmd(sp, "/fill 20 200 0 22 211 2 minecraft:stone");
+        cmd(sp, "/fill 21 200 1 21 211 1 minecraft:air");
+        waitForBlock(ctx, 22, 211, 2, "stone");
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.DigEsp.class));
+        for (int i = 0; i < 400 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.DigEsp.class).shaftCount() == 0); i++) ctx.waitTick();
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.DigEsp.class).shaftCount() >= 1), "DigEsp finds a 12-deep 1x1 shaft");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill 20 200 0 22 211 2 minecraft:air");
+
+        // --- NewChunks: liquid starting to flow marks chunks as new (world borders + the chunk map)
+        ctx.runOnClient(c -> on(dev.novautils.modules.render.NewChunks.class));
+        cmd(sp, "/tp @a 5.5 200 0.5 180 35");
+        ctx.waitTicks(5);
+        cmd(sp, "/setblock -2 200 -3 minecraft:water");
+        cmd(sp, "/setblock 10 200 -3 minecraft:water");
+        cmd(sp, "/setblock -2 200 4 minecraft:water");
+        cmd(sp, "/setblock 10 200 4 minecraft:water");
+        for (int i = 0; i < 100 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.NewChunks.class).newCount() < 2); i++) ctx.waitTick();
+        check(ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.NewChunks.class).newCount() >= 2), "NewChunks marks chunks where liquid starts flowing");
+        ctx.waitTicks(10);
+        shot(ctx, "44d_newchunks");
+        ctx.runOnClient(c -> allOff());
+        cmd(sp, "/fill -4 200 -6 14 200 6 minecraft:air replace minecraft:water");
+
+
+        // --- DebugBridge: read-only local HTTP answers with the game state, module settings and server messages
+        ctx.runOnClient(c -> on(dev.novautils.modules.misc.DebugBridge.class));
+        cmd(sp, "/tellraw @a {\"text\":\"bridge-ping\"}");
+        ctx.waitTicks(25);
+        String bState = httpGet("http://127.0.0.1:25599/state");
+        String bModule = httpGet("http://127.0.0.1:25599/module?name=NewChunks");
+        String bLog = httpGet("http://127.0.0.1:25599/log");
+        System.out.println("[novautils-test] bridge state: " + bState);
+        check(bState.contains("\"dimension\":\"minecraft:overworld\"") && bState.contains("\"DebugBridge\""), "DebugBridge /state has the dimension and the enabled modules");
+        check(bModule.contains("\"new-color\""), "DebugBridge /module lists a module's settings");
+        check(bLog.contains("bridge-ping"), "DebugBridge /log has server messages");
+        ctx.runOnClient(c -> allOff());
+        ctx.waitTicks(2);
+        check(httpGet("http://127.0.0.1:25599/state").isEmpty(), "DebugBridge stops listening when turned off");
 
         // --- Search custom blocks: .search add makes an ordinary block findable
         cmd(sp, "/setblock 5 201 3 minecraft:gold_block");
@@ -1750,6 +1890,73 @@ public class NovaClientGameTest implements FabricClientGameTest {
                 if (radius != 20) throw new AssertionError("valid old value (radius=20) was not loaded, got " + radius);
                 System.out.println("[novautils-test] config migration verified");
             });
+        }
+        endCityIslandCheck(context);
+    }
+
+    /** .locate end_city: in a normal world with structures, the island check agrees with the cities the game really builds. */
+    private static void endCityIslandCheck(ClientGameTestContext ctx) {
+        try (TestSingleplayerContext sp = ctx.worldBuilder().setUseConsistentSettings(false).adjustSettings(st -> st.setSeed("4419")).create()) {
+            // --- .locate end_city: the island check agrees with what the game really built there
+            long worldSeed = sp.getServer().computeOnServer(s -> s.overworld().getSeed());
+            var endCityKind = dev.novautils.utils.StructureFinder.find("end_city");
+            cmd(sp, "/gamemode spectator @a");
+
+            // --- NewChunks outside the Overworld: freshly generated Nether and End chunks show as new (biome palette)
+            ctx.runOnClient(c -> on(dev.novautils.modules.render.NewChunks.class));
+            String[][] dims = {{"the_nether", "3000 100 3000"}, {"the_end", "4000 80 4000"}};
+            for (String[] d : dims) {
+                net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> want =
+                    d[0].equals("the_nether") ? net.minecraft.world.level.Level.NETHER : net.minecraft.world.level.Level.END;
+                cmd(sp, "/execute in minecraft:" + d[0] + " run tp @a " + d[1]);
+                for (int i = 0; i < 300 && ctx.computeOnClient(c -> c.level.dimension() != want); i++) ctx.waitTick();
+                ctx.runOnClient(c -> { allOff(); on(dev.novautils.modules.render.NewChunks.class); });
+                ctx.waitTicks(40);
+                for (int i = 0; i < 300 && ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.NewChunks.class).newCount() < 60); i++) ctx.waitTick();
+                int fresh = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.NewChunks.class).newCount());
+                int stale = ctx.computeOnClient(c -> ModuleManager.get().get(dev.novautils.modules.render.NewChunks.class).oldCount());
+                System.out.println("[novautils-test] NewChunks in " + d[0] + ": new=" + fresh + " old=" + stale);
+                check(fresh >= 60 && stale <= fresh / 10, "NewChunks marks freshly generated chunks in " + d[0] + " as new");
+                shot(ctx, "44e_newchunks_" + d[0]);
+            }
+            ctx.runOnClient(c -> allOff());
+
+            int agree = 0, disagree = 0, cities = 0;
+            for (var spot : dev.novautils.utils.StructureFinder.nearest(worldSeed, endCityKind, 1600, 0, 12, 160)) {
+                int sx = spot.x(), sz = spot.z();
+                cmd(sp, "/execute in minecraft:the_end run tp @a " + sx + " 130 " + sz);
+                for (int i = 0; i < 300 && ctx.computeOnClient(c -> c.level.dimension() != net.minecraft.world.level.Level.END); i++) ctx.waitTick();
+                ctx.waitTicks(60);
+                int verdict = -1;
+                for (int i = 0; i < 300 && verdict == -1; i++) {
+                    ctx.waitTick();
+                    verdict = ctx.computeOnClient(c -> c.level.dimension() == net.minecraft.world.level.Level.END
+                        ? dev.novautils.utils.StructureFinder.endCityCheck(c.level, worldSeed, sx, sz) : -1);
+                }
+                if (verdict == -1) continue;
+                boolean city = sp.getServer().computeOnServer(s -> {
+                    var end = s.getLevel(net.minecraft.world.level.Level.END);
+                    int n = 0, bx = (sx >> 4) << 4, bz = (sz >> 4) << 4;
+                    for (int x = bx - 16; x < bx + 32; x += 2)
+                        for (int z = bz - 16; z < bz + 32; z += 2)
+                            for (int y = 55; y < 160; y += 2)
+                                if (end.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).is(net.minecraft.world.level.block.Blocks.PURPUR_BLOCK)) n++;
+                    return n > 3;
+                });
+                String server = sp.getServer().computeOnServer(s -> {
+                    var end = s.getLevel(net.minecraft.world.level.Level.END);
+                    int v = dev.novautils.utils.StructureFinder.endCityCheck(end, worldSeed, sx, sz);
+                    int starts = end.getChunk(sx >> 4, sz >> 4).getAllStarts().size();
+                    int top = 127;
+                    while (top > 0 && !end.getBlockState(new net.minecraft.core.BlockPos(sx, top, sz)).is(net.minecraft.world.level.block.Blocks.END_STONE)) top--;
+                    return "server check " + v + ", starts " + starts + ", end stone top at centre " + top;
+                });
+                System.out.println("[novautils-test] end city spot " + sx + " " + sz + ": client check " + verdict + ", city built " + city + ", " + server);
+                if (city) cities++;
+                if ((verdict == 1) == city) agree++;
+                else disagree++;
+            }
+            check(disagree == 0 && agree >= 4 && cities >= 1, ".locate end_city island check matches the generated cities (" + agree + " agree, " + disagree + " disagree, " + cities + " cities)");
         }
     }
 }

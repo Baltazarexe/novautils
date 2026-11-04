@@ -42,6 +42,11 @@ public abstract class ClientPacketListenerMixin {
         observe(packet);
     }
 
+    @Inject(method = "handleSystemChat", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
+    private void novautils$systemChat(net.minecraft.network.protocol.game.ClientboundSystemChatPacket packet, CallbackInfo ci) {
+        observe(packet);
+    }
+
     @Inject(method = "handleBlockUpdate", at = @At(value = "INVOKE", target = ENSURE, shift = At.Shift.AFTER))
     private void novautils$block(net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket packet, CallbackInfo ci) {
         observe(packet);

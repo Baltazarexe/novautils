@@ -58,6 +58,7 @@ public class ClassicGuiScreen extends Screen {
     private static final int TEXT = 0xFFD1D1D1;
     private static final int TEXT_DIM = 0xFFA3A3A3;
     private static final int TEXT_OFF = 0xFF7A7A7A;
+    private static final int WARN = 0xFFFFB347;
 
     private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND, COLOR, CHANNEL }
 
@@ -200,7 +201,34 @@ public class ClassicGuiScreen extends Screen {
         if (search.isEmpty()) return true;
         String q = search.toLowerCase(Locale.ROOT);
         return module.name.toLowerCase(Locale.ROOT).contains(q)
-            || module.description.toLowerCase(Locale.ROOT).contains(q);
+            || module.description.toLowerCase(Locale.ROOT).contains(q)
+            || settingMatch(module) != null;
+    }
+
+    /** Whether a setting's name matches the search ("glow" finds Esp through glow-spread). */
+    private boolean settingMatches(Setting<?> setting) {
+        if (search.isEmpty() || setting.name.startsWith("hud-") || rowTypeOf(setting) == null) return false;
+        String q = search.toLowerCase(Locale.ROOT);
+        return setting.name.toLowerCase(Locale.ROOT).contains(q) || setting.name.replace('-', ' ').toLowerCase(Locale.ROOT).contains(q);
+    }
+
+    private Setting<?> settingMatch(Module module) {
+        for (Setting<?> setting : module.getSettings()) if (settingMatches(setting)) return setting;
+        return null;
+    }
+
+    /** Open: right-clicked, or found through one of its settings while searching. */
+    private boolean expanded(Module module) {
+        if (EXPANDED.contains(module)) return true;
+        return !search.isEmpty() && !module.name.toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)) && settingMatch(module) != null;
+    }
+
+    /** Another module on the same key, or null. */
+    private static Module clashWith(Module module) {
+        int key = module.getKeyBind();
+        if (key == -1) return null;
+        for (Module m : ModuleManager.get().getModules()) if (m != module && m.getKeyBind() == key) return m;
+        return null;
     }
 
     private RowType rowTypeOf(Setting<?> setting) {
@@ -225,7 +253,7 @@ public class ClassicGuiScreen extends Screen {
             for (Module module : ModuleManager.get().getModules()) {
                 if (module.category != panel.category || !matchesSearch(module)) continue;
                 contentH += ROW_H;
-                if (!EXPANDED.contains(module)) continue;
+                if (!expanded(module)) continue;
                 for (Setting<?> setting : module.getSettings()) {
                     if (!setting.isVisible()) continue;
                     RowType type = rowTypeOf(setting);
@@ -245,7 +273,7 @@ public class ClassicGuiScreen extends Screen {
                 rows.add(new Row(panel, RowType.MODULE, panel.x, y, PANEL_W, ROW_H, module, null));
                 y += ROW_H;
 
-                if (!EXPANDED.contains(module)) continue;
+                if (!expanded(module)) continue;
 
                 for (Setting<?> setting : module.getSettings()) {
                     if (!setting.isVisible()) continue;
@@ -318,7 +346,7 @@ public class ClassicGuiScreen extends Screen {
 
         // Setting tooltips are set here, after the panels, so they draw on top of everything.
         if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
-            g.setTooltipForNextFrame(Component.literal(hoveredSetting.description + "  (middle-click: reset)"), mouseX, mouseY);
+            g.setTooltipForNextFrame(Component.literal(hoveredSetting.description + "  (" + dev.novautils.gui.SettingText.defaultText(hoveredSetting) + ", middle-click resets)"), mouseX, mouseY);
         }
         hoveredSetting = null;
     }
@@ -486,7 +514,14 @@ public class ClassicGuiScreen extends Screen {
     /** Thin vertical guide on the left of settings, so it's clear which module they belong to. */
     private void settingGuide(GuiGraphicsExtractor g, Row row) {
         g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), SETTING_BG);
-        g.fill(row.x(), row.y(), row.x() + 2, row.y() + row.h(), Theme.alpha(accent(), 0.55f));
+        boolean real = row.setting() != null && row.type() != RowType.CHANNEL;
+        boolean match = real && settingMatches(row.setting());
+        if (match) g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), Theme.alpha(accent(), 0.14f));
+        g.fill(row.x(), row.y(), row.x() + 2, row.y() + row.h(), Theme.alpha(accent(), match ? 1f : 0.55f));
+        // a small dot marks settings changed from their default
+        if (real && dev.novautils.gui.SettingText.changed(row.setting())) {
+            g.fill(row.x() + 5, row.y() + row.h() / 2 - 1, row.x() + 7, row.y() + row.h() / 2 + 1, accent());
+        }
     }
 
     private void hoverFill(GuiGraphicsExtractor g, Row row, int mouseX, int mouseY) {
@@ -502,7 +537,7 @@ public class ClassicGuiScreen extends Screen {
         HOVER.put(module, anim);
         int x = row.x(), y = row.y(), w = row.w(), h = row.h();
 
-        boolean open = EXPANDED.contains(module);
+        boolean open = expanded(module);
         g.fill(x, y, x + w, y + h, open && !module.isEnabled() ? ROW_OPEN : ROW_BG);
         if (module.isEnabled()) {
             g.fill(x, y, x + w, y + h, accent());
@@ -519,7 +554,7 @@ public class ClassicGuiScreen extends Screen {
             int kw = UiFont.width(key);
             int kx = x + w - 16 - kw;
             Theme.roundRect(g, kx - 2, y + 4, kw + 4, 10, module.isEnabled() ? 0x30000000 : 0x50000000);
-            UiFont.text(g, key, kx, y + 5, module.isEnabled() ? Theme.alpha(onAccent(), 0.8f) : TEXT_OFF);
+            UiFont.text(g, key, kx, y + 5, module.isEnabled() ? Theme.alpha(onAccent(), 0.8f) : clashWith(module) != null ? WARN : TEXT_OFF);
         }
         // three small dots on the right (the settings handle), a thin line under enabled rows
         int dots = module.isEnabled() ? onAccent() : open ? TEXT : TEXT_OFF;
@@ -644,6 +679,11 @@ public class ClassicGuiScreen extends Screen {
         Theme.roundRect(g, kx - 3, row.y() + 2, kw + 6, 11,
             binding ? Theme.alpha(accent(), 0.15f + 0.2f * Theme.pulse(8f)) : 0x50000000);
         UiFont.text(g, key, kx, row.y() + 3, binding ? accent() : TEXT_OFF);
+        Module clash = binding ? null : clashWith(module);
+        if (clash != null) {
+            int lx = row.x() + 12 + UiFont.width("bind") + 5;
+            UiFont.text(g, UiFont.plainSubstrByWidth("⚠ " + clash.name, kx - lx - 6), lx, row.y() + 3, WARN);
+        }
     }
 
     private String keyName(int keyCode) {

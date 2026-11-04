@@ -65,6 +65,14 @@ public class ClickGuiScreen extends Screen {
     private Setting<?> hoveredSetting;
     private final long openedAt = System.nanoTime();
     private long lastFrame = System.nanoTime();
+    /** Amber for warnings (two modules on one key, the reset confirmation). */
+    private static final int WARN = 0xFFFFB347;
+    /** How many modules use each key, refreshed every frame (clash warnings). */
+    private final Map<Integer, Integer> keyUse = new HashMap<>();
+    /** Set when "Reset" was clicked once: a second click within 2.5 s resets the module. */
+    private long resetArmedAt;
+    /** After picking a module during a search, scroll its settings to the first match. */
+    private boolean scrollToMatch;
     /** Fade-in of the module list / settings pane after switching tab or module (rows stagger in). */
     private float listFade, setFade;
     private int lastTabKey = Integer.MIN_VALUE;
@@ -122,6 +130,13 @@ public class ClickGuiScreen extends Screen {
 
     public int[] hudButtonCenter() {
         return new int[]{wx + SIDEBAR / 2, hudButtonY() + 7};
+    }
+
+    /** Centre of the "Reset" button in the settings header (test hook), or null while it's hidden. */
+    public int[] resetButtonCenter() {
+        if (selected == null || !modified(selected)) return null;
+        int[] rb = resetButton();
+        return new int[]{rb[0] + rb[2] / 2, rb[1] + rb[3] / 2};
     }
 
     /** Somewhere inside the module list / settings pane (for scrolling in tests). */
@@ -215,7 +230,34 @@ public class ClickGuiScreen extends Screen {
     private boolean matchesSearch(Module m) {
         if (search.isEmpty()) return true;
         String q = search.toLowerCase(Locale.ROOT);
-        return m.name.toLowerCase(Locale.ROOT).contains(q) || m.description.toLowerCase(Locale.ROOT).contains(q);
+        return m.name.toLowerCase(Locale.ROOT).contains(q) || m.description.toLowerCase(Locale.ROOT).contains(q) || settingMatch(m) != null;
+    }
+
+    /** Whether a setting's name matches the search ("glow" finds Esp through glow-spread). */
+    private boolean settingMatches(Setting<?> s) {
+        if (search.isEmpty() || s.name.startsWith("hud-") || rowTypeOf(s) == null) return false;
+        String q = search.toLowerCase(Locale.ROOT);
+        return s.name.toLowerCase(Locale.ROOT).contains(q) || pretty(s.name).toLowerCase(Locale.ROOT).contains(q);
+    }
+
+    /** The first of a module's settings that matches the search, or null. */
+    private Setting<?> settingMatch(Module m) {
+        for (Setting<?> s : m.getSettings()) if (settingMatches(s)) return s;
+        return null;
+    }
+
+    /** Settings the "Reset" button puts back (the HUD position is left alone). */
+    private boolean resettable(Setting<?> s) {
+        return rowTypeOf(s) != null && !s.name.startsWith("hud-");
+    }
+
+    private boolean modified(Module m) {
+        for (Setting<?> s : m.getSettings()) if (resettable(s) && dev.novautils.gui.SettingText.changed(s)) return true;
+        return false;
+    }
+
+    private boolean clashes(Module m) {
+        return m.getKeyBind() != -1 && keyUse.getOrDefault(m.getKeyBind(), 0) > 1;
     }
 
     private List<Module> listedModules() {
@@ -298,6 +340,15 @@ public class ClickGuiScreen extends Screen {
         sy += SET_H + 2;
         int setContent = sy - start;
         setScrollTarget = Math.max(0, Math.min(setScrollTarget, Math.max(0, setContent - (bodyBottom - setRowsTop))));
+        if (scrollToMatch) {
+            scrollToMatch = false;
+            for (Row r : rows) {
+                if (r.pane() == Pane.SETTINGS && r.setting() != null && settingMatches(r.setting())) {
+                    setScroll = setScrollTarget = Math.max(0, r.y() + Math.round(setScroll) - setRowsTop - 6);
+                    break;
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------ drawing
@@ -318,6 +369,8 @@ public class ClickGuiScreen extends Screen {
         listScroll += (listScrollTarget - listScroll) * Math.min(1f, dt * 16f);
         setScroll += (setScrollTarget - setScroll) * Math.min(1f, dt * 16f);
 
+        keyUse.clear();
+        for (Module m : ModuleManager.get().getModules()) if (m.getKeyBind() != -1) keyUse.merge(m.getKeyBind(), 1, Integer::sum);
         computeGeometry();
         layout();
 
@@ -329,6 +382,8 @@ public class ClickGuiScreen extends Screen {
         if (selected != lastSelected) {
             lastSelected = selected;
             setFade = 0f;
+            resetArmedAt = 0;
+            scrollToMatch = !search.isEmpty();
         }
         listFade = Math.min(1f, listFade + dt * 4.5f);
         setFade = Math.min(1f, setFade + dt * 4.2f);
@@ -496,7 +551,10 @@ public class ClickGuiScreen extends Screen {
             // name on top, a one-line description (or the category, when searching) under it
             UiFont.text(g, m.name, r.x() + 8, r.y() + 4, nameColor, false);
             if (m.isFavorite()) UiFont.text(g, "\u2605", r.x() + 11 + UiFont.width(m.name), r.y() + 4, 0xFFFFD84A, false);
-            String sub = search.isEmpty() ? m.description : title(m.category) + "  ·  " + m.description;
+            Setting<?> hit = search.isEmpty() || m.name.toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)) ? null : settingMatch(m);
+            String sub = search.isEmpty() ? m.description
+                : hit != null ? title(m.category) + "  ·  ⌕ " + pretty(hit.name)
+                : title(m.category) + "  ·  " + m.description;
             int subW = r.w() - 40 - (m.getKeyBind() != -1 ? UiFont.width(keyName(m.getKeyBind())) + 8 : 0);
             String shortSub = UiFont.plainSubstrByWidth(sub, subW);
             if (shortSub.length() < sub.length()) shortSub = UiFont.plainSubstrByWidth(sub, subW - UiFont.width("…")) + "…";
@@ -507,7 +565,7 @@ public class ClickGuiScreen extends Screen {
                 int kw = UiFont.width(key);
                 int kx = r.x() + r.w() - 26 - kw;
                 Theme.rounded(g, kx - 3, r.y() + 3, kw + 6, 10, 3, 0xFF1C1E25);
-                UiFont.text(g, key, kx, r.y() + 4, Theme.TEXT_OFF, false);
+                UiFont.text(g, key, kx, r.y() + 4, clashes(m) ? WARN : Theme.TEXT_OFF, false);
             }
             Theme.toggle(g, r.x() + r.w() - 22, r.y() + 8, sw);
             // rows fade in one after the other when the tab changes
@@ -541,6 +599,15 @@ public class ClickGuiScreen extends Screen {
         float on = animate("hdr", selected.isEnabled() ? 1f : 0f, 16f, dt);
         int[] hs = headerSwitch();
         Theme.toggle(g, hs[0], hs[1], on);
+        if (modified(selected)) {
+            int[] rb = resetButton();
+            boolean armed = System.currentTimeMillis() - resetArmedAt < 2500;
+            boolean rh = mx >= rb[0] && mx < rb[0] + rb[2] && my >= rb[1] && my < rb[1] + rb[3];
+            float ra = animate("resetbtn", rh ? 1f : 0f, 14f, dt);
+            Theme.rounded(g, rb[0], rb[1], rb[2], rb[3], 4, armed ? Theme.alpha(WARN, 0.22f) : Theme.mix(0xFF1C1E25, 0xFF262A36, ra));
+            String rl = armed ? "Sure?" : "Reset";
+            UiFont.text(g, rl, rb[0] + rb[2] / 2 - UiFont.width(rl) / 2, rb[1] + 3, armed ? WARN : Theme.mix(Theme.TEXT_OFF, Theme.TEXT, ra), false);
+        }
         int dy = wy + 26;
         for (String line : descriptionLines()) {
             UiFont.text(g, line, setX + 12, dy, Theme.TEXT_OFF, false);
@@ -559,6 +626,16 @@ public class ClickGuiScreen extends Screen {
             float h = animate(key, hover ? 1f : 0f, 14f, dt);
             if (h > 0.01f && r.type() != RowType.CHANNEL) Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, Theme.alpha(0x0EFFFFFF, h));
             if (hover && r.setting() != null && r.type() != RowType.CHANNEL) hoveredSetting = r.setting();
+            if (r.setting() != null && r.type() != RowType.CHANNEL) {
+                if (settingMatches(r.setting())) {
+                    Theme.rounded(g, r.x(), r.y(), r.w(), r.h(), 5, Theme.alpha(Theme.accent(), 0.12f));
+                    Theme.rounded(g, r.x(), r.y() + 4, 2, r.h() - 8, 1, Theme.accent());
+                }
+                // a small dot marks settings changed from their default
+                if (dev.novautils.gui.SettingText.changed(r.setting())) {
+                    Theme.rounded(g, r.x() + 3, r.y() + r.h() / 2 - 2, 3, 3, 1, Theme.alpha(Theme.accent(), 0.9f));
+                }
+            }
             switch (r.type()) {
                 case BOOL -> drawBool(g, r, dt);
                 case NUMBER -> drawNumber(g, r);
@@ -577,9 +654,13 @@ public class ClickGuiScreen extends Screen {
 
         // hovered setting's description along the bottom edge
         if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
-            String d = UiFont.plainSubstrByWidth(hoveredSetting.description, setW - 20);
+            String extra = dev.novautils.gui.SettingText.defaultText(hoveredSetting);
+            int ew = UiFont.width(extra);
+            String d = UiFont.plainSubstrByWidth(hoveredSetting.description, setW - 28 - ew);
+            if (d.length() < hoveredSetting.description.length()) d = UiFont.plainSubstrByWidth(hoveredSetting.description, setW - 28 - ew - UiFont.width("…")) + "…";
             Theme.rounded(g, setX + 6, bodyBottom - 14, setW - 12, 13, 4, 0xF01B1D24);
             UiFont.text(g, d, setX + 10, bodyBottom - 11, Theme.TEXT_DIM, false);
+            UiFont.text(g, extra, setX + setW - 10 - ew, bodyBottom - 11, Theme.TEXT_OFF, false);
         }
     }
 
@@ -610,6 +691,13 @@ public class ClickGuiScreen extends Screen {
     /** {x, y, w, h} of the inline colour swatch on a switch row. */
     private static int[] swatch(Row r) {
         return new int[]{r.x() + r.w() - 44, r.y() + 5, 16, 10};
+    }
+
+    /** {x, y, w, h} of the "Reset" button left of the header switch. */
+    private int[] resetButton() {
+        int w = Math.max(UiFont.width("Reset"), UiFont.width("Sure?")) + 10;
+        int[] hs = headerSwitch();
+        return new int[]{hs[0] - 8 - w, hs[1] - 2, w, 13};
     }
 
     /** {x, y} of the big on/off switch in the settings header. */
@@ -724,6 +812,15 @@ public class ClickGuiScreen extends Screen {
         int bg = binding ? Theme.alpha(Theme.accent(), 0.18f + 0.12f * Theme.pulse(6f)) : 0xFF1E2128;
         Theme.rounded(g, kx, r.y() + 3, kw, 12, 4, bg);
         UiFont.text(g, key, kx + 6, r.y() + 5, binding ? Theme.accent() : Theme.TEXT_DIM, false);
+        int bound = r.module().getKeyBind();
+        if (!binding && bound != -1) {
+            for (Module m : ModuleManager.get().getModules()) {
+                if (m == r.module() || m.getKeyBind() != bound) continue;
+                int lx = r.x() + 8 + UiFont.width("Keybind") + 6;
+                UiFont.text(g, UiFont.plainSubstrByWidth("⚠ also " + m.name, kx - lx - 4), lx, r.y() + 5, WARN, false);
+                break;
+            }
+        }
     }
 
     private static int channelValue(int color, int channel) {
@@ -811,6 +908,19 @@ public class ClickGuiScreen extends Screen {
                 favoritesTab = true;
                 search = "";
                 listScroll = listScrollTarget = 0;
+                return true;
+            }
+        }
+        if (selected != null && modified(selected)) {
+            int[] rb = resetButton();
+            if (mx >= rb[0] && mx < rb[0] + rb[2] && my >= rb[1] && my < rb[1] + rb[3]) {
+                if (System.currentTimeMillis() - resetArmedAt < 2500) {
+                    for (Setting<?> s : selected.getSettings()) if (resettable(s)) s.reset();
+                    resetArmedAt = 0;
+                    ModuleManager.get().markDirty();
+                } else {
+                    resetArmedAt = System.currentTimeMillis();
+                }
                 return true;
             }
         }

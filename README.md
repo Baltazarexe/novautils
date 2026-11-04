@@ -32,8 +32,14 @@ Fabric needs [Fabric API](https://modrinth.com/mod/fabric-api). Drop the jar in 
   middle-click it to add it to the **Favorites** tab.
 - Two menu styles: the single **Nova** window (smooth: a pill glides between tabs, rows fade in one by one, it opens and closes with a soft zoom, accent line on top), or **Classic**, flat graphite panels (one orange
   accent, enabled modules as a solid row in that colour), draggable, one per category. Drag the
-  colour strip at the top to pick any menu colour (middle-click it to go back to orange); it is remembered.
+  colour strip at the top to pick any colour (middle-click it to go back to orange), or pick a preset
+  in the **Theme** module; it is remembered and also recolours the Nova menu and the HUD.
   The button above *Edit HUD* (or next to it, in Classic) switches; your choice is kept.
+- Type anywhere in the menu to search. It finds modules by name, description **or setting**: typing
+  `two-tone` finds Esp and opens its settings on that row, highlighted.
+- A small dot marks settings you changed. Hovering a setting shows its default (and range); **Reset**
+  in the settings header (click it twice) puts the whole module back to its defaults. Two modules on
+  the same key are flagged in amber.
 - Any module can be bound to a key or a mouse button (side buttons too) from its settings.
 - **Edit HUD** in the menu lets you drag the HUD elements (coords, armour, minimap, ...) anywhere.
 - Settings are saved to `config/novautils.json`.
@@ -61,7 +67,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | `.sort` | sort the open chest or your inventory |
 | `.drop add/del/list <item>` | extra items for AutoDrop |
 | `.seed <n|2b2t>` | set the world seed for `.locate` and slime chunks |
-| `.locate <structure> [n]` | nearest structures from the seed, with a waypoint |
+| `.locate <structure> [n]` | nearest structures from the seed, with a waypoint (end cities: islands too low for a city are checked and skipped once loaded) |
 | `.wp add <name> [x y z] / del / list / clear` | waypoints, by coordinates or where you stand |
 | `.coords`, `.seed <seed>`, `.panic` | copy coordinates, slime-chunk seed, everything off |
 
@@ -87,6 +93,9 @@ Type them in chat; they never reach the server. `.help` lists them.
 | Esp | Highlights entities through walls (box, chams, textured chams, glow), every look a toggle. |
 | StorageEsp | Highlights chests, shulkers, barrels and more through walls. |
 | Search | Finds spawners, portals, beacons and other rare blocks, with an alert and a counter. Add your own blocks with `.search add <block> [hex]`.  Or open the list editor from the menu (search, icons, 3D mob preview). |
+| BaseFinder | Finds places players built: storage, machines, redstone, building blocks, rails and portals close together become a discovery. Clue blocks are outlined by kind, each new discovery gets a toast and a line in `config/novautils_bases.csv`, and looking at one shows a card (what was found, how many, how far). Villages and structures can match too: loaded objects, not proof of a base. |
+| StashFinder | Chunks full of storage (chests, barrels, shulker boxes count triple): outlined, labelled with what they hold, announced and written to `config/novautils_stashes.csv`. |
+| DigEsp | Straight 1x1 shafts dug down (walled on all four sides the whole way): the world almost never makes them, players digging to ores or to a hidden base leave them everywhere. |
 | BlockHighlight | Outlines the block you are looking at (rainbow option). |
 | TargetHud | Name, animated health pill, armour and distance of the creature you look at (works past survival reach). |
 | GearView | Armour, held items and enchantments (short tags or full names) above other players, with durability. |
@@ -96,8 +105,8 @@ Type them in chat; they never reach the server. `.help` lists them.
 | PetOwner | Owner tag above tamed animals. |
 | Particles | Choose which particles show and how many (FPS in big bases). |
 | Compass | A heading bar with your waypoints on it. |
-| GhostHand | Right-click chests, levers, doors and villagers through walls (never players; off while sneaking). |
-| Tracers | Lines from your crosshair to nearby entities. |
+| GhostHand | Open chests behind walls, even several blocks thick, and use levers, doors and villagers through blocks. Containers come first; signs, beds, item frames and armour stands in the wall never take the click. Every container within reach is outlined and the aim snaps to it. Reach goes up to what servers accept (about 5.5 blocks, 6 on 1.20.1). Never players; off while sneaking. |
+| Tracers | Smooth lines from your crosshair to nearby entities, drawn on top of everything (ice, water and glass never hide them), with an end dot, outline, distance fade and colours per kind. |
 | Nametags | Name tags in three styles (card with an animated health pill, classic, minimal): health, ping, distance, totem pops, held item. |
 | Waypoints | Named markers with distance, visible through walls. |
 | Minimap | A small map with you, mobs, players and waypoints. |
@@ -109,7 +118,7 @@ Type them in chat; they never reach the server. `.help` lists them.
 | FallPredict | Where you'll land and how much fall damage it will do. |
 | ChunkBorders | Chunk outlines and slime chunks. |
 | Trajectories | Where pearls, arrows and potions will land. |
-| NewChunks | New vs already-loaded chunks (find trails). |
+| NewChunks | New vs already-loaded chunks (find trails), in the Overworld, the Nether and the End: freshly generated chunks still carry a leftover entry in their biome palette that a saved-and-reloaded chunk does not; flowing liquid is the fallback. Each region is one shape: a soft tint plus a low border wall only where it ends, readable from any angle; a top-down chunk map on the HUD (corner and size adjustable) shows new and old chunks around you. |
 | LightOverlay | Where mobs can spawn, and the best spots for torches. |
 | Freecam | Fly the camera freely while your body stays put. |
 | Zoom | Zoom in, scroll to zoom further. |
@@ -164,18 +173,21 @@ Type them in chat; they never reach the server. `.help` lists them.
 ### Misc
 | Module | What it does |
 |---|---|
-| HudInfo, ArmorHud, PotionHud, InventoryHUD, KeyStrokes, TotemCounter, ActiveModules | HUD elements. |
+| HudInfo, ArmorHud, PotionHud, InventoryHUD, KeyStrokes, TotemCounter | HUD elements. |
+| ActiveModules | What's on, as a list: lines slide in and out as modules turn on and off; colours follow the Theme (or your own two, rainbow, per category). |
 | Theme | One colour for both menus and the HUD: 10 presets (Orange, Nova, Red, Pink, Purple, Blue, Cyan, Green, Yellow, White), your own colour, or a rainbow that cycles. The Classic menu's colour strip sets it too. |
 | Notifier | Alerts for players in view, totem pops, joins, full inventory, low food. |
 | DurabilityAlert | Warns before armour, elytra or tools break. |
 | PlayerRadar | Nearby players and their distance. |
 | BetterChat | Timestamps, anti-spam stacking, longer history. |
+| BetterTab | Player list: show 10 to 1000 players (vanilla stops at 80), ping as a coloured number, you and your friends highlighted. |
 | DeathPoint | Marks where you died. |
 | ChestTracker | Remembers what you saw in every chest; `.find` tells you where something is. |
 | AutoCommand | Runs a chat command on a timer (e.g. /rtp every 20s), stops after N runs. |
 | Accounts | "Accounts" button on the multiplayer screen: switch to an offline nick (offline-mode servers) and back, no restart. |
 | Friends | Middle-click a player to add them as a friend. |
 | AutoRespawn, AutoReconnect, AntiAfk | Quality of life. |
+| DebugBridge | Read-only bridge for debugging, off by default: answers on `http://127.0.0.1:25599` (this computer only) with the game state (`/state`), modules and their settings (`/modules`, `/module?name=X`) and recent server messages and disconnect reasons (`/log`). Nothing can be sent to the game or the server through it. |
 
 ## Fair play
 

@@ -13,6 +13,7 @@
     "NametagHideMixin",
     "EspGlowColorMixin",
     "PostPassMixin",
+    "PlayerTabOverlayMixin",
     "ChatComponentAccessor",
     "ChatComponentMixin",
     "ChatSendMixin",

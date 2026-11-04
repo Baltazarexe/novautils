@@ -3,6 +3,7 @@ package dev.novautils.gui.screens;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.novautils.gui.GuiState;
 import dev.novautils.gui.Theme;
+import dev.novautils.gui.UiFont;
 import dev.novautils.modules.Category;
 import dev.novautils.modules.Module;
 import dev.novautils.modules.ModuleManager;
@@ -53,6 +54,7 @@ public class ClassicGuiScreen extends Screen {
     private static final int TEXT = 0xFFD1D1D1;
     private static final int TEXT_DIM = 0xFFA3A3A3;
     private static final int TEXT_OFF = 0xFF7A7A7A;
+    private static final int WARN = 0xFFFFB347;
 
     private enum RowType { MODULE, BOOL, NUMBER, ENUM, KEYBIND, COLOR, CHANNEL }
 
@@ -188,7 +190,34 @@ public class ClassicGuiScreen extends Screen {
         if (search.isEmpty()) return true;
         String q = search.toLowerCase(Locale.ROOT);
         return module.name.toLowerCase(Locale.ROOT).contains(q)
-            || module.description.toLowerCase(Locale.ROOT).contains(q);
+            || module.description.toLowerCase(Locale.ROOT).contains(q)
+            || settingMatch(module) != null;
+    }
+
+    /** Whether a setting's name matches the search ("glow" finds Esp through glow-spread). */
+    private boolean settingMatches(Setting<?> setting) {
+        if (search.isEmpty() || setting.name.startsWith("hud-") || rowTypeOf(setting) == null) return false;
+        String q = search.toLowerCase(Locale.ROOT);
+        return setting.name.toLowerCase(Locale.ROOT).contains(q) || setting.name.replace('-', ' ').toLowerCase(Locale.ROOT).contains(q);
+    }
+
+    private Setting<?> settingMatch(Module module) {
+        for (Setting<?> setting : module.getSettings()) if (settingMatches(setting)) return setting;
+        return null;
+    }
+
+    /** Open: right-clicked, or found through one of its settings while searching. */
+    private boolean expanded(Module module) {
+        if (EXPANDED.contains(module)) return true;
+        return !search.isEmpty() && !module.name.toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)) && settingMatch(module) != null;
+    }
+
+    /** Another module on the same key, or null. */
+    private static Module clashWith(Module module) {
+        int key = module.getKeyBind();
+        if (key == -1) return null;
+        for (Module m : ModuleManager.get().getModules()) if (m != module && m.getKeyBind() == key) return m;
+        return null;
     }
 
     private RowType rowTypeOf(Setting<?> setting) {
@@ -213,7 +242,7 @@ public class ClassicGuiScreen extends Screen {
             for (Module module : ModuleManager.get().getModules()) {
                 if (module.category != panel.category || !matchesSearch(module)) continue;
                 contentH += ROW_H;
-                if (!EXPANDED.contains(module)) continue;
+                if (!expanded(module)) continue;
                 for (Setting<?> setting : module.getSettings()) {
                     if (!setting.isVisible()) continue;
                     RowType type = rowTypeOf(setting);
@@ -233,7 +262,7 @@ public class ClassicGuiScreen extends Screen {
                 rows.add(new Row(panel, RowType.MODULE, panel.x, y, PANEL_W, ROW_H, module, null));
                 y += ROW_H;
 
-                if (!EXPANDED.contains(module)) continue;
+                if (!expanded(module)) continue;
 
                 for (Setting<?> setting : module.getSettings()) {
                     if (!setting.isVisible()) continue;
@@ -293,10 +322,10 @@ public class ClassicGuiScreen extends Screen {
         String hint = bindingFor != null
             ? "Press a key to bind " + bindingFor.name + "   (ESC clears it)"
             : "L-click toggle  ·  R-click settings  ·  M-click reset  ·  type to search";
-        int hw = this.font.width(hint);
+        int hw = UiFont.width(hint);
         int hy = this.height - 10;
         Theme.roundRect(g, this.width / 2 - hw / 2 - 6, hy - 2, hw + 12, 11, 0xB0141414);
-        g.drawString(this.font, hint, this.width / 2 - hw / 2, hy,
+        UiFont.text(g, hint, this.width / 2 - hw / 2, hy,
             bindingFor != null ? Theme.alpha(accent(), 0.6f + 0.4f * Theme.pulse(6f)) : TEXT_OFF);
 
         g.pose().popPose();
@@ -306,7 +335,7 @@ public class ClassicGuiScreen extends Screen {
 
         // Setting tooltips are set here, after the panels, so they draw on top of everything.
         if (hoveredSetting != null && !hoveredSetting.description.isEmpty()) {
-            g.renderTooltip(this.font, Component.literal(hoveredSetting.description + "  (middle-click: reset)"), mouseX, mouseY);
+            g.renderTooltip(this.font, Component.literal(hoveredSetting.description + "  (" + dev.novautils.gui.SettingText.defaultText(hoveredSetting) + ", middle-click resets)"), mouseX, mouseY);
         }
         hoveredSetting = null;
     }
@@ -324,10 +353,10 @@ public class ClassicGuiScreen extends Screen {
     }
 
     private void drawLogo(GuiGraphics g) {
-        int x = this.width - 10 - this.font.width("Nova Utils"), y = 11;
+        int x = this.width - 10 - UiFont.width("Nova Utils"), y = 11;
         if (x < STRIP_X + STRIP_W + 14) return;
-        g.drawString(this.font, "Nova", x, y, accent(), false);
-        g.drawString(this.font, "Utils", x + this.font.width("Nova "), y, TEXT_DIM, false);
+        UiFont.text(g, "Nova", x, y, accent(), false);
+        UiFont.text(g, "Utils", x + UiFont.width("Nova "), y, TEXT_DIM, false);
     }
 
     private static final int HUD_BTN_X = 164, HUD_BTN_Y = 8, HUD_BTN_W = 56, HUD_BTN_H = 14;
@@ -375,21 +404,21 @@ public class ClassicGuiScreen extends Screen {
         boolean hover = overHudButton(mouseX, mouseY);
         Theme.rounded(g, HUD_BTN_X, HUD_BTN_Y, HUD_BTN_W, HUD_BTN_H, 3, hover ? ROW_HOVER : ROW_BG);
         String label = "Edit HUD";
-        g.drawString(this.font, label, HUD_BTN_X + HUD_BTN_W / 2 - this.font.width(label) / 2, HUD_BTN_Y + 3, hover ? TEXT : TEXT_DIM, false);
+        UiFont.text(g, label, HUD_BTN_X + HUD_BTN_W / 2 - UiFont.width(label) / 2, HUD_BTN_Y + 3, hover ? TEXT : TEXT_DIM, false);
         boolean sh = overStyleButton(mouseX, mouseY);
         Theme.rounded(g, STYLE_BTN_X, HUD_BTN_Y, HUD_BTN_W, HUD_BTN_H, 3, sh ? ROW_HOVER : ROW_BG);
         String style = "Nova menu";
-        g.drawString(this.font, style, STYLE_BTN_X + HUD_BTN_W / 2 - this.font.width(style) / 2, HUD_BTN_Y + 3, sh ? TEXT : TEXT_DIM, false);
+        UiFont.text(g, style, STYLE_BTN_X + HUD_BTN_W / 2 - UiFont.width(style) / 2, HUD_BTN_Y + 3, sh ? TEXT : TEXT_DIM, false);
     }
 
     private void drawSearch(GuiGraphics g) {
         int w = 150, h = 14, x = 8, y = 8;
         boolean typing = !search.isEmpty();
         Theme.rounded(g, x, y, w, h, 3, typing ? ROW_HOVER : ROW_BG);
-        g.drawString(this.font, "⌕", x + 5, y + 3, typing ? accent() : TEXT_OFF);
+        UiFont.text(g, "⌕", x + 5, y + 3, typing ? accent() : TEXT_OFF);
         boolean caret = (Theme.time() % 1f) < 0.5f;
         String shown = typing ? search + (caret ? "_" : "") : "Search modules...";
-        g.drawString(this.font, shown, x + 16, y + 3, typing ? TEXT : TEXT_OFF);
+        UiFont.text(g, shown, x + 16, y + 3, typing ? TEXT : TEXT_OFF);
     }
 
     private static String icon(Category c) {
@@ -418,8 +447,8 @@ public class ClassicGuiScreen extends Screen {
         if (panel.open) g.fill(x, y + HEADER_H - 4, x + PANEL_W, y + HEADER_H, HEADER);
 
         // header: icon, title, on/total pill, open/closed chevron
-        g.drawString(this.font, icon(panel.category), x + 6, y + 5, accent);
-        g.drawString(this.font, title(panel.category), x + 18, y + 5, TEXT);
+        UiFont.text(g, icon(panel.category), x + 6, y + 5, accent);
+        UiFont.text(g, title(panel.category), x + 18, y + 5, TEXT);
 
         int total = 0, on = 0;
         for (Module m : ModuleManager.get().getModules()) {
@@ -428,11 +457,11 @@ public class ClassicGuiScreen extends Screen {
             if (m.isEnabled()) on++;
         }
         String count = on + "/" + total;
-        int cw = this.font.width(count) + 6;
+        int cw = UiFont.width(count) + 6;
         int px = x + PANEL_W - 15 - cw;
         Theme.roundRect(g, px, y + 4, cw, 10, on > 0 ? Theme.alpha(accent, 0.22f) : 0x40000000);
-        g.drawString(this.font, count, px + 3, y + 5, on > 0 ? accent : TEXT_OFF);
-        g.drawString(this.font, panel.open ? "⌄" : "›", x + PANEL_W - 10, y + (panel.open ? 3 : 5), TEXT_DIM);
+        UiFont.text(g, count, px + 3, y + 5, on > 0 ? accent : TEXT_OFF);
+        UiFont.text(g, panel.open ? "⌄" : "›", x + PANEL_W - 10, y + (panel.open ? 3 : 5), TEXT_DIM);
 
         if (!panel.open) {
             Theme.border(g, x, y, PANEL_W, h, 0x60363536);
@@ -470,7 +499,14 @@ public class ClassicGuiScreen extends Screen {
     /** Thin vertical guide on the left of settings, so it's clear which module they belong to. */
     private void settingGuide(GuiGraphics g, Row row) {
         g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), SETTING_BG);
-        g.fill(row.x(), row.y(), row.x() + 2, row.y() + row.h(), Theme.alpha(accent(), 0.55f));
+        boolean real = row.setting() != null && row.type() != RowType.CHANNEL;
+        boolean match = real && settingMatches(row.setting());
+        if (match) g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), Theme.alpha(accent(), 0.14f));
+        g.fill(row.x(), row.y(), row.x() + 2, row.y() + row.h(), Theme.alpha(accent(), match ? 1f : 0.55f));
+        // a small dot marks settings changed from their default
+        if (real && dev.novautils.gui.SettingText.changed(row.setting())) {
+            g.fill(row.x() + 5, row.y() + row.h() / 2 - 1, row.x() + 7, row.y() + row.h() / 2 + 1, accent());
+        }
     }
 
     private void hoverFill(GuiGraphics g, Row row, int mouseX, int mouseY) {
@@ -486,7 +522,7 @@ public class ClassicGuiScreen extends Screen {
         HOVER.put(module, anim);
         int x = row.x(), y = row.y(), w = row.w(), h = row.h();
 
-        boolean open = EXPANDED.contains(module);
+        boolean open = expanded(module);
         g.fill(x, y, x + w, y + h, open && !module.isEnabled() ? ROW_OPEN : ROW_BG);
         if (module.isEnabled()) {
             g.fill(x, y, x + w, y + h, accent());
@@ -496,14 +532,14 @@ public class ClassicGuiScreen extends Screen {
         }
 
         int textColor = module.isEnabled() ? onAccent() : open ? TEXT : Theme.mix(TEXT_DIM, TEXT, anim);
-        g.drawString(this.font, module.name, x + 7 + (int) (anim * 2), y + 4, textColor);
+        UiFont.text(g, module.name, x + 7 + (int) (anim * 2), y + 4, textColor);
         if (module.getKeyBind() != -1) {
             String key = keyName(module.getKeyBind());
             if (key.length() > 5) key = key.substring(0, 5);
-            int kw = this.font.width(key);
+            int kw = UiFont.width(key);
             int kx = x + w - 16 - kw;
             Theme.roundRect(g, kx - 2, y + 4, kw + 4, 10, module.isEnabled() ? 0x30000000 : 0x50000000);
-            g.drawString(this.font, key, kx, y + 5, module.isEnabled() ? Theme.alpha(onAccent(), 0.8f) : TEXT_OFF);
+            UiFont.text(g, key, kx, y + 5, module.isEnabled() ? Theme.alpha(onAccent(), 0.8f) : clashWith(module) != null ? WARN : TEXT_OFF);
         }
         // three small dots on the right (the settings handle), a thin line under enabled rows
         int dots = module.isEnabled() ? onAccent() : open ? TEXT : TEXT_OFF;
@@ -522,7 +558,7 @@ public class ClassicGuiScreen extends Screen {
         settingGuide(g, row);
         hoverFill(g, row, mouseX, mouseY);
 
-        g.drawString(this.font, setting.name, row.x() + 12, row.y() + 3, on ? TEXT : TEXT_DIM);
+        UiFont.text(g, setting.name, row.x() + 12, row.y() + 3, on ? TEXT : TEXT_DIM);
 
         // small switch: coloured track when on, a dark knob that slides across
         int tx = row.x() + row.w() - 24, ty = row.y() + (row.h() - 7) / 2;
@@ -541,8 +577,8 @@ public class ClassicGuiScreen extends Screen {
 
         boolean isInt = setting.get() instanceof Integer;
         String shown = isInt ? String.valueOf((int) value) : String.format(Locale.ROOT, "%.2f", value);
-        g.drawString(this.font, setting.name, row.x() + 12, row.y() + 2, TEXT_DIM);
-        g.drawString(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 3, accent());
+        UiFont.text(g, setting.name, row.x() + 12, row.y() + 2, TEXT_DIM);
+        UiFont.text(g, shown, row.x() + row.w() - 8 - UiFont.width(shown), row.y() + 3, accent());
 
         // flat track, accent fill, small round knob (same geometry the slider input uses)
         int tx = row.x() + 12, ty = row.y() + row.h() - 4, tw = row.w() - 24;
@@ -558,7 +594,7 @@ public class ClassicGuiScreen extends Screen {
         hoverFill(g, row, mouseX, mouseY);
 
         boolean open = OPEN_COLORS.contains(setting);
-        g.drawString(this.font, (open ? "⌄ " : "› ") + setting.name, row.x() + 9, row.y() + (open ? 2 : 3), TEXT_DIM);
+        UiFont.text(g, (open ? "⌄ " : "› ") + setting.name, row.x() + 9, row.y() + (open ? 2 : 3), TEXT_DIM);
 
         int color = (Integer) setting.get();
         int sx = row.x() + row.w() - 22, sy = row.y() + 3;
@@ -577,7 +613,7 @@ public class ClassicGuiScreen extends Screen {
         int value = channelValue(color, channel);
         String name = switch (channel) { case 0 -> "R"; case 1 -> "G"; case 2 -> "B"; default -> "A"; };
 
-        g.drawString(this.font, name + " " + value, row.x() + 14, row.y() + 2, TEXT_DIM);
+        UiFont.text(g, name + " " + value, row.x() + 14, row.y() + 2, TEXT_DIM);
 
         int tx = row.x() + 34, ty = row.y() + 6, tw = row.w() - 44;
         int bar = switch (channel) { case 0 -> 0xFFFF4D6D; case 1 -> 0xFF34D399; case 2 -> 0xFF60A5FA; default -> 0xFFCBD5E1; };
@@ -610,24 +646,29 @@ public class ClassicGuiScreen extends Screen {
         Setting<?> setting = row.setting();
         settingGuide(g, row);
         hoverFill(g, row, mouseX, mouseY);
-        g.drawString(this.font, setting.name, row.x() + 12, row.y() + 3, TEXT_DIM);
+        UiFont.text(g, setting.name, row.x() + 12, row.y() + 3, TEXT_DIM);
         String value = ((Enum<?>) setting.get()).name().replace('_', ' ');
         String shown = "‹ " + value + " ›";
-        g.drawString(this.font, shown, row.x() + row.w() - 8 - this.font.width(shown), row.y() + 2, accent());
+        UiFont.text(g, shown, row.x() + row.w() - 8 - UiFont.width(shown), row.y() + 2, accent());
     }
 
     private void drawKeybindRow(GuiGraphics g, Row row, int mouseX, int mouseY) {
         Module module = row.module();
         settingGuide(g, row);
         hoverFill(g, row, mouseX, mouseY);
-        g.drawString(this.font, "bind", row.x() + 12, row.y() + 3, TEXT_DIM);
+        UiFont.text(g, "bind", row.x() + 12, row.y() + 3, TEXT_DIM);
         boolean binding = bindingFor == module;
         String key = binding ? "press a key..." : keyName(module.getKeyBind());
-        int kw = this.font.width(key);
+        int kw = UiFont.width(key);
         int kx = row.x() + row.w() - 8 - kw;
         Theme.roundRect(g, kx - 3, row.y() + 2, kw + 6, 11,
             binding ? Theme.alpha(accent(), 0.15f + 0.2f * Theme.pulse(8f)) : 0x50000000);
-        g.drawString(this.font, key, kx, row.y() + 3, binding ? accent() : TEXT_OFF);
+        UiFont.text(g, key, kx, row.y() + 3, binding ? accent() : TEXT_OFF);
+        Module clash = binding ? null : clashWith(module);
+        if (clash != null) {
+            int lx = row.x() + 12 + UiFont.width("bind") + 5;
+            UiFont.text(g, UiFont.plainSubstrByWidth("⚠ " + clash.name, kx - lx - 6), lx, row.y() + 3, WARN);
+        }
     }
 
     private String keyName(int keyCode) {

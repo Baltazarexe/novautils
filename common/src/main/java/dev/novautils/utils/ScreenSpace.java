@@ -95,6 +95,19 @@ public final class ScreenSpace {
         return toScreen(c);
     }
 
+    /**
+     * Like project, but a point behind you still gives a direction: a spot far off the screen edge on
+     * the side the point is on, so a line drawn towards it leaves the screen the right way.
+     */
+    public static double[] projectOrEdge(Vec3 world) {
+        Vec3 c = toCamera(world);
+        if (c.z >= NEAR) return toScreen(c);
+        double dx = c.x, dy = -c.y, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) dy = len = 1;
+        double far = (sw + sh) * 2;
+        return new double[]{sw / 2 + dx / len * far, sh / 2 + dy / len * far};
+    }
+
     /** ModuleManager.renderHud, first thing: draw what the world pass queued this frame. */
     public static void draw(GuiGraphicsExtractor g) {
         if (boxes.isEmpty() && lines.isEmpty()) return;

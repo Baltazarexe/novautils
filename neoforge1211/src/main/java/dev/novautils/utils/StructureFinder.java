@@ -171,6 +171,37 @@ public final class StructureFinder {
         return out.subList(0, Math.min(count, out.size()));
     }
 
+    /** End cities only generate where the island reaches this height under all four checked points. */
+    public static final int END_CITY_MIN_Y = 60;
+
+    /**
+     * The four spots (block x, z) whose terrain height the game checks before building an end city
+     * in this chunk: a 5x5 box from the chunk's middle, turned the way the city will be rotated. The
+     * rotation is the first roll of the chunk's structure random (EndCityStructure.findGenerationPoint).
+     */
+    public static int[][] endCityCorners(long seed, int chunkX, int chunkZ) {
+        int rotation = largeFeature(seed, chunkX, chunkZ).nextInt(4); // NONE, CW_90, CW_180, CCW_90
+        int dx = rotation == 1 || rotation == 2 ? -5 : 5;
+        int dz = rotation == 2 || rotation == 3 ? -5 : 5;
+        int x = (chunkX << 4) + 7, z = (chunkZ << 4) + 7;
+        return new int[][]{{x, z}, {x, z + dz}, {x + dx, z}, {x + dx, z + dz}};
+    }
+
+    /**
+     * Whether the end city candidate at block (x, z) really gets a city, judged from the loaded
+     * terrain: 1 = the island is high enough, 0 = too low (the game won't build one), -1 = not loaded.
+     */
+    public static int endCityCheck(net.minecraft.world.level.Level level, long seed, int x, int z) {
+        int lowest = Integer.MAX_VALUE;
+        for (int[] p : endCityCorners(seed, x >> 4, z >> 4)) {
+            if (!level.hasChunk(p[0] >> 4, p[1] >> 4)) return -1;
+            int y = 127;
+            while (y > 0 && !level.getBlockState(new net.minecraft.core.BlockPos(p[0], y, p[1])).is(net.minecraft.world.level.block.Blocks.END_STONE)) y--;
+            lowest = Math.min(lowest, y + 1);
+        }
+        return lowest >= END_CITY_MIN_Y ? 1 : 0;
+    }
+
     /** Test hook: the candidate chunk {x, z} in a region, and whether the spot survives the extra checks. */
     public static int[] candidate(long seed, Kind k, int regionX, int regionZ) {
         return potentialChunk(seed, k, regionX, regionZ);
